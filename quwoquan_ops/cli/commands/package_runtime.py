@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
@@ -222,6 +223,7 @@ def _command_package_unlocked(
             rollback_release_attestation=str(
                 getattr(args, "rollback_release_attestation", "") or ""
             ),
+            candidate_evidence=str(getattr(args, "candidate_evidence", "") or ""),
         )
     report_dir = _stackctl.resolve_report_dir(args, env_name, target_name)
     started_monotonic, started_at = _stackctl._start_timing()
@@ -252,6 +254,7 @@ def _command_package_unlocked(
         "GOCACHE": str(go_build_cache),
         "GOTMPDIR": str(go_tmp),
     }
+    print("[runtime-package-stage] compile-preflight", file=sys.stderr, flush=True)
     preflight_reports, preflight_error = _stackctl._run_runtime_compile_preflight(
         package_environment=package_environment,
         source_root=package_source_root,
@@ -308,6 +311,7 @@ def _command_package_unlocked(
         # Skill 包签名等 prod 期外部签名材料在 rehearsal 中改用独立随机 rehearsal key。
         package_environment["QWQ_PROD_HOSTED_MATERIAL_SOURCE"] = "local-build"
     if not args.service:
+        print("[runtime-package-stage] legal-static", file=sys.stderr, flush=True)
         legal_environment = dict(package_environment)
         if rehearsal_material:
             # rehearsal 只做内部验证：法务占位字段记入候选，不阻断打包，也不构成证据。
@@ -352,6 +356,7 @@ def _command_package_unlocked(
         )
 
     if not args.service:
+        print("[runtime-package-stage] app-runtime-package", file=sys.stderr, flush=True)
         app_cmd = ["bash", "quwoquan_app/scripts/env/build_app_env_package.sh", "--env", env_name]
         app_result = _stackctl.run(app_cmd, cwd=package_source_root, env=package_environment)
         reports.append(
@@ -398,6 +403,7 @@ def _command_package_unlocked(
         services = [args.service] if args.service else _stackctl._all_services()
         packaged_services = list(services)
         for service in services:
+            print(f"[runtime-package-stage] service-package:{service}", file=sys.stderr, flush=True)
             svc_cmd = [
                 "bash",
                 "quwoquan_service/scripts/runtime/packaging/build_service_env_package.sh",
@@ -695,6 +701,7 @@ def _command_package_unlocked(
                 "Provider and observability runtime packages were not materialized"
             )
         try:
+            print("[runtime-package-stage] local-oci-images", file=sys.stderr, flush=True)
             image_manifest_path, image_manifest = _stackctl._build_package_bound_local_images(
                 env_name,
                 target_name,
@@ -873,9 +880,12 @@ def _command_package_unlocked(
         )
 
     try:
-        _stackctl.validate_release_attestations(
-            str(getattr(args, "release_attestation", "") or ""),
-            str(getattr(args, "rollback_release_attestation", "") or ""),
+        _stackctl.resolve_package_release_binding(
+            env_name,
+            target_name,
+            release_attestation=str(getattr(args, "release_attestation", "") or ""),
+            rollback_release_attestation=str(getattr(args, "rollback_release_attestation", "") or ""),
+            candidate_evidence=str(getattr(args, "candidate_evidence", "") or ""),
         )
         contract_graph_digest = _stackctl.canonical_contract_graph_digest()
         fingerprint = _stackctl.write_package_fingerprint(
@@ -906,6 +916,7 @@ def _command_package_unlocked(
             rollback_release_attestation=str(
                 getattr(args, "rollback_release_attestation", "") or ""
             ),
+            candidate_evidence=str(getattr(args, "candidate_evidence", "") or ""),
             expected_snapshot=package_snapshot,
             candidate_root=package_capsule_root.parent,
         )
@@ -919,6 +930,7 @@ def _command_package_unlocked(
             rollback_release_attestation=str(
                 getattr(args, "rollback_release_attestation", "") or ""
             ),
+            candidate_evidence=str(getattr(args, "candidate_evidence", "") or ""),
             app_launch_bundle=app_launch_bundle,
         )
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:

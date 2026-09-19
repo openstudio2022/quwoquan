@@ -21,16 +21,8 @@ sys.path.insert(0, str(ROOT / "quwoquan_ops/cli"))
 
 from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
 from lib.candidate_evidence import build_candidate_evidence  # noqa: E402
-from lib.feature_tree.content_addressed_writer import _write_content_addressed_bytes  # noqa: E402
 import evidence_runner  # noqa: E402
 import review_dispatch  # noqa: E402
-from lib.feature_context_fingerprint import (  # noqa: E402
-    build_feature_context_fingerprint,
-    embedded_fingerprint_binding,
-)
-from lib.feature_tree.commands import _context_manifest  # noqa: E402
-from lib.feature_tree.nodes import discover_nodes  # noqa: E402
-from lib.feature_tree.ownership import resolve_target_details  # noqa: E402
 from lib.governance_pipeline_admission import (  # noqa: E402
     adapters,
     assemble_evidence_bundle,
@@ -92,9 +84,6 @@ def test_bundle_producer_freezes_exact_refs_and_managed_drift_rejects(tmp_path: 
         managed.write_bytes(original + b"\n")
         payload = current_repository_input(contract, evidence_bundle=path)
         result = inspect(payload)
-        assert payload["evidence"]["owner_manifest"]["schema_valid"] is True
-        assert payload["evidence"]["owner_manifest"]["fresh"] is False
-        assert payload["evidence"]["owner_manifest"]["fingerprint_match"] is True
         assert result["blockers"][0] == "EVIDENCE_STALE"
     finally:
         managed.write_bytes(original)
@@ -166,7 +155,7 @@ def test_locally_resigned_external_receipt_is_rejected_without_real_verifier(tmp
     contract = load_contract()
     ref = write_receipt(tmp_path, "commercial.json", {"passed": True, "provider_kind": "authenticated_external"})
     refs = empty_refs()
-    refs["owner_manifest"] = _write_current_owner_manifest(contract)
+    refs["candidate_evidence"] = _write_current_candidate_evidence()
     refs["external"]["commercial"] = ref
     path = assemble_evidence_bundle(contract, run_id=run_id(tmp_path, "forged"), refs=refs)
     payload = current_repository_input(contract, evidence_bundle=path)
@@ -180,26 +169,6 @@ def test_locally_resigned_external_receipt_is_rejected_without_real_verifier(tmp
     assert result["status"] == "blocked"
     assert result["blockers"][0] == "EVIDENCE_FINGERPRINT_MISMATCH"
 
-
-def test_bundle_owner_identity_failure_reaches_evaluator_as_fingerprint_mismatch(tmp_path: Path) -> None:
-    contract = load_contract()
-    manifest, _raw, _ref = _current_owner_manifest(contract)
-    manifest["canonical_contexts"] = []
-    ref = write_receipt(tmp_path, "forged-owner.json", manifest)
-    digest = __import__("hashlib").sha256((ROOT / ref).read_bytes()).hexdigest()
-    canonical_ref = (
-        ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint" / f"{digest}.json"
-    )
-    canonical_ref.write_bytes((ROOT / ref).read_bytes())
-    refs = empty_refs()
-    refs["owner_manifest"] = canonical_ref.relative_to(ROOT).as_posix()
-    path = assemble_evidence_bundle(contract, run_id=run_id(tmp_path, "owner-identity"), refs=refs)
-    payload = current_repository_input(contract, evidence_bundle=path)
-    owner = payload["evidence"]["owner_manifest"]
-    assert owner["schema_valid"] is True
-    assert owner["fresh"] is True
-    assert owner["fingerprint_match"] is False
-    assert inspect(payload)["blockers"][0] == "EVIDENCE_FINGERPRINT_MISMATCH"
 
 
 @pytest.mark.parametrize(
@@ -248,13 +217,13 @@ def test_forged_named_workspace_or_toolchain_receipt_is_rejected(tmp_path: Path)
     assert projected["portal_test"]["fingerprint_match"] is False
 
 
-@pytest.mark.parametrize("missing", ("review_plan", "owner_manifest"))
-def test_named_receipt_requires_exact_plan_and_owner_manifest(
+@pytest.mark.parametrize("missing", ("review_plan", "candidate_evidence"))
+def test_named_receipt_requires_exact_plan_and_candidate(
     tmp_path: Path, missing: str,
 ) -> None:
     contract = load_contract()
     refs = empty_refs()
-    refs["owner_manifest"] = _write_current_owner_manifest(contract)
+    refs["candidate_evidence"] = _write_current_candidate_evidence()
     refs["review_plan"] = write_receipt(tmp_path, "review-plan.json", {})
     refs["named_evidence"]["portal-test"] = write_receipt(
         tmp_path, "named.json", {},
@@ -280,27 +249,21 @@ def test_named_receipt_requires_exact_plan_and_owner_manifest(
     assert "missing" in item["detail"]
 
 
-def _write_current_owner_manifest(contract: dict[str, Any]) -> str:
-    _manifest, raw, ref = _current_owner_manifest(contract)
-    path = ROOT / ref
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(raw)
-    return ref
+def _write_current_candidate_evidence(*paths: str) -> str:
+    import subprocess
+    changed = list(paths) or ["quwoquan_ops/policies/governance_pipeline_admission_contract.yaml"]
+    command = [sys.executable, "quwoquan_ops/cli/feature_tree.py", "candidate-evidence"]
+    for path in changed:
+        command.extend(["--changed-path", path])
+    return subprocess.run(command, cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
 
 
 def _governance_review_fixture(
     *, changed_paths: list[str], run_id_value: str,
-) -> tuple[dict[str, Any], dict[str, Any], str, str]:
+) -> tuple[dict[str, Any], dict[str, Any], str]:
     contract = load_contract()
-    owner = contract["current_repository_evidence"]["owner_manifest_target"]
-    nodes = discover_nodes()
-    manifest = _context_manifest(owner, resolve_target_details(owner, nodes), nodes)
-    owner_path = _write_content_addressed_bytes(canonical_json_bytes(manifest))
-    owner_ref = owner_path.relative_to(ROOT).as_posix()
-    candidate = build_candidate_evidence(owner_ref, changed_paths, repo_root=ROOT)
-    candidate_path = _write_content_addressed_bytes(
-        canonical_json_bytes(candidate), subdirectory="candidates/by-fingerprint"
-    )
+    scope = contract["current_repository_evidence"]["named_evidence_plan_binding"]["scope"]
+    candidate_ref = _write_current_candidate_evidence(*changed_paths)
     registry = copy.deepcopy(
         __import__("yaml").safe_load(
             (ROOT / ".agents/skills/review/references/registry.yaml").read_text()
@@ -332,22 +295,21 @@ def _governance_review_fixture(
     ):
         plan = review_dispatch.build_plan(
             registry, "dev", "POST", "implementation", changed_paths,
-            context_manifest=manifest, context_manifest_ref=owner_ref,
-            candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
-            scope=owner,
+            candidate_evidence_ref=candidate_ref,
+            scope=scope,
         )
         receipt = evidence_runner.run_plan(
             plan, registry=registry, cwd=ROOT, run_id=run_id_value,
             plan_bytes=canonical_json_bytes(plan), plan_ref=".qwq_output/test-fixture-plan.json",
         )
     evidence_runner.validate_named_evidence_receipt(receipt)
-    return plan, receipt, owner_ref, candidate_path.relative_to(ROOT).as_posix()
+    return plan, receipt, candidate_ref
 
 
 def test_governance_named_layers_reject_feedback_only_receipt(
     tmp_path: Path,
 ) -> None:
-    plan, receipt, owner_ref, _candidate_ref = _governance_review_fixture(
+    plan, receipt, candidate_ref = _governance_review_fixture(
         changed_paths=[
             "quwoquan_ops/cli/lib/governance_pipeline_admission/adapters.py"
         ],
@@ -357,7 +319,7 @@ def test_governance_named_layers_reject_feedback_only_receipt(
     plan_ref = write_receipt(tmp_path, "review-plan-feedback.json", plan)
     named_ref = write_receipt(tmp_path, "named-feedback.json", receipt)
     refs = empty_refs()
-    refs.update({"owner_manifest": owner_ref, "review_plan": plan_ref})
+    refs.update({"candidate_evidence": candidate_ref, "review_plan": plan_ref})
     refs["named_evidence"] = {
         "portal-test": named_ref,
         "portal-build": named_ref,
@@ -377,19 +339,18 @@ def test_governance_named_layers_reject_feedback_only_receipt(
 def test_current_repository_rejects_fresh_named_receipts_from_other_exact_plan(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    current_plan, _current_receipt, owner_ref, candidate_ref = _governance_review_fixture(
+    current_plan, _current_receipt, candidate_ref = _governance_review_fixture(
         changed_paths=[
             "quwoquan_ops/cli/lib/governance_pipeline_admission/adapters.py"
         ],
         run_id_value="governance-current-plan",
     )
-    other_plan, other_receipt, other_owner_ref, _other_candidate_ref = _governance_review_fixture(
+    other_plan, other_receipt, other_candidate_ref = _governance_review_fixture(
         changed_paths=[
             "quwoquan_ops/cli/lib/governance_pipeline_admission/contract.py"
         ],
         run_id_value="governance-other-plan",
     )
-    assert owner_ref == other_owner_ref
     assert candidate_ref == current_plan["candidate_evidence_identity"]["ref"]
     assert other_receipt["plan_fingerprint_ref"] == other_plan["fingerprint_receipt"]["ref"]
     assert other_receipt["plan_fingerprint_ref"] != current_plan["fingerprint_receipt"]["ref"]
@@ -398,7 +359,7 @@ def test_current_repository_rejects_fresh_named_receipts_from_other_exact_plan(
     plan_ref = write_receipt(tmp_path, "review-plan.json", current_plan)
     named_ref = write_receipt(tmp_path, "named-other-plan.json", other_receipt)
     refs = empty_refs()
-    refs.update({"owner_manifest": owner_ref, "review_plan": plan_ref})
+    refs.update({"candidate_evidence": candidate_ref, "review_plan": plan_ref})
     refs["named_evidence"] = {
         "portal-test": named_ref,
         "portal-build": named_ref,
@@ -502,10 +463,10 @@ def test_failed_adapter_dimensions_reach_evaluator_with_exact_precedence() -> No
         ("receipt JSON invalid", "EVIDENCE_SCHEMA_INVALID", (False, True, True)),
     ):
         payload = current_repository_input(contract, verification_time=now)
-        payload["evidence"]["owner_manifest"] = evidence_module._failed(
+        payload["evidence"]["local_scope_ready"] = evidence_module._failed(
             ContractError(detail), verification_time=now,
         )
-        item = payload["evidence"]["owner_manifest"]
+        item = payload["evidence"]["local_scope_ready"]
         assert (item["schema_valid"], item["fresh"], item["fingerprint_match"]) == dimensions
         assert inspect(payload)["blockers"][0] == expected
 
@@ -542,7 +503,7 @@ def test_local_readiness_adapter_never_creates_or_chmods_state(tmp_path: Path, m
     with pytest.raises(ContractError):
         verify_explicit_receipt_read_only(
             level="scope", receipt_path=receipt, exact_bytes=b"{}", paths=["AGENTS.md"],
-            mode="workspace", owner_manifest_path=tmp_path / "manifest.json", repo_root=ROOT,
+            mode="workspace", candidate_evidence_path=tmp_path / "candidate.json", repo_root=ROOT,
         )
     assert snapshot(tmp_path) == before
     assert not state.exists()
@@ -587,94 +548,6 @@ def test_hotl_and_handoff_adapter_negative_boundaries() -> None:
         adapters.verify_handoff(
             raw=b"{}", receipt_ref=".qwq_output/handoff.json", candidate_id="c",
             scope_id="s", verification_time=datetime.now(timezone.utc), contract=contract,
-        )
-
-
-def _current_owner_manifest(contract: dict[str, Any]) -> tuple[dict[str, Any], bytes, str]:
-    owner = contract["current_repository_evidence"]["owner_manifest_target"]
-    nodes = discover_nodes()
-    manifest = _context_manifest(owner, resolve_target_details(owner, nodes), nodes)
-    raw = canonical_json_bytes(manifest)
-    ref = (
-        ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
-        + __import__("hashlib").sha256(raw).hexdigest()
-        + ".json"
-    )
-    return manifest, raw, ref
-
-
-def test_owner_identity_consumes_canonical_v4_raw_content_address() -> None:
-    contract = load_contract()
-    manifest, raw, ref = _current_owner_manifest(contract)
-    raw_digest = __import__("hashlib").sha256(raw).hexdigest()
-    evidence_digest = manifest["evidence_fingerprint"]["digest"].removeprefix("sha256:")
-    assert raw_digest != evidence_digest
-
-    readback, fingerprint = adapters.verify_owner_manifest(
-        raw=raw, receipt_ref=ref, candidate_id="c", scope_id="s",
-        verification_time=datetime.now(timezone.utc), contract=contract,
-    )
-    assert readback["result"] == "pass"
-    assert fingerprint["digest"] == manifest["evidence_fingerprint"]["digest"]
-
-
-def test_owner_manifest_rejects_caller_forged_owner_chain_contexts_and_agents() -> None:
-    contract = load_contract()
-    canonical, _raw, _ref = _current_owner_manifest(contract)
-    mutations = (
-        lambda value: value.update(owner_chain=[]),
-        lambda value: value.update(owner_chain=value["owner_chain"][:-1]),
-    )
-    for mutate in mutations:
-        forged = copy.deepcopy(canonical)
-        mutate(forged)
-        identity = {key: value for key, value in forged.items() if key != "evidence_fingerprint"}
-        forged["evidence_fingerprint"] = embedded_fingerprint_binding(
-            build_feature_context_fingerprint(identity, repo_root=ROOT)
-        )
-        raw = canonical_json_bytes(forged)
-        ref = (
-            ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
-            + __import__("hashlib").sha256(raw).hexdigest()
-            + ".json"
-        )
-        with pytest.raises(Exception, match="canonical feature-tree producer|non-empty"):
-            adapters.verify_owner_manifest(
-                raw=raw, receipt_ref=ref, candidate_id="c", scope_id="s",
-                verification_time=datetime.now(timezone.utc), contract=contract,
-            )
-
-
-def test_owner_manifest_rejects_wrong_filename_schema_drift_and_noncanonical_bytes() -> None:
-    contract = load_contract()
-    manifest, raw, _ref = _current_owner_manifest(contract)
-    root = ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
-
-    with pytest.raises(Exception, match="filename"):
-        adapters.verify_owner_manifest(
-            raw=raw, receipt_ref=root + "0" * 64 + ".json",
-            candidate_id="c", scope_id="s", verification_time=datetime.now(timezone.utc),
-            contract=contract,
-        )
-
-    drifted = dict(manifest)
-    drifted["unexpected"] = True
-    drifted_raw = canonical_json_bytes(drifted)
-    with pytest.raises(Exception, match="字段漂移"):
-        adapters.verify_owner_manifest(
-            raw=drifted_raw,
-            receipt_ref=root + __import__("hashlib").sha256(drifted_raw).hexdigest() + ".json",
-            candidate_id="c", scope_id="s", verification_time=datetime.now(timezone.utc),
-            contract=contract,
-        )
-
-    noncanonical_raw = json.dumps(manifest, indent=2, ensure_ascii=False).encode("utf-8")
-    with pytest.raises(Exception, match="canonical JSON bytes"):
-        adapters.verify_owner_manifest(
-            raw=noncanonical_raw,
-            receipt_ref=root + __import__("hashlib").sha256(noncanonical_raw).hexdigest() + ".json",
-            candidate_id="c", scope_id="s", verification_time=datetime.now(timezone.utc),
-            contract=contract,
         )
 
 
@@ -741,89 +614,45 @@ def test_human_readback_consumes_exact_owner_v2_and_rejects_v1_or_digest_drift()
 
 def _real_review_exact_fixture(monkeypatch: pytest.MonkeyPatch) -> tuple[dict[str, Any], bytes, str, bytes, str, bytes]:
     from lib.agent_governance_contract import contract_schema_version
-    from lib.evidence_fingerprint import build_evidence_fingerprint, canonical_digest
     import handoff_consumer
     import review_consolidator
 
-    plan_digest = "sha256:" + "1" * 64
-    plan_ref = "evidence-fingerprint-v1:" + plan_digest
-    plan = {
-        "fingerprint_receipt": {"ref": plan_ref, "digest": plan_digest},
-        "reviewers": [{"role": "developer", "required": True}],
-    }
-    timestamp = "2026-08-30T00:00:00+00:00"
-    fingerprint = build_evidence_fingerprint(
-        {
-            "git": {"head_sha": "a" * 40, "merge_base_sha": "b" * 40},
-            "workspace": {},
-            "assets": {
-                "canonical_assets_digest": canonical_digest("assets"),
-                "review_assets_digest": canonical_digest("review"),
-            },
-            "execution": {
-                "commands_digest": canonical_digest([]),
-                "toolchain_digest": canonical_digest("toolchain"),
-                "provider_digest": canonical_digest("provider"),
-                "generator_digest": canonical_digest("generator"),
-            },
-        },
-        captured_at=timestamp, captured_by="fixture",
-        captured_metadata={"consumer": "test"},
+    plan, evidence, _candidate_ref = _governance_review_fixture(
+        changed_paths=["README.md"],
+        run_id_value="governance-review-positive",
     )
-    evidence = {
-        "schema_version": contract_schema_version("named_evidence_receipt"),
-        "run_id": "run", "generation_id": fingerprint["digest"],
-        "source": {
-            "mode": "workspace", "head_sha": "a" * 40,
-            "merge_base_sha": "b" * 40, "repository_clean": True,
-            "immutable": False,
-        },
-        "evidence_class": "reusable", "admission_eligible": True,
-        "plan_fingerprint_ref": plan_ref, "plan_fingerprint_digest": plan_digest,
-        "execution_fingerprint": fingerprint, "result_fingerprint": fingerprint,
-        "evidence": [],
-        "terminal": {"status": "PASS", "code": "EVIDENCE.PASSED", "failed_evidence": None},
-        "captured_by": "fixture", "started_at": timestamp, "finished_at": timestamp,
-    }
+    evidence["source"]["repository_clean"] = True
+    evidence["evidence_class"] = "reusable"
+    evidence["admission_eligible"] = True
     evidence_raw = canonical_json_bytes(evidence)
     evidence_ref = ".qwq_output/evidence.json"
-    evidence_identity = handoff_consumer.named_evidence_identity_from_raw(
-        evidence_ref, evidence_raw, evidence
-    )
+    identity = handoff_consumer.named_evidence_identity_from_raw(evidence_ref, evidence_raw, evidence)
+    timestamp = evidence["finished_at"]
     result = {
         "schema_version": contract_schema_version("review_result"),
         "role": "developer", "status": "completed",
-        "plan_fingerprint_ref": plan_ref, "plan_fingerprint_digest": plan_digest,
+        "plan_fingerprint_ref": plan["fingerprint_receipt"]["ref"],
+        "plan_fingerprint_digest": plan["fingerprint_receipt"]["digest"],
         "evidence_receipt_ref": evidence_ref,
-        "evidence_receipt_canonical_bytes_sha256": evidence_identity["canonical_bytes_sha256"],
-        "evidence_run_id": evidence_identity["run_id"],
-        "evidence_generation_id": evidence_identity["generation_id"],
-        "execution_fingerprint_ref": evidence_identity["execution_fingerprint_ref"],
-        "execution_fingerprint_digest": evidence_identity["execution_fingerprint_digest"],
-        "result_fingerprint_ref": evidence_identity["result_fingerprint_ref"],
-        "result_fingerprint_digest": evidence_identity["result_fingerprint_digest"],
-        "assembled_input_byte_count": 1,
-        "assembled_input_digest": "sha256:" + "3" * 64,
+        "evidence_receipt_canonical_bytes_sha256": identity["canonical_bytes_sha256"],
+        "evidence_run_id": identity["run_id"], "evidence_generation_id": identity["generation_id"],
+        "execution_fingerprint_ref": identity["execution_fingerprint_ref"],
+        "execution_fingerprint_digest": identity["execution_fingerprint_digest"],
+        "result_fingerprint_ref": identity["result_fingerprint_ref"],
+        "result_fingerprint_digest": identity["result_fingerprint_digest"],
+        "assembled_input_byte_count": 1, "assembled_input_digest": "sha256:" + "3" * 64,
         "assembled_input_compression": {"mode": "full", "applied": False, "changes": [], "attempts": []},
         "started_at": timestamp, "finished_at": timestamp, "findings": [],
     }
-    result_ref = ".qwq_output/review.json"
-    result_raw = canonical_json_bytes(result)
-    monkeypatch.setattr(
-        review_consolidator.review_dispatch, "validate_current_review_plan",
-        lambda *_args, **_kwargs: {"ref": plan_ref, "digest": plan_digest},
-    )
-    monkeypatch.setattr(
-        review_consolidator.handoff_consumer, "validate_named_evidence_ref_payload",
-        lambda receipt, **_kwargs: receipt,
-    )
+    result_ref = ".qwq_output/review.json"; result_raw = canonical_json_bytes(result)
+    monkeypatch.setattr(review_consolidator.review_dispatch, "validate_current_review_plan", lambda *_args, **_kwargs: plan["fingerprint_receipt"] )
+    monkeypatch.setattr(review_consolidator.handoff_consumer, "validate_named_evidence_ref_payload", lambda receipt, **_kwargs: receipt)
     consolidation = review_consolidator.consolidate(
         plan, [(evidence_ref, evidence)], [(result_ref, result)],
         generated_at="2026-08-30T00:01:00+00:00",
         exact_bytes_by_ref={evidence_ref: evidence_raw, result_ref: result_raw},
     )
     return plan, evidence_raw, evidence_ref, result_raw, result_ref, canonical_json_bytes(consolidation)
-
 
 def test_review_exact_inputs_have_real_positive_path(monkeypatch: pytest.MonkeyPatch) -> None:
     contract = load_contract()

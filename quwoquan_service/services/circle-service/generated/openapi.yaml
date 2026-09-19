@@ -233,11 +233,64 @@ paths:
                   required: true
                   schema:
                     type: string
-                - name: identity
+                - name: clientPresentationContract
                   in: query
                   required: false
-                  schema:
-                    type: string
+                  content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                contentTypes:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - image
+                                            - video
+                                            - article
+                                    maxItems: 32
+                                contractDigest:
+                                    type: string
+                                    pattern: ^sha256:[0-9a-f]{64}$
+                                    maxLength: 71
+                                    minLength: 71
+                                listObjectKinds:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - post
+                                            - entity_homepage
+                                    maxItems: 32
+                                openSurfaces:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - home_feed
+                                            - profile_works
+                                            - media_immersive
+                                            - article_reader
+                                            - homepage_detail
+                                    maxItems: 32
+                                presentationRecipes:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - cover_media_card
+                                            - article_excerpt_card
+                                            - homepage_summary_card
+                                    maxItems: 32
+                            required:
+                                - contentTypes
+                                - listObjectKinds
+                                - presentationRecipes
+                                - openSurfaces
+                                - contractDigest
+                            additionalProperties: false
+                  x-max-bytes: 8192
                 - name: type
                   in: query
                   required: false

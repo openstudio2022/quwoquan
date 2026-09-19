@@ -160,8 +160,8 @@ func TestSourceAttributionGeneratedFieldsMatchDataSchema(t *testing.T) {
 			t.Fatalf("Data attribution field absent from Service model: %s", name)
 		}
 	}
-	if !modelFields["publicationAdmission"] {
-		t.Fatal("test expects generated model retirement to remain Wave B")
+	if modelFields["publicationAdmission"] {
+		t.Fatal("generated model retained retired publicationAdmission")
 	}
 }
 

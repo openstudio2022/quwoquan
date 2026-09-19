@@ -122,7 +122,11 @@ extension_fields:
   launchManifestDigest:
     type: string
     max_length: 80
-  contentIdentityOutcome:
+  # 启动时客户端观测到的 ContentActivationIdentity（releaseId + manifestDigest）
+  # 绑定结果，与已退役的 Post ContentIdentity（moment/work）无关：
+  # bound=完整两元组；absent=本次启动未绑定任何 active release；
+  # protocol_failure=wire 上只有半身份或非 canonical digest；unavailable=读取失败。
+  contentReleaseIdentityOutcome:
     type: string
     enum:
     - bound
@@ -329,7 +333,6 @@ extension_fields:
   contentType:
     type: string
     enum:
-    - micro
     - article
     - image
     - video
@@ -656,7 +659,7 @@ events:
   - buildNumber
   - launchManifestDigest
   - terminalState
-  - contentIdentityOutcome
+  - contentReleaseIdentityOutcome
   normal_sample_rate: 1.0
   slow_threshold_ms: 3000
   internal_priority: critical

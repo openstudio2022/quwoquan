@@ -1,7 +1,13 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: 706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31
 
 part of '../../../gateway/gateway_operation_contracts.g.dart';
+
+Map<String, Object?> _generatedRequestObject(Object? value, String path) {
+  if (value is Map<String, Object?>) return value;
+  if (value is Map) return Map<String, Object?>.from(value);
+  throw FormatException('$path must be an object');
+}
 
 void _generatedRequestRejectUnknownFields(
   Map<String, Object?> map,
@@ -32,12 +38,14 @@ List<Object?> _generatedRequestList(Object? value, String path) {
 
 final class SearchPageInput {
   SearchPageInput({
+    ClientContentPresentationContract? clientPresentationContract,
     required String query,
     int? first,
     String? after,
     List<String>? objectTypes,
     List<String>? contentTypes,
-  }) : query = query,
+  }) : clientPresentationContract = clientPresentationContract,
+       query = query,
        first = first,
        after = after,
        objectTypes = objectTypes == null
@@ -47,6 +55,7 @@ final class SearchPageInput {
            ? null
            : List.unmodifiable(contentTypes) {}
 
+  final ClientContentPresentationContract? clientPresentationContract;
   final String query;
   final int? first;
   final String? after;
@@ -58,6 +67,7 @@ final class SearchPageInput {
     String path = "SearchPageInput",
   ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{
+      "clientPresentationContract",
       "query",
       "first",
       "after",
@@ -65,6 +75,15 @@ final class SearchPageInput {
       "contentTypes",
     }, path);
     return SearchPageInput(
+      clientPresentationContract: map["clientPresentationContract"] == null
+          ? null
+          : ClientContentPresentationContract.fromWire(
+              _generatedRequestObject(
+                map["clientPresentationContract"],
+                '$path.clientPresentationContract',
+              ),
+              '$path.clientPresentationContract',
+            ),
       query: _generatedRequestString(map["query"], '$path.query'),
       first: map["first"] == null
           ? null
@@ -102,6 +121,8 @@ final class SearchPageInput {
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
+    if (this.clientPresentationContract != null)
+      "clientPresentationContract": this.clientPresentationContract!.toWire(),
     "query": this.query,
     if (this.first != null) "first": this.first!,
     if (this.after != null) "after": this.after!,
@@ -122,6 +143,9 @@ encodeGatewayPersistedQueryExecutionSearchPageGeneratedRequest(
 ) {
   return CloudOperationRequestPayload(
     body: <String, Object?>{
+      if (request.clientPresentationContract != null)
+        "clientPresentationContract": request.clientPresentationContract!
+            .toWire(),
       "query": request.query,
       if (request.first != null) "first": request.first!,
       if (request.after != null) "after": request.after!,

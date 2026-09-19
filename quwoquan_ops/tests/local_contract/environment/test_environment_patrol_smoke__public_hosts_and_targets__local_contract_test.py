@@ -288,7 +288,7 @@ class EnvironmentPatrolSmokeTest(EnvironmentPatrolSmokeCaseBase):
         self.assertEqual(source, "anonymous_public_video_session")
         self.assertEqual(args.test_auth_token, "")
         self.assertEqual(args.test_refresh_token, "")
-        self.assertEqual(smoke._resolved_owner_id(args), "")
+        self.assertEqual(smoke._context_status_id(args), "")
         self.assertEqual(smoke._resolved_persona_id(args), "")
         self.assertEqual(smoke._missing_required_args(args), [])
         command = smoke.patrol_command(

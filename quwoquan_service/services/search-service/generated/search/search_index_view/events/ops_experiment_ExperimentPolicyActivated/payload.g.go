@@ -5,6 +5,50 @@ package eventpayload
 
 import "time"
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
+type ExperimentStatus string
+
+const (
+	ExperimentStatusDraft     ExperimentStatus = "draft"
+	ExperimentStatusScheduled ExperimentStatus = "scheduled"
+	ExperimentStatusRunning   ExperimentStatus = "running"
+	ExperimentStatusPaused    ExperimentStatus = "paused"
+	ExperimentStatusEnded     ExperimentStatus = "ended"
+)
+
+func (v ExperimentStatus) Validate() error {
+	switch v {
+	case "draft", "scheduled", "running", "paused", "ended":
+		return nil
+	}
+	return fmt.Errorf("invalid ExperimentStatus")
+}
+func (v ExperimentStatus) MarshalJSON() ([]byte, error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(v))
+}
+func (v *ExperimentStatus) UnmarshalJSON(data []byte) error {
+	var wire *string
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire == nil {
+		return fmt.Errorf("invalid ExperimentStatus")
+	}
+	next := ExperimentStatus(*wire)
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	*v = next
+	return nil
+}
+
 type Variant struct {
 	Key                   string `json:"key"`
 	AllocationBasisPoints int    `json:"allocationBasisPoints"`
@@ -15,13 +59,13 @@ type AudienceRule struct {
 }
 
 type Experiment struct {
-	Id           string       `json:"id"`
-	Key          string       `json:"key"`
-	Version      int          `json:"version"`
-	Status       string       `json:"status"`
-	Variants     []Variant    `json:"variants"`
-	AudienceRule AudienceRule `json:"audienceRule"`
-	StartsAt     *time.Time   `json:"startsAt"`
-	EndsAt       *time.Time   `json:"endsAt"`
-	UpdatedAt    time.Time    `json:"updatedAt"`
+	Id           string           `json:"id"`
+	Key          string           `json:"key"`
+	Version      int              `json:"version"`
+	Status       ExperimentStatus `json:"status"`
+	Variants     []Variant        `json:"variants"`
+	AudienceRule AudienceRule     `json:"audienceRule"`
+	StartsAt     *time.Time       `json:"startsAt"`
+	EndsAt       *time.Time       `json:"endsAt"`
+	UpdatedAt    time.Time        `json:"updatedAt"`
 }

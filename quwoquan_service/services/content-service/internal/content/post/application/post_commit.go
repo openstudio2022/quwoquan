@@ -66,10 +66,23 @@ func (s *PostService) commitPostCommandWithResult(
 	}
 	commandHash := sha256.Sum256(commandJSON)
 	switch eventType {
-	case "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostPromotedToWork", "PostModerationRejected", "PostDeleted":
+	case "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostModerationRejected", "PostDeleted":
 		source, ok := eventPayload.(map[string]any)
 		if !ok {
 			return nil, false, fmt.Errorf("Post lifecycle payload must be produced by owning mapper")
+		}
+		// contentType 是 payload 的 typed 闭集字段（enum_ref: ContentType）。
+		// producer 端一次判否：退役成员与任何闭集外取值都不得进入 outbox，
+		// 否则下游只能在解码期发现一个本不该被写出的事实。
+		contentType, ok := source["contentType"].(string)
+		if !ok {
+			return nil, false, fmt.Errorf("Post lifecycle payload must declare contentType")
+		}
+		if _, allowed := contentgenerated.AllowedContentTypes[contentType]; !allowed {
+			return nil, false, fmt.Errorf(
+				"Post lifecycle payload contentType %q is not a ContentType member",
+				contentType,
+			)
 		}
 		wire := make(map[string]any, len(source)+6)
 		for key, value := range source {

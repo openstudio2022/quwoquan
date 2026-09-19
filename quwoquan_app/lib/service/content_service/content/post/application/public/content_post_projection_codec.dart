@@ -11,7 +11,6 @@ ContentPostProjection contentPostProjectionFromViewData(
   return ContentPostProjection(
     postId: source.id,
     contentType: source.type,
-    contentIdentity: source.identity,
     assistantUsePolicy: source.assistantUsePolicy,
     authorId: source.authorId,
     authorDisplayName: source.displayName,

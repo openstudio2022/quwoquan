@@ -8,6 +8,44 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from enum import Enum
+from pydantic_core import core_schema
+
+
+class _ContractEnum(str, Enum):
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        return core_schema.no_info_before_validator_function(
+            cls._validate_wire,
+            handler(source_type),
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize_wire),
+        )
+
+    @classmethod
+    def _serialize_wire(cls, value):
+        return cls._validate_wire(value).value
+
+    @classmethod
+    def _validate_wire(cls, value):
+        if isinstance(value, cls):
+            return value
+        if type(value) is not str:
+            raise ValueError("enum wire value must be a string")
+        return cls(value)
+
+
+class PremiumPoolEntryStatus(_ContractEnum):
+    VALUE_ACTIVE = "active"
+    VALUE_ROLLED_BACK = "rolled_back"
+    VALUE_TAKEDOWN_EJECTED = "takedown_ejected"
+
+
+class PremiumPoolQualityAdmission(_ContractEnum):
+    VALUE_APPROVED = "approved"
+
+
+class PremiumPoolScope(_ContractEnum):
+    VALUE_GLOBAL = "global"
 
 
 class ReleaseCandidateBinding(BaseModel):
@@ -49,10 +87,10 @@ class ReleasePremiumAdmission(BaseModel):
 class PremiumPoolEntry(BaseModel):
     contentId: str
     releaseAdmissions: list[ReleasePremiumAdmission]
-    scope: str
-    status: str
+    scope: PremiumPoolScope
+    status: PremiumPoolEntryStatus
     qualityScore: float
-    qualityAdmission: str
+    qualityAdmission: PremiumPoolQualityAdmission
     supplySource: str | None = None
     sourceTaskId: str | None = None
     auditId: str

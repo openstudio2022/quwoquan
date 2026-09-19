@@ -121,19 +121,17 @@ var (
 // Thread-safe via atomic operations. Periodically snapshot for reporting.
 type EngagementMetrics struct {
 	// Impressions by content type
-	ImpressionPhoto   atomic.Int64
+	ImpressionImage   atomic.Int64
 	ImpressionVideo   atomic.Int64
 	ImpressionArticle atomic.Int64
-	ImpressionMoment  atomic.Int64
 
 	// Clicks (CTR numerator)
 	ClickTotal atomic.Int64
 
 	// Deep engagement (depth >= L2)
-	DeepEngagePhoto   atomic.Int64
+	DeepEngageImage   atomic.Int64
 	DeepEngageVideo   atomic.Int64
 	DeepEngageArticle atomic.Int64
-	DeepEngageMoment  atomic.Int64
 
 	// Interactions
 	LikeTotal    atomic.Int64
@@ -141,22 +139,18 @@ type EngagementMetrics struct {
 	CommentTotal atomic.Int64
 
 	// Per-type click/like/share breakdown
-	ClickPhoto     atomic.Int64
+	ClickImage     atomic.Int64
 	ClickVideo     atomic.Int64
 	ClickArticle   atomic.Int64
-	ClickMoment    atomic.Int64
-	LikePhoto      atomic.Int64
+	LikeImage      atomic.Int64
 	LikeVideo      atomic.Int64
 	LikeArticle    atomic.Int64
-	LikeMoment     atomic.Int64
-	SharePhoto     atomic.Int64
+	ShareImage     atomic.Int64
 	ShareVideo     atomic.Int64
 	ShareArticle   atomic.Int64
-	ShareMoment    atomic.Int64
-	CommentPhoto   atomic.Int64
+	CommentImage   atomic.Int64
 	CommentVideo   atomic.Int64
 	CommentArticle atomic.Int64
-	CommentMoment  atomic.Int64
 
 	// Negative feedback
 	DislikeTotal atomic.Int64
@@ -192,7 +186,7 @@ var GlobalEngagementMetrics EngagementMetrics
 func resolveContentType(signal BehaviorSignal) string {
 	contentType := strings.ToLower(strings.TrimSpace(signal.ContentType))
 	switch contentType {
-	case "image", "video", "micro", "article":
+	case "image", "video", "article":
 		return contentType
 	default:
 		return ""
@@ -266,78 +260,66 @@ func RecordBehaviorMetric(signal BehaviorSignal) {
 func recordImpressionByType(contentType string) {
 	switch contentType {
 	case "image":
-		GlobalEngagementMetrics.ImpressionPhoto.Add(1)
+		GlobalEngagementMetrics.ImpressionImage.Add(1)
 	case "video":
 		GlobalEngagementMetrics.ImpressionVideo.Add(1)
 	case "article":
 		GlobalEngagementMetrics.ImpressionArticle.Add(1)
-	case "micro":
-		GlobalEngagementMetrics.ImpressionMoment.Add(1)
 	}
 }
 
 func recordDeepEngageByType(contentType string) {
 	switch contentType {
 	case "image":
-		GlobalEngagementMetrics.DeepEngagePhoto.Add(1)
+		GlobalEngagementMetrics.DeepEngageImage.Add(1)
 	case "video":
 		GlobalEngagementMetrics.DeepEngageVideo.Add(1)
 	case "article":
 		GlobalEngagementMetrics.DeepEngageArticle.Add(1)
-	case "micro":
-		GlobalEngagementMetrics.DeepEngageMoment.Add(1)
 	}
 }
 
 func recordClickByType(contentType string) {
 	switch contentType {
 	case "image":
-		GlobalEngagementMetrics.ClickPhoto.Add(1)
+		GlobalEngagementMetrics.ClickImage.Add(1)
 	case "video":
 		GlobalEngagementMetrics.ClickVideo.Add(1)
 	case "article":
 		GlobalEngagementMetrics.ClickArticle.Add(1)
-	case "micro":
-		GlobalEngagementMetrics.ClickMoment.Add(1)
 	}
 }
 
 func recordLikeByType(contentType string) {
 	switch contentType {
 	case "image":
-		GlobalEngagementMetrics.LikePhoto.Add(1)
+		GlobalEngagementMetrics.LikeImage.Add(1)
 	case "video":
 		GlobalEngagementMetrics.LikeVideo.Add(1)
 	case "article":
 		GlobalEngagementMetrics.LikeArticle.Add(1)
-	case "micro":
-		GlobalEngagementMetrics.LikeMoment.Add(1)
 	}
 }
 
 func recordShareByType(contentType string) {
 	switch contentType {
 	case "image":
-		GlobalEngagementMetrics.SharePhoto.Add(1)
+		GlobalEngagementMetrics.ShareImage.Add(1)
 	case "video":
 		GlobalEngagementMetrics.ShareVideo.Add(1)
 	case "article":
 		GlobalEngagementMetrics.ShareArticle.Add(1)
-	case "micro":
-		GlobalEngagementMetrics.ShareMoment.Add(1)
 	}
 }
 
 func recordCommentByType(contentType string) {
 	switch contentType {
 	case "image":
-		GlobalEngagementMetrics.CommentPhoto.Add(1)
+		GlobalEngagementMetrics.CommentImage.Add(1)
 	case "video":
 		GlobalEngagementMetrics.CommentVideo.Add(1)
 	case "article":
 		GlobalEngagementMetrics.CommentArticle.Add(1)
-	case "micro":
-		GlobalEngagementMetrics.CommentMoment.Add(1)
 	}
 }
 
@@ -463,15 +445,13 @@ func RecordModelTimeoutMetric() {
 
 // SnapshotEngagementMetrics returns a point-in-time business metrics map.
 func SnapshotEngagementMetrics() map[string]int64 {
-	impressionTotal := GlobalEngagementMetrics.ImpressionPhoto.Load() +
+	impressionTotal := GlobalEngagementMetrics.ImpressionImage.Load() +
 		GlobalEngagementMetrics.ImpressionVideo.Load() +
-		GlobalEngagementMetrics.ImpressionArticle.Load() +
-		GlobalEngagementMetrics.ImpressionMoment.Load()
+		GlobalEngagementMetrics.ImpressionArticle.Load()
 
-	deepTotal := GlobalEngagementMetrics.DeepEngagePhoto.Load() +
+	deepTotal := GlobalEngagementMetrics.DeepEngageImage.Load() +
 		GlobalEngagementMetrics.DeepEngageVideo.Load() +
-		GlobalEngagementMetrics.DeepEngageArticle.Load() +
-		GlobalEngagementMetrics.DeepEngageMoment.Load()
+		GlobalEngagementMetrics.DeepEngageArticle.Load()
 
 	interactionTotal := GlobalEngagementMetrics.LikeTotal.Load() +
 		GlobalEngagementMetrics.ShareTotal.Load() +
@@ -479,33 +459,27 @@ func SnapshotEngagementMetrics() map[string]int64 {
 
 	return map[string]int64{
 		"impression_total":         impressionTotal,
-		"impression_photo":         GlobalEngagementMetrics.ImpressionPhoto.Load(),
+		"impression_image":         GlobalEngagementMetrics.ImpressionImage.Load(),
 		"impression_video":         GlobalEngagementMetrics.ImpressionVideo.Load(),
 		"impression_article":       GlobalEngagementMetrics.ImpressionArticle.Load(),
-		"impression_moment":        GlobalEngagementMetrics.ImpressionMoment.Load(),
 		"click_total":              GlobalEngagementMetrics.ClickTotal.Load(),
-		"click_photo":              GlobalEngagementMetrics.ClickPhoto.Load(),
+		"click_image":              GlobalEngagementMetrics.ClickImage.Load(),
 		"click_video":              GlobalEngagementMetrics.ClickVideo.Load(),
 		"click_article":            GlobalEngagementMetrics.ClickArticle.Load(),
-		"click_moment":             GlobalEngagementMetrics.ClickMoment.Load(),
 		"deep_engage_total":        deepTotal,
-		"deep_engage_photo":        GlobalEngagementMetrics.DeepEngagePhoto.Load(),
+		"deep_engage_image":        GlobalEngagementMetrics.DeepEngageImage.Load(),
 		"deep_engage_video":        GlobalEngagementMetrics.DeepEngageVideo.Load(),
 		"deep_engage_article":      GlobalEngagementMetrics.DeepEngageArticle.Load(),
-		"deep_engage_moment":       GlobalEngagementMetrics.DeepEngageMoment.Load(),
 		"interaction_total":        interactionTotal,
-		"like_photo":               GlobalEngagementMetrics.LikePhoto.Load(),
+		"like_image":               GlobalEngagementMetrics.LikeImage.Load(),
 		"like_video":               GlobalEngagementMetrics.LikeVideo.Load(),
 		"like_article":             GlobalEngagementMetrics.LikeArticle.Load(),
-		"like_moment":              GlobalEngagementMetrics.LikeMoment.Load(),
-		"share_photo":              GlobalEngagementMetrics.SharePhoto.Load(),
+		"share_image":              GlobalEngagementMetrics.ShareImage.Load(),
 		"share_video":              GlobalEngagementMetrics.ShareVideo.Load(),
 		"share_article":            GlobalEngagementMetrics.ShareArticle.Load(),
-		"share_moment":             GlobalEngagementMetrics.ShareMoment.Load(),
-		"comment_photo":            GlobalEngagementMetrics.CommentPhoto.Load(),
+		"comment_image":            GlobalEngagementMetrics.CommentImage.Load(),
 		"comment_video":            GlobalEngagementMetrics.CommentVideo.Load(),
 		"comment_article":          GlobalEngagementMetrics.CommentArticle.Load(),
-		"comment_moment":           GlobalEngagementMetrics.CommentMoment.Load(),
 		"dislike_total":            GlobalEngagementMetrics.DislikeTotal.Load(),
 		"skip_total":               GlobalEngagementMetrics.SkipTotal.Load(),
 		"social_impressions":       GlobalEngagementMetrics.SocialImpressions.Load(),

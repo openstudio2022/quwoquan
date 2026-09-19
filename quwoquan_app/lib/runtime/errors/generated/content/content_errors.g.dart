@@ -45,6 +45,18 @@ enum ContentErrorCode {
   unauthorized('CONTENT.USER.unauthorized', 'surface', 0, 401),
   invalidArgument('CONTENT.USER.invalid_argument', 'surface', 0, 400),
   invalidContentType('CONTENT.USER.invalid_content_type', 'surface', 0, 400),
+  presentationUnsupported(
+    'CONTENT.USER.presentation_unsupported',
+    'surface',
+    0,
+    426,
+  ),
+  presentationContractChanged(
+    'CONTENT.USER.presentation_contract_changed',
+    'surface',
+    0,
+    409,
+  ),
   rateLimited('CONTENT.USER.rate_limited', 'retry', 60, 429),
   feedCapacityUnavailable(
     'CONTENT.SYSTEM.feed_capacity_unavailable',
@@ -330,6 +342,10 @@ enum ContentErrorCode {
         return ContentErrorCode.invalidArgument;
       case 'CONTENT.USER.invalid_content_type':
         return ContentErrorCode.invalidContentType;
+      case 'CONTENT.USER.presentation_unsupported':
+        return ContentErrorCode.presentationUnsupported;
+      case 'CONTENT.USER.presentation_contract_changed':
+        return ContentErrorCode.presentationContractChanged;
       case 'CONTENT.USER.rate_limited':
         return ContentErrorCode.rateLimited;
       case 'CONTENT.SYSTEM.feed_capacity_unavailable':
@@ -471,6 +487,8 @@ class ContentErrorMessages {
     ContentErrorCode.unauthorized: '请先登录',
     ContentErrorCode.invalidArgument: '请求参数有误，请检查后重试',
     ContentErrorCode.invalidContentType: '不支持的内容类型',
+    ContentErrorCode.presentationUnsupported: '当前版本暂不支持此内容，请更新后查看',
+    ContentErrorCode.presentationContractChanged: '内容展示能力已变化，请刷新列表',
     ContentErrorCode.rateLimited: '操作太频繁，请稍后重试',
     ContentErrorCode.feedCapacityUnavailable: '内容服务繁忙，请稍后重试',
     ContentErrorCode.contentTooLong: '内容超出长度限制',
@@ -551,6 +569,10 @@ class ContentErrorMessages {
     ContentErrorCode.unauthorized: 'Please sign in to continue',
     ContentErrorCode.invalidArgument: 'Invalid request, please check and retry',
     ContentErrorCode.invalidContentType: 'Unsupported content type',
+    ContentErrorCode.presentationUnsupported:
+        'This content requires a newer app version',
+    ContentErrorCode.presentationContractChanged:
+        'Content capabilities changed; refresh the list',
     ContentErrorCode.rateLimited: 'Too many requests, please retry later',
     ContentErrorCode.feedCapacityUnavailable:
         'Content service is busy, please retry shortly',

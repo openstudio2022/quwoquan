@@ -20,7 +20,6 @@ func WithFeedDeliveryPageStore(store deliveryapp.Store) FeedServiceOption {
 
 type feedDeliveryPageReplay struct {
 	items               []FeedItemView
-	objectCards         []ObjectCardView
 	nextCursor          string
 	previousCursor      string
 	paginationExpiresAt time.Time
@@ -41,7 +40,6 @@ type feedDeliveryPageAppendInput struct {
 	depth            int
 	previousPageID   string
 	items            []FeedItemView
-	objectCards      []ObjectCardView
 	outboundCursor   string
 	releaseID        string
 	manifestDigest   string
@@ -74,7 +72,6 @@ func (s *FeedService) appendFeedDeliveryPage(
 		Depth:            input.depth,
 		PreviousPageID:   input.previousPageID,
 		Items:            deliveryPageReferences(input.items),
-		ObjectCards:      deliveryPageObjectCards(input.objectCards),
 		OutboundCursor:   input.outboundCursor,
 		ReleaseID:        input.releaseID,
 		ManifestDigest:   input.manifestDigest,
@@ -116,7 +113,6 @@ func (s *FeedService) replayFeedDeliveryPage(
 	ctx context.Context,
 	req ListFeedRequest,
 	route feedRoute,
-	requestedIdentity string,
 	requestedType string,
 	cursorState feedCursorEnvelope,
 	appendPost func(*postports.PostFeedItemSlice, *rtrec.FeedItem) bool,
@@ -125,7 +121,7 @@ func (s *FeedService) replayFeedDeliveryPage(
 	if s == nil || s.deliveryPages == nil || s.postReader == nil {
 		return feedDeliveryPageReplay{}, deliveryapp.ErrStoreUnavailable
 	}
-	scope := feedCursorScope(req, route, requestedIdentity, requestedType)
+	scope := feedCursorScope(req, route, requestedType)
 	scopeHash := deliverymodel.ScopeHash(scope)
 	page, err := s.deliveryPages.Load(ctx, scopeHash, cursorState.DeliveryPageID)
 	if err != nil {
@@ -224,7 +220,6 @@ func (s *FeedService) replayFeedDeliveryPage(
 	paginationExpiry := earlierTime(nextExpiry, previousExpiry)
 	return feedDeliveryPageReplay{
 		items:               items,
-		objectCards:         rebaseDeliveredObjectCards(page, items),
 		nextCursor:          nextCursor,
 		previousCursor:      previousCursor,
 		paginationExpiresAt: paginationExpiry,
@@ -292,44 +287,6 @@ func feedDeliveryReleaseMatches(
 		strings.TrimSpace(post.LifecycleStatus) == "active"
 }
 
-func rebaseDeliveredObjectCards(
-	page deliverymodel.Page,
-	visible []FeedItemView,
-) []ObjectCardView {
-	if len(page.ObjectCards) == 0 || len(visible) == 0 {
-		return nil
-	}
-	visibleIDs := make(map[string]struct{}, len(visible))
-	for _, item := range visible {
-		visibleIDs[item.PostID] = struct{}{}
-	}
-	cards := make([]ObjectCardView, 0, len(page.ObjectCards))
-	for _, card := range page.ObjectCards {
-		originalAnchor := card.AnchorIndex
-		if originalAnchor > len(page.Items) {
-			originalAnchor = len(page.Items)
-		}
-		visibleAnchor := 0
-		for _, item := range page.Items[:originalAnchor] {
-			if _, ok := visibleIDs[item.PostID]; ok {
-				visibleAnchor++
-			}
-		}
-		cards = append(cards, ObjectCardView{
-			ObjectKind:  card.ObjectKind,
-			ObjectID:    card.ObjectID,
-			Title:       card.Title,
-			Subtitle:    card.Subtitle,
-			CoverURL:    card.CoverURL,
-			TagRefs:     append([]string(nil), card.TagRefs...),
-			ReasonText:  card.ReasonText,
-			RecallPath:  card.RecallPath,
-			AnchorIndex: visibleAnchor,
-		})
-	}
-	return cards
-}
-
 func deliveryPageReferences(items []FeedItemView) []deliverymodel.PostReference {
 	references := make([]deliverymodel.PostReference, 0, len(items))
 	for _, item := range items {
@@ -342,24 +299,6 @@ func deliveryPageReferences(items []FeedItemView) []deliverymodel.PostReference 
 		})
 	}
 	return references
-}
-
-func deliveryPageObjectCards(cards []ObjectCardView) []deliverymodel.ObjectCard {
-	output := make([]deliverymodel.ObjectCard, 0, len(cards))
-	for _, card := range cards {
-		output = append(output, deliverymodel.ObjectCard{
-			ObjectKind:  card.ObjectKind,
-			ObjectID:    card.ObjectID,
-			Title:       card.Title,
-			Subtitle:    card.Subtitle,
-			CoverURL:    card.CoverURL,
-			TagRefs:     append([]string(nil), card.TagRefs...),
-			ReasonText:  card.ReasonText,
-			RecallPath:  card.RecallPath,
-			AnchorIndex: card.AnchorIndex,
-		})
-	}
-	return output
 }
 
 func earlierTime(left time.Time, right time.Time) time.Time {

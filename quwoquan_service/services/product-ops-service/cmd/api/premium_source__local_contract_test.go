@@ -23,7 +23,7 @@ func TestPremiumSourceCompositionSignsExactScopeAndRejectsWrongSource(t *testing
 	d := "sha256:" + strings.Repeat("a", 64)
 	release := rt.ReleaseCandidateBinding{Environment: "gamma", SourceOwner: "qwq_data", ReleaseID: "A", ManifestDigest: d}
 	source := rt.ReleaseCandidateObjectIdentity{Release: release, ObjectType: "content.post", ObjectID: "p", SourceVersion: 1, SourceDigest: d}
-	snapshot := rt.ReleasePostCandidateSnapshot{Release: release, SourceClosureDigest: d, MediaClosureDigest: d, Posts: []rt.ReleasePostPublicSnapshot{{Identity: source, PostRef: "p", AuthorID: "a", AuthorDisplayName: "Author", ContentType: "video", ContentIdentity: "work", Status: "published", Visibility: "public", ModerationStatus: "approved", TagRefs: []string{}, EntityRefs: []string{}, MediaAssetIDs: []string{}, MediaURLs: []string{}, PublishedAt: "2026-09-13T00:00:00Z", UpdatedAt: "2026-09-13T00:00:00Z", DeepLink: "/p"}}}
+	snapshot := rt.ReleasePostCandidateSnapshot{Release: release, SourceClosureDigest: d, MediaClosureDigest: d, Posts: []rt.ReleasePostPublicSnapshot{{Identity: source, PostRef: "p", AuthorID: "a", AuthorDisplayName: "Author", ContentType: "video", Status: "published", Visibility: "public", ModerationStatus: "approved", TagRefs: []string{}, EntityRefs: []string{}, MediaAssetIDs: []string{}, MediaURLs: []string{}, PublishedAt: "2026-09-13T00:00:00Z", UpdatedAt: "2026-09-13T00:00:00Z", DeepLink: "/p"}}}
 	_ = snapshot.Seal()
 	verifier, err := auth.NewHS256Verifier(cfg)
 	if err != nil {

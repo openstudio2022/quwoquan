@@ -2,7 +2,10 @@
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-003.t1
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001.t5
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/home-recommend-intersection-redesign/spec.md#gwt-001.t6
+// spec_ref: specs/feature-tree/discovery-content/content-display-consistency/spec.md#sit-001
 import 'dart:io';
+
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/gestures.dart';
@@ -44,6 +47,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         AssistantUsePolicy,
         BehaviorEventType,
         ContentFeedEmptyReason,
+        ContentType,
         IntersectionActionHint,
         IntersectionActorEvidence,
         IntersectionEvidenceRow,
@@ -398,13 +402,11 @@ ContentPostViewData _microPost({
       reason ?? _reason(intersectionClass: reasonClass, postId: postId);
   return ContentPostViewData(
     id: postId,
-    type: 'micro',
-    identity: 'moment',
-    displayFormat: videoUrl != null
-        ? 'video'
+    type: videoUrl != null
+        ? ContentType.video
         : imageUrls.isNotEmpty
-        ? 'image'
-        : 'note',
+        ? ContentType.image
+        : ContentType.article,
     authorId: 'user_demo',
     displayName: '小趣用户',
     avatarUrl: avatarUrl,
@@ -443,9 +445,7 @@ ContentPostViewData _photoPost({
   final effectiveReason = reason ?? _reason(postId: postId);
   return ContentPostViewData(
     id: postId,
-    type: 'image',
-    identity: 'work',
-    displayFormat: 'image',
+    type: ContentType.image,
     assistantUsePolicy: AssistantUsePolicy.inherit,
     authorId: 'user_photo',
     displayName: '影像作者',
@@ -474,9 +474,7 @@ ContentPostViewData _videoPost({required int width, required int height}) {
   final postId = 'video_${width}_$height';
   return ContentPostViewData(
     id: postId,
-    type: 'video',
-    identity: 'work',
-    displayFormat: 'video',
+    type: ContentType.video,
     assistantUsePolicy: AssistantUsePolicy.inherit,
     authorId: 'user_video',
     displayName: '视频作者',
@@ -520,9 +518,7 @@ ContentPostViewData _articleLayoutPost({
 }) {
   return ContentPostViewData(
     id: id,
-    type: 'article',
-    identity: 'work',
-    displayFormat: 'note',
+    type: ContentType.article,
     assistantUsePolicy: AssistantUsePolicy.inherit,
     authorId: 'user_article',
     displayName: '文章作者',
@@ -606,6 +602,8 @@ Widget _buildFeed(
   ContentPostViewData post, {
   ContentBehaviorTracker? tracker,
   bool authenticated = false,
+  double? contentWidth,
+  Size mediaQuerySize = const Size(390, 844),
   List<Override> extraOverrides = const <Override>[],
   void Function(
     ContentPostViewData post,
@@ -635,13 +633,18 @@ Widget _buildFeed(
       home: ScreenUtilInit(
         designSize: const Size(390, 844),
         child: MediaQuery(
-          data: const MediaQueryData(size: Size(390, 844)),
-          child: HomeMultiFormFeed(
-            isDark: false,
-            channelId: 'recommend',
-            template: 'single_column_multiform',
-            onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
-            onPostTap: onPostTap,
+          data: MediaQueryData(size: mediaQuerySize),
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: SizedBox(
+              width: contentWidth,
+              child: HomeMultiFormFeed(
+                isDark: false,
+                channelId: 'recommend',
+                onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
+                onPostTap: onPostTap,
+              ),
+            ),
           ),
         ),
       ),
@@ -674,7 +677,6 @@ Widget _buildRealProviderFeed() {
           child: HomeMultiFormFeed(
             isDark: false,
             channelId: 'recommend',
-            template: 'single_column_multiform',
             onUserTap: _noopUserTap,
           ),
         ),
@@ -691,6 +693,37 @@ void _noopUserTap(
 }) {}
 
 void main() {
+  testWidgets('首页列数跟随实际内容区而不是整窗 MediaQuery', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
+    for (final width in <double>[390, 720, 1200]) {
+      await tester.pumpWidget(
+        _buildFeed(
+          _microPost(),
+          contentWidth: width,
+          mediaQuerySize: const Size(1440, 900),
+        ),
+      );
+      await tester.pump();
+      if (width == 390) {
+        expect(find.byType(SliverMasonryGrid), findsNothing);
+        expect(
+          tester.getSize(find.byKey(const ValueKey('home-feed-card-0'))).width,
+          390,
+        );
+      } else {
+        final grid = tester.widget<SliverMasonryGrid>(
+          find.byType(SliverMasonryGrid),
+        );
+        final delegate =
+            grid.gridDelegate
+                as SliverSimpleGridDelegateWithFixedCrossAxisCount;
+        expect(delegate.crossAxisCount, width == 720 ? 3 : 4);
+      }
+    }
+  });
+
   testWidgets('单列 post 内展示作者身份、媒体、交集与底部互动', (tester) async {
     await tester.binding.setSurfaceSize(const Size(390, 844));
     addTearDown(() => tester.binding.setSurfaceSize(null));
@@ -2170,9 +2203,7 @@ const _kHomeCardWishlistKey = ValueKey<String>('home-card-wishlist-action');
 ContentPostViewData _wishlistAnchoredPost() {
   return ContentPostViewData(
     id: 'post_wishlist_card_1',
-    type: 'image',
-    identity: 'work',
-    displayFormat: 'image',
+    type: ContentType.image,
     assistantUsePolicy: AssistantUsePolicy.inherit,
     authorId: 'user_wish_author',
     displayName: '风光摄影师',
@@ -2248,7 +2279,6 @@ Widget _routedFeed(
             child: HomeMultiFormFeed(
               isDark: false,
               channelId: 'recommend',
-              template: 'single_column_multiform',
               onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
               onPostTap: null,
             ),
@@ -2647,7 +2677,6 @@ Widget _buildFeedScope({
           child: HomeMultiFormFeed(
             isDark: false,
             channelId: channelId,
-            template: 'single_column_multiform',
             onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
           ),
         ),

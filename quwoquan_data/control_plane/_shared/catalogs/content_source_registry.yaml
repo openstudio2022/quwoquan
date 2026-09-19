@@ -49,44 +49,42 @@ allowedValues:
     - maxPagesPerDay
     - crawlAllowed
 
-# 来源专业度先验（作品 vs 随记判定的来源侧信号）。
-# baseTier ∈ tier1..tier5；worksAffinity ∈ work_strong/work/neutral/moment/reject。
-# 判定权重在 works_classification.yaml；此处只声明"来源类别 → 专业度先验"映射（单一真相源）。
+# 来源专业度先验（baseTier ∈ tier1..tier5）。
+# 此处只声明"来源类别 → 专业度先验"映射（单一真相源）。
 # 缺失 sourceClass 走 default；内容实测信号(score_source_markdown/结构/图片)会进一步调整。
 sourceTierSignals:
   default:
     baseTier: tier4_casual
-    worksAffinity: neutral
   bySourceClass:
-    encyclopedia: { baseTier: tier1_authoritative, worksAffinity: work_strong }
-    knowledge_graph: { baseTier: tier1_authoritative, worksAffinity: work_strong }
-    official_site: { baseTier: tier1_authoritative, worksAffinity: work_strong }
-    government_tourism: { baseTier: tier1_authoritative, worksAffinity: work }
-    official_article: { baseTier: tier2_professional, worksAffinity: work }
-    authoritative_media: { baseTier: tier2_professional, worksAffinity: work }
-    vertical_professional: { baseTier: tier2_professional, worksAffinity: work }
-    media_article: { baseTier: tier2_professional, worksAffinity: work }
-    ugc_longform: { baseTier: tier3_quality_ugc, worksAffinity: neutral }
-    community_post: { baseTier: tier3_quality_ugc, worksAffinity: neutral }
-    platform_article: { baseTier: tier3_quality_ugc, worksAffinity: neutral }
-    open_license_media: { baseTier: tier2_professional, worksAffinity: work }
-    photography_community: { baseTier: tier2_professional, worksAffinity: work }
-    free_stock: { baseTier: tier3_quality_ugc, worksAffinity: work }
-    commercial_stock: { baseTier: tier2_professional, worksAffinity: work }
-    visual_discovery_platform: { baseTier: tier4_casual, worksAffinity: neutral }
-    domestic_stock: { baseTier: tier3_quality_ugc, worksAffinity: work }
-    official_gallery: { baseTier: tier1_authoritative, worksAffinity: work }
-    museum_open_access: { baseTier: tier1_authoritative, worksAffinity: work }
-    vertical_image_platform: { baseTier: tier3_quality_ugc, worksAffinity: neutral }
-    guidebook: { baseTier: tier2_professional, worksAffinity: work }
-    route_platform: { baseTier: tier3_quality_ugc, worksAffinity: work }
-    review_note: { baseTier: tier3_quality_ugc, worksAffinity: neutral }
-    video_platform: { baseTier: tier4_casual, worksAffinity: neutral }
-    vertical_video: { baseTier: tier3_quality_ugc, worksAffinity: neutral }
-    stock_video: { baseTier: tier3_quality_ugc, worksAffinity: work }
-    social_feed: { baseTier: tier4_casual, worksAffinity: moment }
-    microblog: { baseTier: tier4_casual, worksAffinity: moment }
-    short_video_feed: { baseTier: tier4_casual, worksAffinity: moment }
+    encyclopedia: { baseTier: tier1_authoritative }
+    knowledge_graph: { baseTier: tier1_authoritative }
+    official_site: { baseTier: tier1_authoritative }
+    government_tourism: { baseTier: tier1_authoritative }
+    official_article: { baseTier: tier2_professional }
+    authoritative_media: { baseTier: tier2_professional }
+    vertical_professional: { baseTier: tier2_professional }
+    media_article: { baseTier: tier2_professional }
+    ugc_longform: { baseTier: tier3_quality_ugc }
+    community_post: { baseTier: tier3_quality_ugc }
+    platform_article: { baseTier: tier3_quality_ugc }
+    open_license_media: { baseTier: tier2_professional }
+    photography_community: { baseTier: tier2_professional }
+    free_stock: { baseTier: tier3_quality_ugc }
+    commercial_stock: { baseTier: tier2_professional }
+    visual_discovery_platform: { baseTier: tier4_casual }
+    domestic_stock: { baseTier: tier3_quality_ugc }
+    official_gallery: { baseTier: tier1_authoritative }
+    museum_open_access: { baseTier: tier1_authoritative }
+    vertical_image_platform: { baseTier: tier3_quality_ugc }
+    guidebook: { baseTier: tier2_professional }
+    route_platform: { baseTier: tier3_quality_ugc }
+    review_note: { baseTier: tier3_quality_ugc }
+    video_platform: { baseTier: tier4_casual }
+    vertical_video: { baseTier: tier3_quality_ugc }
+    stock_video: { baseTier: tier3_quality_ugc }
+    social_feed: { baseTier: tier4_casual }
+    microblog: { baseTier: tier4_casual }
+    short_video_feed: { baseTier: tier4_casual }
 
 lanePolicies:
   homepage:

@@ -542,25 +542,23 @@ def test_app_pipeline_requires_exactly_five_build_products_without_environment_c
     assert "build_product_id=build_product_id" in collector
 
 
-def test_app_pipeline_missing_signing_inputs_are_typed_gate_blocks() -> None:
+def test_app_pipeline_android_inputs_are_signing_only_and_firebase_free() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
 
-    assert text.count("quwoquan_ops/gate/require_ci_inputs.py") == 2
-    assert text.count("--scope release-signing") == 2
+    assert text.count("quwoquan_ops/gate/require_ci_inputs.py") == 3
+    assert text.count("--scope release-signing") == 3
     for required in (
         "QWQ_ANDROID_RELEASE_KEYSTORE_B64",
         "QWQ_ANDROID_RELEASE_KEY_ALIAS",
-        "QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON",
-        "QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON",
+        "QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256",
     ):
         assert required in text
-    for retired in (
-        "QWQ_ANDROID_ALPHA_GOOGLE_SERVICES_JSON",
-        "QWQ_ANDROID_BETA_GOOGLE_SERVICES_JSON",
-        "QWQ_ANDROID_GAMMA_GOOGLE_SERVICES_JSON",
+    for forbidden in (
+        "GOOGLE_SERVICES_JSON",
+        "google-" + "services.json",
+        "FIREBASE_INPUT",
     ):
-        assert retired not in text
-    assert "FIREBASE_INPUT=QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON" in text
+        assert forbidden not in text
 
 
 def test_collector_preserves_nonpromotable_baseline_product_manifest(

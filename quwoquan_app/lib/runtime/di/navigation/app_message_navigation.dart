@@ -1,4 +1,5 @@
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -63,7 +64,7 @@ class AppMessageNavigationTarget {
         return AppMessageNavigationTarget._(
           AppRoutePaths.workBrowser(
             workId: targetId,
-            source: 'notification',
+            source: ReferralSource.pushNotification.value,
             openComments: 'true',
             commentEntrySource:
                 MediaViewerCommentContext.entrySourceNotification,

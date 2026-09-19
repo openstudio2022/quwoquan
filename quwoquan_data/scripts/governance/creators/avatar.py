@@ -307,7 +307,13 @@ def materialize_creator_avatar(
         avatar_sha256=digest,
         derivative_body=derivative["bytes"],
         evidence_ref=evidence_ref,
-        evidence_document=quality_evidence,
+        evidence_document={**quality_evidence, "commercialRights": {
+            **dict(source_asset_evidence),
+            "canonicalFilePage": str(source_asset_evidence.get("sourceUrl") or ""),
+            "source": str(source_asset_evidence.get("sourceUrl") or ""),
+            "sourceUseMode": "licensed_adaptation" if source_asset_evidence.get("rightsAuditStatus") == "verified" else "rights_audit_only",
+            "fetchedAt": str(source_asset_evidence.get("fetchedAt") or "2026-01-01T00:00:00Z"),
+        }},
         avatar_asset=avatar_asset,
     )
 

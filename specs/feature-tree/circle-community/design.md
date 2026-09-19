@@ -34,7 +34,7 @@
 - [`gathering-coordination`](./gathering-coordination/spec.md)：以单一 Gathering 组合 lifecycle、Participation、Host、room+board、Outcome 与安全边界。
 - [`in-circle-recommendation-loop`](./in-circle-recommendation-loop/spec.md)：把圈内行为事实转为权限受控的候选排序，并将曝光与反馈归因回评估链路。
 - Gathering 主数据流为 `Content -> intersection sentence -> user-expanded evidence -> one canonical actionHint -> source refs -> Circle draft -> Chat ensure contextual room -> Circle publish -> Circle admission/Participation -> Chat membership -> Board projection -> Circle Outcome -> Content confirmed recap/provenance`；每一步只提交 owner 事实并以 receipt/outbox 收敛。
-- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
+- Feature 层表达业务与设计边界；工程影响由 current actual diff 与 dependency closure 推导。
 
 ## 5. 关键决策
 

@@ -286,7 +286,6 @@ def _http(**kwargs: Any) -> subject.HttpObservation:
         payload = {
             "postId": path.rsplit("/", 1)[-1],
             "contentType": carrier,
-            "contentIdentity": "work",
         }
     return subject.HttpObservation(
         method=str(kwargs["method"]),

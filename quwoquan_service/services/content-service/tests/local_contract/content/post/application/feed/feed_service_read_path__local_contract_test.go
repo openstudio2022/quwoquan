@@ -89,10 +89,6 @@ func (r fixtureFeedReader) ListPublishedFeedPosts(
 			}
 			continue
 		}
-		identity := ResolvedContentIdentity(post.ContentType, post.ContentIdentity)
-		if request.Identity() != "" && identity != string(request.Identity()) {
-			continue
-		}
 		if request.ContentType() != "" && post.ContentType != string(request.ContentType()) {
 			continue
 		}
@@ -134,7 +130,6 @@ func fixturePostFeedSlice(post postmodel.Post) postports.PostFeedItemSlice {
 		PostID:           postports.NewPostID(post.ID),
 		AuthorPersonaID:  postports.NewPersonaID(post.AuthorId),
 		ContentType:      postports.ContentType(post.ContentType),
-		ContentIdentity:  postports.ContentIdentity(post.ContentIdentity),
 		Title:            post.Title,
 		Body:             post.Body,
 		MediaURLs:        append([]string(nil), post.MediaUrls...),
@@ -176,14 +171,13 @@ func TestListFeedCarriesVersionBoundHLSCMAFDelivery(t *testing.T) {
 		hlsMasterURL      = "media/video/m/asset/mas_feed_adaptive_0001/v4/hls/master.m3u8"
 	)
 	reader := fixtureFeedReader{posts: []postmodel.Post{{
-		ID:              "post_feed_adaptive_0001",
-		ContentType:     "video",
-		ContentIdentity: "work",
-		AuthorId:        "author_adaptive",
-		Status:          "published",
-		Visibility:      "public",
-		VideoUrl:        progressiveURL,
-		DurationMs:      12000,
+		ID:          "post_feed_adaptive_0001",
+		ContentType: "video",
+		AuthorId:    "author_adaptive",
+		Status:      "published",
+		Visibility:  "public",
+		VideoUrl:    progressiveURL,
+		DurationMs:  12000,
 		MediaItems: []postmodel.PostMediaItem{{
 			Kind:                     "video",
 			MediaAssetId:             assetID,
@@ -201,7 +195,7 @@ func TestListFeedCarriesVersionBoundHLSCMAFDelivery(t *testing.T) {
 		ctx,
 		ListFeedRequest{
 			UserID: "user_feed_adaptive", SessionID: "session_feed_adaptive",
-			Identity: "work", Type: "video", Limit: 10,
+			Type: "video", Limit: 10,
 		},
 	)
 	if err != nil {
@@ -616,13 +610,13 @@ func feedDisplayReadyReason(id, postID, weightTier string) intersection.Intersec
 func TestListFeed_NamedUGCQueryDoesNotInheritActiveDataReleaseBinding(t *testing.T) {
 	ctx := context.Background()
 	reader := &capturingPostFeedReader{fixtureFeedReader: fixtureFeedReader{posts: []postmodel.Post{{
-		ID: "ugc-photo", ContentType: "image", ContentIdentity: "work",
+		ID: "ugc-photo", ContentType: "image",
 		AuthorId: "author-ugc", Status: "published", Visibility: "public",
 	}}}}
 	service := NewFeedService(reader, readyActiveSupplyOption(), feedDeliveryPageStoreOption())
 
 	response, err := service.ListFeed(ctx, ListFeedRequest{
-		UserID: "user-ugc", SessionID: "session-ugc", Identity: "work", Type: "image", Limit: 20,
+		UserID: "user-ugc", SessionID: "session-ugc", Type: "image", Limit: 20,
 	})
 	if err != nil {
 		t.Fatalf("ListFeed named UGC query: %v", err)
@@ -710,26 +704,26 @@ func TestListFeed_ChannelRecommendRoutesRankedWindow(t *testing.T) {
 	}
 }
 
-// TestListFeed_ChannelIgnoresNoncanonicalIdentityType 守护频道推荐主链路与浏览流互斥：
-// channelId 存在时 identity/type 被忽略，不得据此改走 PostReader 时间流。
-func TestListFeed_ChannelIgnoresNoncanonicalIdentityType(t *testing.T) {
+// TestListFeed_ChannelTakesPrecedenceOverContentType 守护频道推荐与具名查询互斥：
+// channelId 存在时 canonical type 不得据此改走 PostReader 时间流。
+func TestListFeed_ChannelTakesPrecedenceOverContentType(t *testing.T) {
 	ctx := context.Background()
 	router := rtredis.MustNewRouter(rtredis.DefaultRouterConfig())
 	sessionCache := rtrec.NewSessionCache(rtrec.NewHotPath(rtredis.NewRecAdapter(router.Scene("rec"))), 2*time.Second, 1000)
 	source := &captureRecallSource{candidates: []rtrec.ContentCandidate{
-		{ContentID: "p_engine", ContentType: "micro", PublishedAt: time.Now()},
+		{ContentID: "p_engine", ContentType: "article", PublishedAt: time.Now()},
 	}}
 	engine := rtrec.NewEngine(sessionCache, []rtrec.CandidateSource{source})
 	reader := fixtureFeedReader{posts: []postmodel.Post{
-		{ID: "p_engine", ContentType: "micro", ContentIdentity: "moment", AuthorId: "author_a", Status: "published", Visibility: "public"},
-		{ID: "p_timeline", ContentType: "micro", ContentIdentity: "moment", AuthorId: "author_b", Status: "published", Visibility: "public"},
+		{ID: "p_engine", ContentType: "article", AuthorId: "author_a", Status: "published", Visibility: "public"},
+		{ID: "p_timeline", ContentType: "article", AuthorId: "author_b", Status: "published", Visibility: "public"},
 	}}
 	probe, options := testsupport.CapturedRankedRecommendationOptions(engine, readyActiveSupplyOption())
 	svc := NewFeedService(reader, options...)
 
 	resp, err := svc.ListFeed(ctx, ListFeedRequest{
 		UserID: "u_mixed", SessionID: "s_mixed",
-		ChannelID: "recommend", Identity: "moment", Type: "micro", Limit: 10,
+		ChannelID: "recommend", Type: "image", Limit: 10,
 	})
 	if err != nil {
 		t.Fatalf("ListFeed: %v", err)
@@ -738,10 +732,8 @@ func TestListFeed_ChannelIgnoresNoncanonicalIdentityType(t *testing.T) {
 	if len(commands) != 1 || commands[0].Scenario != "content_feed" {
 		t.Fatalf("channelId must select the content_feed ranked-window scenario, got %+v", commands)
 	}
-	for _, item := range resp.Items {
-		if item.PostID == "p_timeline" {
-			t.Fatalf("channel request must not fill from post reader timeline, got %+v", resp.Items)
-		}
+	if len(resp.Items) != 1 || resp.Items[0].PostID != "p_engine" || resp.Items[0].ContentType != "article" {
+		t.Fatalf("channel must deliver the ranked article candidate despite type=image, without timeline fill: %+v", resp.Items)
 	}
 }
 

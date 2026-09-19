@@ -89,7 +89,6 @@ domain_operation_page_ids:
     UnlikePost: content.post.unlike
     UpdatePost: content.post.update
     UpdatePostSettings: content.post.settings
-    PromotePostToWork: content.post.promote
 
   entity:
     CreateHomepageClaimRequest: entity.homepage.claim.create

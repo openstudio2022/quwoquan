@@ -61,6 +61,8 @@ def test_release_reset_canonical__clears_only_canonical_output_after_baseline_re
     release_root = tmp_path / "data/releases"
     output_root = tmp_path
     publish_root = tmp_path / "publish"
+    from support.publish_repository_fixture import make_publish_repository
+    make_publish_repository(publish_root, "reset-fixture")
     _baseline(release_root)
     _receipt(output_root, "alpha")
     _receipt(output_root, "beta")
@@ -77,12 +79,13 @@ def test_release_reset_canonical__clears_only_canonical_output_after_baseline_re
     )
 
     assert removed == ("creators", "entities", "tags")
-    assert list(publish_root.iterdir()) == []
+    assert {path.name for path in publish_root.iterdir()} == {"repository.json", ".git"}
 
 
 def _publish_one_object(publish_root: Path) -> None:
     """Publish one object in the exact order an object transaction applies it."""
-    publish_root.mkdir(parents=True, exist_ok=True)
+    from support.publish_repository_fixture import make_publish_repository
+    make_publish_repository(publish_root, "reset-fixture")
     inventory = load_or_bootstrap_inventory(publish_root)
     payload = json.dumps({"schema": "quwoquan_data.post_object"}).encode("utf-8")
     destination = publish_root / PUBLISHED_REF
@@ -108,6 +111,8 @@ def test_release_reset_canonical__drops_the_inventory_sidecar_with_the_tree__fun
 ) -> None:
     release_root = tmp_path / "data/releases"
     publish_root = tmp_path / "publish"
+    from support.publish_repository_fixture import make_publish_repository
+    make_publish_repository(publish_root, "reset-fixture")
     _baseline(release_root)
     _receipt(tmp_path, "alpha")
     _publish_one_object(publish_root)

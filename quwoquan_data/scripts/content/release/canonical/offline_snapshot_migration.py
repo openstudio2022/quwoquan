@@ -144,7 +144,10 @@ def _convert_content(root: Path, execution: Path, ref: str, target: Path, *, lib
     if final_ref != "manifest.json":
         _write(target / final_ref, safe_path(root, final_ref).read_bytes())
     _write(target / "content_review.json", (root / "content_review.json").read_bytes())
-    assert_valid(manifest, "publish" if entity is not None else "content", "entity" if entity is not None else "post_manifest")
+    if entity is not None:
+        assert_valid(manifest, "publish", "entity")
+    else:
+        assert_valid(manifest, "content", "post_manifest")
     _write_json(target / "manifest.json", manifest)
     read_object_sources(target, manifest)
     # 原 records 不重签，放在 original/；唯一新 record 只转录原状态和新物理包摘要。

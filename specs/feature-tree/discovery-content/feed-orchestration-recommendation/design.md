@@ -34,8 +34,8 @@
 ## 4. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 四类内容共用候选编排并保留类型特有策略
-- 决策：四类内容由 recommendation-service 的单一 Python CandidateIndex/FeatureProfile/RankedRecommendationWindow 编排并保留类型特有策略；Content 只做 Post 权限 hydration、FeedDeliveryPage 与公开响应。
+### DEC-001 三类 Post 与实体主页信封共用候选编排并保留类型特有策略
+- 决策：`ContentType` 三类（`image`、`video`、`article`）Post 与 `entityHomepage` 信封项由 recommendation-service 的单一 Python CandidateIndex/FeatureProfile/RankedRecommendationWindow 编排并保留类型特有策略；Content 只做 Post 权限 hydration、FeedDeliveryPage 与公开响应。
 - 理由：发现流推荐编排的端云行为、流式体验、交集解释、曝光治理集成边界与推荐 SLO 基线。
 - 被否决方案：由 Content Go、调用方、页面或脚本复制候选/特征/交集/排序状态并绕过公开契约。
 - 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
@@ -87,6 +87,53 @@
 - 关联要求：[`streaming-feed-performance` REQ-002](./streaming-feed-performance/spec.md#req-002)
 - 影响 Story：[`streaming-feed-performance`](./streaming-feed-performance/spec.md)
 - 关联验收：[`GWT-002`](./streaming-feed-performance/spec.md#gwt-002)
+
+<a id="dec-006"></a>
+### DEC-006 列表与推荐请求必须携带生成的 ClientContentPresentationContract，窗口 identity 含 contractDigest
+
+- 决策：每次 feed、推荐与作者作品列表请求上送 codegen 的 `ClientContentPresentationContract`（`contentTypes`、`listObjectKinds`、`presentationRecipes`、`openSurfaces`、`contractDigest`，与 App 生成枚举同源）。recommendation 在建窗与 hydrate 之前用集合差丢掉任一字段落在客户端闭集外的候选并补足 page size；`RankedFeedWindow` 的 identity 必须含 `contractDigest`，不同代 App 不复用同一窗口。
+- 理由：旧包遇未知枚举只能整页解码失败，而请求里只有 `X-Client-App-Build` 时云无法知道旧包能解码什么。用编译期生成的闭集做能力协商，「不下发」就退化成一次集合差运算；digest 进窗口 identity 则保证整轮翻页的候选集合始终对应同一代客户端闭集。
+- 被否决方案：用 `X-Client-App-Build` 维护第二张版本到能力的映射表；请求上送手写的支持列表；把 GraphQL 详情切片字段当能力广告；按 build 黑名单而不是集合差决定不下发；让不同 digest 的请求共享同一排序窗口。
+- 约束与影响：正常 App 的闭集字段全部来自 codegen，手写数组一律阻断。只有整份声明缺席才由服务边界装配 canonical 契约显式固定并生成的最小集合；不依赖历史无声明包，不跟随新枚举扩大，不建立版本能力映射。声明已出现但结构非法、集合无效、摘要缺失或不匹配时 typed 拒绝，禁止退回最小集合或全量能力。
+- 摘要与一致性：边界按 canonical 规则规范化并重算摘要后交给 recommendation，Go/Python/Dart 使用同一生成来源与 golden vectors；窗口、cursor、交付缓存和 App query snapshot 全部绑定有效摘要。同一窗口续页不重新选择能力，但每次必须核对请求与 cursor/window 的摘要身份，不匹配按 canonical 失败及重新首刷恢复，不能静默复用。窗口基数计入 DEC-003 的配额主体与 shard 预算。
+- 有界补页：过滤在建窗前完成；预算内候选足够才承诺补满。真实候选耗尽可返回末页与无后续 cursor；预算先耗尽必须保留独立 typed 终态，部分页是否交付、cursor 与恢复动作由 canonical 契约声明，不得把预算失败解释成末页，也不得改写已交付页补位。
+- 可测试面与恢复：真实请求边界注入缺声明/非法声明/伪摘要；跨语言 golden 比对规范化字节；候选源注入过滤比例、真实末尾与预算退出；同源缓存验证不同摘要不能交叉命中。恢复重放 canonical 请求，失败保留已有页，不走另一能力或旧模型。观测按既有 canonical telemetry 区分声明拒绝、摘要不匹配、候选耗尽和预算耗尽，不新造 wire 状态。回滚整体回退同一协议与生成消费闭包，不保留双轨默认。
+- 关联要求：[`REQ-001`](./spec.md#req-001)、[`content-type-framework REQ-006`](../content-type-framework/spec.md#req-006)
+- 影响 Story：[`unified-items-cursor`](./unified-items-cursor/spec.md)、[`realtime-feed-baseline`](./realtime-feed-baseline/spec.md)
+- 关联验收：[`SIT-001`](./spec.md#sit-001)、[`GWT-002`](./unified-items-cursor/spec.md#gwt-002)、[`GWT-003`](./unified-items-cursor/spec.md#gwt-003)
+
+<a id="dec-007"></a>
+### DEC-007 FeedPresentationRecipe 的唯一 writer 是 recommendation 建窗，且只服务 homeFeed
+
+- 决策：`FeedPresentationRecipe` 只由 recommendation 在建立排序窗口时写入，且只出现在 `homeFeed` 的列表项上；首页 v1 闭集是 `coverMediaCard`、`articleExcerptCard`、`homepageSummaryCard`。`profileWorks` 的格子 chrome 由该 Surface 自己声明，作者作品查询返回的信封子集不带 recipe；`mediaImmersive` 与 `articleReader` 的全屏 chrome 同样不消费 recipe。
+- 理由：recipe 表达的是「同一个面上同一类对象该用哪种卡片家族」，只有首页存在多家族并存。给没有选择余地的面下发 recipe，会在端侧多留一条可被误用的分支，也让 chrome 归属在云与端之间摇摆。写入点收在建窗一处，卡片家族才能与排序、多样性和频控在同一次决策里解释。
+- 被否决方案：允许 content hydration 改写或按媒体附件补全 recipe；让 `profileWorks` 也从云取 chrome；把列数或全屏语义塞进 recipe 闭集；新增卡片视觉时直接扩大闭集而不登记归属面。
+- 约束与影响：recipe 是可选字段，只在 `homeFeed` 有语义；出现在其它面的项上即为契约违例。`homeFeed` 项缺失 recipe 时端侧按 typed 失败处理，不得临时恢复读侧派生轴。新增卡片家族只能加在 `homeFeed`，并须同时声明兼容替换或接受旧包不下发。
+- 关联要求：[`REQ-001`](./spec.md#req-001)、[`content-type-framework REQ-004`](../content-type-framework/spec.md#req-004)
+- 影响 Story：[`premium-stream-recommendation`](./premium-stream-recommendation/spec.md)、[`unified-items-cursor`](./unified-items-cursor/spec.md)
+- 关联验收：[`SIT-001`](./spec.md#sit-001)
+
+<a id="dec-008"></a>
+### DEC-008 recipe 允许契约声明的同 Surface 兼容替换，openSurface 禁止替换
+
+- 决策：契约可以为 `FeedPresentationRecipe` 声明同一 Surface 内的兼容替换（仅 `homeFeed`，例如新家族声明 `compatibleRecipe=coverMediaCard`），云在出站时选一个落在客户端闭集内的取值写进 wire。`openSurface` 没有兼容替换：目的面不在旧包闭集内时，该项直接不下发。
+- 理由：卡片家族只影响同一个面上的呈现密度，降级到旧家族仍是产品可接受的同义展示；把目的面换成另一个面会改变点击后的去向语义，等于服务端伪造一条产品从未定义的跳转边。替换只在云侧一次赋值、端侧不参与，才不会重新变成读侧 fallback。
+- 被否决方案：让端在未知 recipe 时自行挑选近似卡片；把 `openSurface` 改写成旧包认识的另一个面；跨 Surface 声明 recipe 替换链；用 feature flag 在运行时切换替换关系。
+- 约束与影响：替换关系属于契约声明，只允许指向同一 Surface 且已存在于更早一代闭集的取值，替换链不得成环。wire 上只出现最终取值，云侧赋值与归因保留原始取值以便解释曝光差异；替换不改变排序位次与去重语义。
+- 关联要求：[`REQ-002`](./spec.md#req-002)、[`content-type-framework REQ-006`](../content-type-framework/spec.md#req-006)
+- 影响 Story：[`premium-stream-recommendation`](./premium-stream-recommendation/spec.md)
+- 关联验收：[`SIT-001`](./spec.md#sit-001)
+
+<a id="dec-009"></a>
+### DEC-009 未知列表项 skip 并打点 client_contract_skew，未知深链走 typed 升级终态
+
+- 决策：列表项逐条解码，未知枚举落入显式未知成员，丢弃该项、打点 `client_contract_skew` 并让整页继续；用户可见文案不得称内容已删除。深链与单对象读取不允许省略：返回 typed 需升级终态并保留返回动作，不渲染任何默认卡片。
+- 理由：集合差过滤是主路径，逐条 skip 只承接漏网项（放量期 digest 与窗口不一致、跨代本地缓存、人工构造链接），因此它必须是可观测的偏斜信号而不是静默容错。深链没有列表上下文可供跳过，唯一诚实的终态是要求升级。
+- 被否决方案：把未知项渲染成封面卡或文章卡；让未知枚举炸掉整页；把未知项显示成内容已删除；只记日志不产出偏斜指标；深链未知时落回首页假装成功。
+- 约束与影响：契约偏差事件与聚合维度只由 canonical telemetry 声明；摘要和被拒原始值不得被假定为低基数指标标签，不携带正文或用户标识。持续偏差须回到 DEC-006 过滤链路修复，而不是扩大端侧容错。逐项隔离不更改服务 cursor、已交付序位与去重事实；客户端不得为补满展示数量合成对象或无界追页，满页承诺仅适用于服务端预算内支持候选足够的结果。
+- 关联要求：[`REQ-002`](./spec.md#req-002)、[`model-attribute-semantics REQ-005`](../../runtime/system-architecture-and-engineering-guide/model-attribute-semantics/spec.md#req-005)
+- 影响 Story：[`feed-fallback-degrade`](./feed-fallback-degrade/spec.md)、[`streaming-feed-performance`](./streaming-feed-performance/spec.md)
+- 关联验收：[`SIT-001`](./spec.md#sit-001)、[`SIT-002`](./spec.md#sit-002)
 
 ## 5. 失败与恢复
 

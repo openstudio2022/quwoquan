@@ -23,7 +23,7 @@
 
 - [`cross-domain-search`](./cross-domain-search/spec.md)：提供从一级页面进入两段式全屏搜索，并完成最近记录、实时联想、独立网络结果、语音转词与 `小趣搜` 结果查看的完整链路。
 - [`search-provider-routing-and-storage-topology`](./search-provider-routing-and-storage-topology/spec.md)：统一搜索 contract、对象 taxonomy、Provider 路由、显式降级、本地搜索生命周期与云侧派生读模型，为全屏搜索和页面内 picker 提供同一查询边界。
-- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
+- Feature 层表达业务与设计边界；工程影响由 current actual diff 与 dependency closure 推导。
 
 ## 5. 关键决策
 

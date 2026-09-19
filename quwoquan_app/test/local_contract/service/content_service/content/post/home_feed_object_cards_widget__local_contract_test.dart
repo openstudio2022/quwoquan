@@ -16,19 +16,21 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_multi_form_feed.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show AssistantUsePolicy, ContentPostProjection, FeedObjectCard;
+    show AssistantUsePolicy, ContentPostProjection, ContentType;
 
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
+
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_feed_object_card.dart';
+import '../../../../../support/service/content_service/content/feed_delivery_page/content_feed_object_card_test_builder.dart';
 
 ContentPostViewData _post(int index) {
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: 'post_object_card_widget_$index',
-      contentType: 'micro',
-      contentIdentity: 'moment',
+      contentType: ContentType.article,
       authorId: 'user_demo',
       authorDisplayName: '小趣用户',
       authorAvatarUrl: '',
@@ -54,7 +56,7 @@ class _ObjectCardsFeedMapNotifier extends DiscoveryFeedMapNotifier {
   _ObjectCardsFeedMapNotifier(this.posts, this.cards);
 
   final List<ContentPostViewData> posts;
-  final List<FeedObjectCard> cards;
+  final List<ContentFeedObjectCard> cards;
 
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
@@ -92,7 +94,7 @@ class _NoopMediaDownloadCache extends MediaDownloadCache {
   Future<String?> getCachedFilePath(String url) async => null;
 }
 
-Widget _buildFeed(List<ContentPostViewData> posts, List<FeedObjectCard> cards) {
+Widget _buildFeed(List<ContentPostViewData> posts, List<ContentFeedObjectCard> cards) {
   return ProviderScope(
     overrides: [
       ...mockContentFacetOverrides(store: InMemoryContentPostStore()),
@@ -109,7 +111,6 @@ Widget _buildFeed(List<ContentPostViewData> posts, List<FeedObjectCard> cards) {
           child: HomeMultiFormFeed(
             isDark: false,
             channelId: 'recommend',
-            template: 'single_column_multiform',
             onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
           ),
         ),
@@ -124,17 +125,8 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final posts = List<ContentPostViewData>.generate(3, _post);
-    final cards = <FeedObjectCard>[
-      FeedObjectCard(
-        objectKind: 'entity_homepage',
-        objectId: 'homepage_sight_west_lake',
-        title: '西湖',
-        subtitle: '杭州 · 风景名胜',
-        tagRefs: const <String>['Topic/旅行/杭州'],
-        reasonText: 'affinity',
-        recallPath: 'entity_affinity_card',
-        anchorIndex: 2,
-      ),
+    final cards = <ContentFeedObjectCard>[
+      buildContentFeedObjectCard(homepageId: 'homepage_sight_west_lake', title: '西湖', subtitle: '杭州 · 风景名胜', anchorIndex: 2),
     ];
 
     await tester.pumpWidget(_buildFeed(posts, cards));
@@ -152,7 +144,7 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final posts = List<ContentPostViewData>.generate(2, _post);
-    await tester.pumpWidget(_buildFeed(posts, const <FeedObjectCard>[]));
+    await tester.pumpWidget(_buildFeed(posts, const <ContentFeedObjectCard>[]));
     await tester.pump();
 
     expect(
@@ -172,17 +164,8 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
     final posts = List<ContentPostViewData>.generate(3, _post);
-    final cards = <FeedObjectCard>[
-      FeedObjectCard(
-        objectKind: 'gathering',
-        objectId: 'gathering-001',
-        title: '周末山野徒步',
-        subtitle: '公开摘要',
-        tagRefs: const <String>['Topic/徒步'],
-        reasonText: 'public_gathering',
-        recallPath: 'gathering_candidate_index',
-        anchorIndex: 2,
-      ),
+    final cards = <ContentFeedObjectCard>[
+      buildContentFeedObjectCard(homepageId: 'gathering-001', title: '周末山野徒步', subtitle: '公开摘要', anchorIndex: 2),
     ];
 
     await tester.pumpWidget(_buildFeed(posts, cards));

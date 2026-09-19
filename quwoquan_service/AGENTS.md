@@ -1,6 +1,6 @@
 # quwoquan_service Agent Guide
 
-本文件与根 `AGENTS.md` 同时生效，只声明 `quwoquan_service/**` 每次变更都成立的服务不变量。进入具体服务时再读其最近 `AGENTS.md`；功能事实、特定 gate 与实现方法从 owner manifest 指向的 Feature/design/contracts 加载。
+本文件补充 `quwoquan_service/**` 服务不变量。进入服务再读最近 `AGENTS.md`；功能事实、特定 gate 与实现方法从非授权 `feature-context` 查询到的 Feature/design/contracts 加载；unresolved 不阻断写入。
 
 ## 契约与生成顺序
 
@@ -36,5 +36,5 @@
 
 - metadata 变更：`make verify-metadata`；服务目录/配置/资源/部署变更：`make verify-service-architecture`。
 - 生成：`make codegen` 与必要的 `make codegen-app`；结构化错误边界：`dart quwoquan_ops/tools/runtime_error_codegen/bin/check_runtime_error_cutover.dart`。
-- 再执行 owner manifest/Review plan 列出的聚焦 Go/local-contract/api-integration evidence。不裸跑不同 profile 的 contract validator 并把其输出冒充 canonical gate。
+- 再执行 current actual diff/ImpactPlan 与 Review plan 列出的聚焦 Go/local-contract/api-integration evidence。不裸跑不同 profile 的 contract validator 并把其输出冒充 canonical gate。
 - 环境、部署或拓扑改动使用 `python3 quwoquan_ops/cli/stackctl.py package/verify/health/inspect`。

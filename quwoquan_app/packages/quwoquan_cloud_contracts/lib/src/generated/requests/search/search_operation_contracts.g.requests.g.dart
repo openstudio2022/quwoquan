@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: 706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31
 
 part of '../../../search/search_operation_contracts.g.dart';
 
@@ -21,6 +21,12 @@ List<String> _normalizeGeneratedTextList(
     result.add(normalized);
   }
   return List<String>.unmodifiable(result);
+}
+
+Map<String, Object?> _generatedRequestObject(Object? value, String path) {
+  if (value is Map<String, Object?>) return value;
+  if (value is Map) return Map<String, Object?>.from(value);
+  throw FormatException('$path must be an object');
 }
 
 void _generatedRequestRejectUnknownFields(
@@ -52,6 +58,7 @@ List<Object?> _generatedRequestList(Object? value, String path) {
 
 final class CanonicalSearchQuery {
   CanonicalSearchQuery({
+    ClientContentPresentationContract? clientPresentationContract,
     String? sessionId,
     required String query,
     CanonicalSearchMode mode = CanonicalSearchMode.result,
@@ -60,7 +67,8 @@ final class CanonicalSearchQuery {
     Iterable<String> ids = const <String>[],
     int limit = 20,
     String? cursor,
-  }) : sessionId = _normalizeGeneratedOptionalText(sessionId),
+  }) : clientPresentationContract = clientPresentationContract,
+       sessionId = _normalizeGeneratedOptionalText(sessionId),
        query = query.trim(),
        mode = mode,
        objectTypes = _normalizeGeneratedTextList(
@@ -79,6 +87,7 @@ final class CanonicalSearchQuery {
     }
   }
 
+  final ClientContentPresentationContract? clientPresentationContract;
   final String? sessionId;
   final String query;
   final CanonicalSearchMode mode;
@@ -93,6 +102,7 @@ final class CanonicalSearchQuery {
     String path = "CanonicalSearchQuery",
   ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{
+      "clientPresentationContract",
       "sessionId",
       "query",
       "mode",
@@ -103,6 +113,15 @@ final class CanonicalSearchQuery {
       "cursor",
     }, path);
     return CanonicalSearchQuery(
+      clientPresentationContract: map["clientPresentationContract"] == null
+          ? null
+          : ClientContentPresentationContract.fromWire(
+              _generatedRequestObject(
+                map["clientPresentationContract"],
+                '$path.clientPresentationContract',
+              ),
+              '$path.clientPresentationContract',
+            ),
       sessionId: map["sessionId"] == null
           ? null
           : _generatedRequestString(map["sessionId"], '$path.sessionId'),
@@ -165,6 +184,8 @@ final class CanonicalSearchQuery {
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
+    if (this.clientPresentationContract != null)
+      "clientPresentationContract": this.clientPresentationContract!.toWire(),
     if (this.sessionId != null) "sessionId": this.sessionId!,
     "query": this.query,
     "mode": this.mode.wireValue,
@@ -522,6 +543,9 @@ CloudOperationRequestPayload encodeSearchSearchIndexViewSearchGeneratedRequest(
       if (request.sessionId != null) "X-Session-Id": request.sessionId!,
     },
     body: <String, Object?>{
+      if (request.clientPresentationContract != null)
+        "clientPresentationContract": request.clientPresentationContract!
+            .toWire(),
       "query": request.query,
       "mode": request.mode.wireValue,
       "objectTypes": request.objectTypes

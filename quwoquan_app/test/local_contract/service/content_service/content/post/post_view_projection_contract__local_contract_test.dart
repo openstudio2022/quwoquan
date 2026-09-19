@@ -14,6 +14,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_surface_view.dart';
 import 'package:quwoquan_app/runtime/di/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/service/content_service/content/post/adapters/post_view_projection.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 /// 投射契约测试：
 /// - [ContentSurfaceViewMapper.fromDto]（统一展示模型，feed/detail/immersive/share 同源）
@@ -71,7 +72,6 @@ void main() {
   const Map<String, dynamic> minArticle = {
     'postId': 'art1',
     'contentType': 'article',
-    'contentIdentity': 'work',
     'authorId': 'writer1',
     'authorDisplayName': '技术作者',
     'authorAvatarUrl': 'media/avatar/s/test/content/art1/v1/avatar.jpg',
@@ -120,7 +120,7 @@ void main() {
     });
 
     test('contentType 来自 DTO.type', () {
-      expect(surfaceOf(minPhoto).contentType, isNotEmpty);
+      expect(surfaceOf(minPhoto).contentType, ContentType.image);
     });
 
     test('author.id 来自 DTO.authorId', () {
@@ -254,10 +254,10 @@ void main() {
       expect(r.body, equals('这是文章内容，包含多段落...'));
     });
 
-    test('kind 依据契约派生 getter 判别', () {
-      expect(surfaceOf(minPhoto).kind, ContentSurfaceKind.image);
-      expect(surfaceOf(minVideo).kind, ContentSurfaceKind.video);
-      expect(surfaceOf(minArticle).kind, ContentSurfaceKind.article);
+    test('三类内容只使用 canonical contentType', () {
+      expect(surfaceOf(minPhoto).contentType, ContentType.image);
+      expect(surfaceOf(minVideo).contentType, ContentType.video);
+      expect(surfaceOf(minArticle).contentType, ContentType.article);
     });
 
     test('tagRefs 从 wire 透传（已去空）', () {
@@ -292,7 +292,7 @@ void main() {
     test('有 markdown 时正文仍只来自 document，不写入旧 contentHtml', () {
       final raw = Map<String, dynamic>.from(minArticle)
         ..['articleMarkdown'] =
-            '---\ntitle: Markdown 标题\n---\n\n# Markdown 标题\n\n正文第一段。\n';
+            '---\nmarkdownDialect: qwq-rich-md\ntitle: Markdown 标题\n---\n\n# Markdown 标题\n\n正文第一段。\n';
       final r = articleView(raw, fallbackArticleId: 'fb1');
       expect(r.document.body, contains('正文第一段'));
       expect(r.contentHtml, isEmpty);
@@ -339,6 +339,7 @@ void main() {
         final raw = Map<String, dynamic>.from(minArticle)
           ..['articleMarkdown'] =
               '---\n'
+              'markdownDialect: qwq-rich-md\n'
               'title: Manifest 标题\n'
               'cover_asset_id: cover\n'
               '---\n\n'
@@ -399,6 +400,7 @@ void main() {
       final raw = Map<String, dynamic>.from(minArticle)
         ..['articleMarkdown'] =
             '---\n'
+            'markdownDialect: qwq-rich-md\n'
             'title: 直接媒体图\n'
             '---\n\n'
             '# 直接媒体图\n\n'
@@ -423,8 +425,7 @@ void main() {
       final raw = Map<String, dynamic>.from(minArticle)
         ..['title'] = '旧标题'
         ..['body'] = '分发摘要正文'
-        ..['articleMarkdown'] =
-            '---\ntitle: 连续文档标题\ntemplate: journal\nfontPreset: clean\n---\n\n# 连续文档标题\n\n## 章节一\n\n图旁正文\n\n:::figure id="hero" layout="wrapRight" caption="文档配图"\nasset://hero\n:::\n'
+        ..['articleMarkdown'] = '---\nmarkdownDialect: qwq-rich-md\ntitle: 连续文档标题\ntemplate: journal\nfontPreset: clean\n---\n\n# 连续文档标题\n\n## 章节一\n\n图旁正文\n\n:::figure id="hero" layout="wrapRight" caption="文档配图"\nasset://hero\n:::\n'
         ..['articleAssetManifest'] = <String, dynamic>{
           'assets': <Map<String, dynamic>>[
             {
@@ -491,16 +492,14 @@ void main() {
               'assetId': 'data_asset_chuanxi_emeishan_weekend_cover',
               'kind': 'image',
               'scope': 'cold_start',
-              'publicSliceKey':
-                  'media/image/s/archived-image/post/chuanxi-emeishan-weekend/v1/cover.jpg',
+              'publicSliceKey': 'media/image/s/archived-image/post/chuanxi-emeishan-weekend/v1/cover.jpg',
               'caption': '封面',
             },
             {
               'assetId': 'data_asset_chuanxi_emeishan_weekend_detail_2',
               'kind': 'image',
               'scope': 'cold_start',
-              'publicSliceKey':
-                  'media/image/s/archived-image/post/chuanxi-emeishan-weekend/v1/detail-2.jpg',
+              'publicSliceKey': 'media/image/s/archived-image/post/chuanxi-emeishan-weekend/v1/detail-2.jpg',
               'caption': '配图2',
             },
           ],
@@ -532,98 +531,80 @@ void main() {
     });
   });
 
-  // ──────────────────────────────────────────────────────────────────
-  // ContentPostProjection micro 投影契约
-  // ──────────────────────────────────────────────────────────────────
-  group('ContentPostProjection micro 投影契约', () {
-    final momentWithImages = <String, dynamic>{
-      'postId': 'moment_01',
-      'contentType': 'micro',
-      'authorId': 'u99',
-      'authorDisplayName': '小趣',
-      'authorAvatarUrl': 'media/avatar/s/test/content/moment_01/v1/avatar.jpg',
-      'body': '今天天气真好 ☀️',
-      'mediaUrls': [
-        'media/image/s/test/content/moment_01/v1/img1.jpg',
-        'media/image/s/test/content/moment_01/v1/img2.jpg',
-      ],
-      'likeCount': 5,
-      'commentCount': 2,
-      'shareCount': 0,
-      'publishedAt': '2025-06-01T10:00:00Z',
-    };
+  // spec_ref: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/spec.md#gwt-001
+  group('三类内容保持正文与媒体边界', () {
+    test('图片配文独立于有序图片集合，不改写图片类型', () {
+      for (final caption in <String?>[null, '今天天气真好']) {
+        final raw = Map<String, dynamic>.from(minPhoto)..['body'] = caption;
+        final view = surfaceOf(raw);
 
-    final momentWithVideo = <String, dynamic>{
-      'postId': 'moment_02',
-      'contentType': 'micro',
-      'authorId': 'u88',
-      'authorDisplayName': '视频君',
-      'authorAvatarUrl': 'media/avatar/s/test/content/moment_02/v1/avatar.jpg',
-      'body': '短视频时刻',
-      'mediaUrls': <String>[],
-      'videoUrl': 'media/video/s/test/content/moment_02/v1/moment_video.mp4',
-      'durationMs': 8000,
-      'likeCount': 12,
-      'commentCount': 3,
-      'shareCount': 1,
-      'publishedAt': '2025-06-01T11:00:00Z',
-    };
-
-    test('micro type 由 canonical ContentPostProjection 承载', () {
-      expect(
-        contentPostProjectionFromReadModelMap(momentWithImages).contentType,
-        'micro',
-        reason: 'contentType=micro must stay on ContentPostProjection',
-      );
-      expect(
-        contentPostProjectionFromReadModelMap(momentWithVideo).contentType,
-        'micro',
-        reason: 'video-backed micro must stay on ContentPostProjection',
-      );
+        expect(view.contentType, ContentType.image);
+        expect(view.body, caption);
+        expect(view.images.map((image) => image.url), <String>[
+          resolvedMedia('media/image/s/test/content/ph1/v1/img1.jpg'),
+          resolvedMedia('media/image/s/test/content/ph1/v1/img2.jpg'),
+        ]);
+        expect(view.stats.like, 100);
+        expect(view.stats.comment, 20);
+      }
     });
 
-    test('moment body is projected to ContentSurfaceView', () {
+    test('纯文字文章有连续正文且无图片，标题可省略', () {
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..remove('coverUrl')
+        ..remove('title')
+        ..['articleMarkdown'] =
+            '---\nmarkdownDialect: qwq-rich-md\n---\n\n'
+            '第一段纯文字。\n\n第二段纯文字。';
+      final view = articleView(raw, fallbackArticleId: 'plain-article');
+
+      expect(surfaceOf(raw).contentType, ContentType.article);
+      expect(view.documentSource, ArticleDetailDocumentSource.markdown);
+      expect(view.document.body, contains('第一段纯文字'));
+      expect(view.document.body, contains('第二段纯文字'));
+      expect(view.document.nodes.where((node) => node.isFigure), isEmpty);
+      expect(view.images, isEmpty);
+    });
+
+    test('文章正文插图夹在段落间，不转成图片 Post', () {
+      final raw = Map<String, dynamic>.from(minArticle)
+        ..['articleMarkdown'] =
+            '---\nmarkdownDialect: qwq-rich-md\n---\n\n'
+            '第一段正文。\n\n'
+            ':::figure id="inline" layout="fullWidth" caption="正文插图"\n'
+            'asset://inline\n'
+            ':::\n\n'
+            '第二段正文。'
+        ..['articleAssetManifest'] = <String, dynamic>{
+          'assets': <Map<String, dynamic>>[
+            {
+              'assetId': 'inline',
+              'publicSliceKey':
+                  'media/image/s/test/article/mixed/v1/inline.jpg',
+            },
+          ],
+        };
+      final view = articleView(raw, fallbackArticleId: 'mixed-article');
+      final nodes = view.document.nodes;
+      final figureIndex = nodes.indexWhere((node) => node.isFigure);
+
+      expect(surfaceOf(raw).contentType, ContentType.article);
+      expect(figureIndex, greaterThan(0));
+      expect(figureIndex, lessThan(nodes.length - 1));
       expect(
-        surfaceOf(momentWithImages).body,
-        equals('今天天气真好 ☀️'),
-        reason: 'moment body must be projected to ContentSurfaceView.body',
+        nodes[figureIndex].imageUrl,
+        contains('/article/mixed/v1/inline.jpg'),
       );
+      expect(nodes[figureIndex - 1].text, contains('第一段正文'));
+      expect(nodes[figureIndex + 1].text, contains('第二段正文'));
     });
 
-    test('moment imageUrls projected correctly', () {
-      final viewData = ContentPostViewData.fromWire(
-        contentPostProjectionFromReadModelMap(momentWithImages),
-      );
-      expect(viewData.mediaImageUrls, hasLength(2));
-      expect(viewData.mediaImageUrls.first, contains('img1.jpg'));
-    });
-
-    test('moment videoUrl projected correctly', () {
-      final viewData = ContentPostViewData.fromWire(
-        contentPostProjectionFromReadModelMap(momentWithVideo),
-      );
-      expect(
-        viewData.mediaVideoUrl,
-        equals('media/video/s/test/content/moment_02/v1/moment_video.mp4'),
-      );
-      expect(viewData.durationMs, equals(8000));
-    });
-
-    test('moment stats projected to ContentSurfaceView', () {
-      final r = surfaceOf(momentWithImages);
-      expect(r.stats.like, equals(5));
-      expect(r.stats.comment, equals(2));
-    });
-
-    test('moment with no images has empty imageUrls list (not null)', () {
-      final viewData = ContentPostViewData.fromWire(
-        contentPostProjectionFromReadModelMap(momentWithVideo),
-      );
-      expect(
-        viewData.mediaImageUrls,
-        isEmpty,
-        reason: 'imageUrls must be an empty list when no images provided',
-      );
+    test('video 保持单一视频与时长，不借用文章类型', () {
+      final view = surfaceOf(minVideo);
+      expect(view.contentType, ContentType.video);
+      expect(view.images, isEmpty);
+      expect(view.video!.durationMs, 45000);
+      expect(view.video!.url, resolvedVideo(minVideo['videoUrl']! as String));
     });
   });
 

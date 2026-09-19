@@ -110,7 +110,6 @@ _INTERNAL_TERM_PATTERNS = {
     "gate_block": re.compile(r"(?i)gate[_ -]?block"),
     "typed_blocker": re.compile(r"(?i)typed[_ -]?block(?:er)?"),
     "fingerprint": re.compile(r"(?i)(?<![a-z0-9])fingerprint(?![a-z0-9])|指纹"),
-    "owner_manifest": re.compile(r"(?i)owner[_ -]?manifest|归属清单"),
     "receipt": re.compile(r"(?i)(?<![a-z0-9])receipt(?![a-z0-9])|回执"),
     "readback": re.compile(r"(?i)(?<![a-z0-9])readback(?![a-z0-9])|读回"),
     "exact_byte": re.compile(r"(?i)exact[_ -]?byte|逐字节"),

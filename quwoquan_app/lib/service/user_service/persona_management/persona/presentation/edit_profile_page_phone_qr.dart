@@ -279,9 +279,6 @@ class _QrCardBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return builder(
-      card: card,
-      onScanPressed: () => context.push(AppRoutePaths.addContactScan),
-    );
+    return builder(card: card, onScanPressed: null);
   }
 }

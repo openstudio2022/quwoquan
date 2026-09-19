@@ -101,6 +101,8 @@ timeouts:
     scope: 1800
     release: 7200
   overrides_by_check:
+    # L0 contract closure is a pure source scan and must stay within the frozen hard budget.
+    static:contract_closure: 15
     static:code_health_delta_fast: 30
     static:code-health-delta: 300
     lane_gate:ops-local-contract:0: 900
@@ -138,8 +140,8 @@ scope_profiles:
     focused: [feature_tree]
     scope_build: [feature_tree]
 commands:
-  recovery_scope_staged: python3 quwoquan_ops/cli/local_readiness.py scope --staged --owner-identity <current-owner-identity> --candidate-evidence <current-candidate-evidence> --review-consolidation <pass.json> --required-evidence <pass-receipt.json>
-  recovery_release_push_stdin: python3 quwoquan_ops/cli/local_readiness.py release --push-updates - --owner-identity <current-owner-identity> --candidate-evidence <current-candidate-evidence> --review-consolidation <pass.json> --required-evidence <pass-receipt.json>
+  recovery_scope_staged: python3 quwoquan_ops/cli/local_readiness.py scope --staged --candidate-evidence <current-candidate-evidence> --review-consolidation <pass.json> --required-evidence <pass-receipt.json>
+  recovery_release_push_stdin: python3 quwoquan_ops/cli/local_readiness.py release --push-updates - --candidate-evidence <current-candidate-evidence> --review-consolidation <pass.json> --required-evidence <pass-receipt.json>
   worker_once: python3 quwoquan_ops/cli/local_readiness.py worker --once
 storage:
   root: .qwq_output/env/repo/local/local-readiness

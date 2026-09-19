@@ -93,23 +93,8 @@ func (r *PostFeedReader) ListPublishedFeedPosts(
 }
 
 func postMatchesFeedRequest(post postmodel.Post, request postports.PostFeedReadRequest) bool {
-	identity := strings.TrimSpace(string(request.Identity()))
-	if identity != "" && resolvedTestPostIdentity(post) != identity {
-		return false
-	}
 	contentType := strings.TrimSpace(string(request.ContentType()))
 	return contentType == "" || strings.EqualFold(strings.TrimSpace(post.ContentType), contentType)
-}
-
-func resolvedTestPostIdentity(post postmodel.Post) string {
-	identity := strings.ToLower(strings.TrimSpace(post.ContentIdentity))
-	if identity == "moment" || identity == "work" {
-		return identity
-	}
-	if strings.EqualFold(strings.TrimSpace(post.ContentType), "micro") {
-		return "moment"
-	}
-	return "work"
 }
 
 func isPublishedPublicPost(post postmodel.Post) bool {
@@ -122,7 +107,6 @@ func postFeedSliceFromModel(post postmodel.Post) postports.PostFeedItemSlice {
 		PostID:           postports.NewPostID(post.ID),
 		AuthorPersonaID:  postports.NewPersonaID(post.AuthorId),
 		ContentType:      postports.ContentType(post.ContentType),
-		ContentIdentity:  postports.ContentIdentity(post.ContentIdentity),
 		Title:            post.Title,
 		Body:             post.Body,
 		MediaURLs:        append([]string(nil), post.MediaUrls...),

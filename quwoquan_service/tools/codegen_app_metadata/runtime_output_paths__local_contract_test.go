@@ -187,15 +187,15 @@ func TestDirectNonAssistantGeneratedTargetsHaveSingleCanonicalOwners(
 					"content_feed_category_policy.g.dart",
 			),
 		},
-		"post read surface": {
+		"content surface layout policy": {
 			got: contentPostPresentationOutputPath(
 				appDir,
-				"post_read_surface_id.g.dart",
+				"surface_layout_policy.g.dart",
 			),
 			want: filepath.Join(
 				appDir,
 				"lib/service/content_service/content/post/presentation/generated/"+
-					"post_read_surface_id.g.dart",
+					"surface_layout_policy.g.dart",
 			),
 		},
 		"circle UI config": {

@@ -10,25 +10,18 @@ import evidence_runner
 from lib.agent_governance_contract import (
     contract_schema_version,
     validate_declared_fields,
-    validate_feature_context_manifest,
     validate_required_fields,
 )
 from lib.candidate_evidence import CandidateEvidenceError, validate_candidate_ref
-from lib.review_owner_manifest import read_owner_manifest_exact_bytes
 from lib.evidence_fingerprint import (
-    EvidenceFingerprintError,
     normalize_repo_relative_path,
     validate_evidence_fingerprint,
-)
-from lib.feature_context_fingerprint import (
-    validate_content_addressed_ref,
-    validate_current_feature_context_fingerprint,
 )
 
 from . import core as _core
 
 
-def owner_manifest_assets(owner_manifest: Path | None, *, repo_root: Path, candidate_evidence: Path | None = None) -> tuple[list[str], dict[str, Any] | None]:
+def candidate_assets(candidate_evidence: Path | None, *, repo_root: Path) -> tuple[list[str], dict[str, Any] | None]:
     assets = [] if repo_root.resolve() != _core.ROOT.resolve() else [
         "quwoquan_ops/policies/local_readiness_contract.yaml",
         "quwoquan_ops/cli/lib/evidence_fingerprint.py",
@@ -38,36 +31,15 @@ def owner_manifest_assets(owner_manifest: Path | None, *, repo_root: Path, candi
         "quwoquan_ops/ci/local_readiness_planner.py",
         "quwoquan_ops/ci/detect_ci_impacted_scopes.py",
     ]
-    manifest_value: dict[str, Any] | None = None
-    if owner_manifest is not None:
-        try:
-            # 保留词法ref，由同一有界fd reader拒绝任一symlink组件与多链接文件。
-            relative = normalize_repo_relative_path(owner_manifest.as_posix(), repo_root)
-            raw_bytes = read_owner_manifest_exact_bytes(relative, repo_root=repo_root)
-            validate_content_addressed_ref(
-                relative, raw_bytes=raw_bytes, repo_root=repo_root
-            )
-            value = json.loads(raw_bytes.decode("utf-8"))
-            if not isinstance(value, dict):
-                raise TypeError("manifest 必须为 object")
-            validate_feature_context_manifest(value)
-            validate_current_feature_context_fingerprint(value, repo_root=repo_root)
-        except (OSError, TypeError, ValueError, EvidenceFingerprintError, json.JSONDecodeError) as exc:
-            raise _core.LocalReadinessError(f"owner manifest 非 current canonical manifest: {exc}") from exc
-        manifest_value = value
-        assets.append(relative)
-        if candidate_evidence is not None:
-            try:
-                candidate_relative = normalize_repo_relative_path(candidate_evidence.as_posix(), repo_root)
-                validate_candidate_ref(candidate_relative, repo_root=repo_root, expected_owner_identity_ref=relative)
-            except (CandidateEvidenceError, ValueError) as exc:
-                raise _core.LocalReadinessError(f"candidate evidence 非 current canonical candidate: {exc}") from exc
-            assets.append(candidate_relative)
-    elif candidate_evidence is not None:
-        raise _core.LocalReadinessError("candidate evidence 要求 owner identity predecessor")
-    existing = [item for item in assets if (repo_root / item).exists()]
-    return existing, manifest_value
-
+    if candidate_evidence is None:
+        return [item for item in assets if (repo_root / item).exists()], None
+    try:
+        relative = normalize_repo_relative_path(candidate_evidence.as_posix(), repo_root)
+        _, _, value, _ = validate_candidate_ref(relative, repo_root=repo_root)
+    except (CandidateEvidenceError, ValueError) as exc:
+        raise _core.LocalReadinessError(f"candidate evidence 非 current canonical candidate: {exc}") from exc
+    assets.append(relative)
+    return [item for item in assets if (repo_root / item).exists()], value
 
 def load_review_inputs(
     review_consolidation: Path | None,

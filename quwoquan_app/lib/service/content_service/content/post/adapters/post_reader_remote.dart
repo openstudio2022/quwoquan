@@ -1,9 +1,12 @@
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_app/runtime/transport/generated/client_content_presentation_contract.g.dart';
 import 'package:quwoquan_app/runtime/transport/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/post_publication_status_reader.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_list_item_decoder.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_list_item_skew_observer.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_projection_mapper.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
@@ -26,11 +29,15 @@ final class RemoteContentPostReaderAdapter
     required this.client,
     required this.invocationContext,
     this.projectionMapper = const ContentPostProjectionMapper(),
+    this.listItemDecoder = const ContentListItemDecoder(),
+    this.skewObserver = const ContentListItemSkewObserver(),
   });
 
   final GeneratedCloudOperationClient client;
   final ContentPostReaderInvocationContextFactory invocationContext;
   final ContentPostProjectionMapper projectionMapper;
+  final ContentListItemDecoder listItemDecoder;
+  final ContentListItemSkewObserver skewObserver;
 
   @override
   Future<ContentPostDetailPayload> getPost({
@@ -74,7 +81,6 @@ final class RemoteContentPostReaderAdapter
   @override
   Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
-    String? identity,
     String? type,
     String? visibility,
     String? cursor,
@@ -82,8 +88,9 @@ final class RemoteContentPostReaderAdapter
   }) async {
     final response = await client.contentPostListUserPosts(
       ContentAuthorPostsQuery(
+        // 能力闭集与端侧编译期真实支持同源生成；不手写数组或摘要。
+        clientPresentationContract: compiledContentPresentationContract,
         personaId: userId,
-        identity: identity,
         type: type,
         visibility: visibility,
         cursor: cursor,
@@ -91,8 +98,23 @@ final class RemoteContentPostReaderAdapter
       ),
       context: invocationContext(ContentRequestPageIds.listUserPosts),
     );
+    // 作者作品面只消费 post 投影；实体主页项在此面没有目的面边，逐项隔离。
+    final decoding = listItemDecoder.decode(response.items);
+    skewObserver.record(
+      <ContentListItemIsolation>[
+        ...decoding.isolated,
+        for (final card in decoding.objectCards)
+          ContentListItemIsolation(
+            reason: ContentListItemIsolationReason.unsupportedObjectKind,
+            deliveryIndex: card.anchorIndex,
+            objectKind: card.objectKind,
+            objectId: card.objectId,
+          ),
+      ],
+      operationId: AppCloudOperationIds.contentPostListUserPosts,
+    );
     return CursorPage<ContentPostViewData>(
-      items: response.items.map(projectionMapper.toDto).toList(growable: false),
+      items: decoding.posts,
       nextCursor: response.nextCursor,
     );
   }
@@ -137,7 +159,11 @@ final class RemoteContentPostReaderAdapter
   }) {
     final baseContext = invocationContext(ContentRequestPageIds.getPost);
     return client.contentPostGetPost(
-      ContentPostDetailQuery(postId: postId),
+      ContentPostDetailQuery(
+        // 能力闭集与端侧编译期真实支持同源生成；不手写数组或摘要。
+        clientPresentationContract: compiledContentPresentationContract,
+        postId: postId,
+      ),
       context: CloudOperationInvocationContext(
         surfaceId: baseContext.surfaceId,
         clientPageId: baseContext.clientPageId,

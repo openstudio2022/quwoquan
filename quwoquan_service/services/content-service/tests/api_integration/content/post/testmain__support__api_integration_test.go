@@ -612,7 +612,7 @@ func TestMain(m *testing.M) {
 			"sourceOwner": "qwq_data", "releaseId": integrationReleaseID,
 			"manifestDigest":  integrationManifestDigest,
 			"lifecycleStatus": "active", "status": "published", "visibility": "public",
-			"moderationStatus": "approved", "contentIdentity": "work", "contentType": "video",
+			"moderationStatus": "approved", "contentType": "video",
 			"videoUrl": "https://media.example.test/api-integration.mp4", "durationMs": int64(1000),
 		}}, mongoopts.UpdateOne().SetUpsert(true)); err != nil {
 		panic(fmt.Errorf("seed api integration active supply post: %w", err))

@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：不直接参与用户 Journey；为所有 Scenario 提供「生效语义可追溯到一处声明」的装配与配置基线
 >
-> 设计归属：[L2 DEC-029](../design.md#dec-029)
+> 设计引用：[L2 DEC-029](../design.md#dec-029)
 
 ## 1. 用户价值
 

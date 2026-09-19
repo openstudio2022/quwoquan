@@ -26,7 +26,7 @@ def _fields(*, feed_request_id: str = "feed-request-001") -> dict[bytes, bytes]:
         "deviceActorId": "",
         "sessionId": "session-001",
         "contentId": "post-001",
-        "contentType": "post",
+        "contentType": "article",
         "action": "like",
         "state": "interaction",
         "duration": 0.0,

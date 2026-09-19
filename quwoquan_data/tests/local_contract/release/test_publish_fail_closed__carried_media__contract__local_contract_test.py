@@ -59,6 +59,7 @@ def _frozen_package(package_root: Path) -> dict[str, object]:
         "executionId": package["executionId"],
         "objectKind": package["target"]["objectKind"],
         "objectRef": package["target"]["objectRef"],
+        "objectPath": package["target"]["objectPath"],
         "objectRoot": package_root / package["target"]["packageObjectRef"],
         "creatorRefs": closure["creatorRefs"],
         "tagRefs": closure["tagRefs"],
@@ -78,9 +79,9 @@ def _commit(publish: Path, package_root: Path, run_root: Path) -> dict[str, obje
     return delta
 
 
-def _cited_asset(publish: Path) -> dict[str, object]:
+def _cited_asset(publish: Path, package_root: Path) -> dict[str, object]:
     manifest = json.loads(
-        (publish / "entities" / OBJECT_REF / "manifest.json").read_text(
+        (publish / json.loads((package_root / "object_transaction_package.json").read_text())["target"]["objectPath"] / "manifest.json").read_text(
             encoding="utf-8"
         )
     )
@@ -94,7 +95,7 @@ def test_committed_object_owns_its_body_in_both_homes(tmp_path: Path) -> None:
 
     _commit(publish, package_root, tmp_path / "run")
 
-    asset = _cited_asset(publish)
+    asset = _cited_asset(publish, package_root)
     digest = str(asset["sha256"])
 
     # The library is what a consumer resolves against on this machine.
@@ -130,7 +131,7 @@ def test_transaction_fails_closed_when_the_body_cannot_be_carried(
 
     # Fail closed means the object did not land. An approved-but-undeliverable
     # object is exactly the state this anchor exists to prevent.
-    assert not (publish / "entities" / OBJECT_REF / "manifest.json").exists()
+    assert not (publish / json.loads((package_root / "object_transaction_package.json").read_text())["target"]["objectPath"] / "manifest.json").exists()
 
 
 def test_carrying_refuses_bytes_that_disagree_with_the_declared_digest(

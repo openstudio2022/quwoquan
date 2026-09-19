@@ -4,12 +4,6 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/domain/article_presentation_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/article_presentation_values.dart';
 
-/// 统一内容展示种类（媒体形态）。
-///
-/// 通过 `ContentPostViewData` 的契约派生 getter（`isVideoLike`/`isArticleLike`/`hasImages`）
-/// 判别，禁止对 DTO 子类做 `is/as/whereType`（遵循 04-dart-polymorphism）。
-enum ContentSurfaceKind { micro, image, video, article }
-
 /// Pure application projection of an already validated public media delivery.
 ///
 /// Runtime endpoint validation remains owned by the media delivery adapter. The
@@ -155,17 +149,15 @@ class ContentArticleRender {
 /// 统一只读内容展示模型。
 ///
 /// 作为 feed / immersive / detail / share 四个消费 surface 的唯一只读真相源，
-/// 覆盖 micro/image/video/article 四媒体类型。媒体差异由 [kind] + 强类型可选字段
-/// 表达，surface widget 只读结果，不再各自从 DTO/Map 抽字段。
+/// 覆盖 image/video/article 三种对象身份。媒体差异由 [contentType] + 强类型可选
+/// 字段表达，surface widget 只读结果，不再各自从 DTO/Map 抽字段。
 ///
 /// 字段集与 fallback 口径对齐 `quwoquan_service/services/content-service/contracts/content/post` 投影
 /// （`fields.yaml` / `discovery_feed.yaml` / `post_read_presentation.yaml`）。
 class ContentSurfaceView {
   const ContentSurfaceView({
     required this.postId,
-    required this.kind,
     required this.contentType,
-    required this.contentIdentity,
     required this.author,
     required this.stats,
     required this.createdAt,
@@ -185,13 +177,9 @@ class ContentSurfaceView {
   });
 
   final String postId;
-  final ContentSurfaceKind kind;
 
-  /// 原始内容类型（photo/video/article/moment 等），保留以便分支与埋点。
-  final String contentType;
-
-  /// 内容身份（work/moment）。
-  final String contentIdentity;
+  /// 对象身份的唯一权威轴：由写入时确定，surface 只按它选渲染分支与埋点。
+  final ContentType contentType;
 
   final ContentAuthorRef author;
   final ContentStats stats;
@@ -247,9 +235,7 @@ class ContentSurfaceView {
   }) {
     return ContentSurfaceView(
       postId: postId,
-      kind: kind,
       contentType: contentType,
-      contentIdentity: contentIdentity,
       author: author,
       stats: stats,
       createdAt: createdAt,

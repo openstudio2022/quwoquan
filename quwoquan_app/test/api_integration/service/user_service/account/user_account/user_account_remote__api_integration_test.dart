@@ -156,41 +156,6 @@ void main() {
     });
   });
 
-  test('profile edit and QR reads round-trip canonical identity', () async {
-    final api = activeHarness();
-    final personaId = activePersona();
-
-    final snapshot = await api.userProfiles.getProfileEditSnapshot(
-      const GetProfileEditSnapshotQuery(),
-    );
-    expect(snapshot.ownerUserId, api.session.ownerId);
-    expect(snapshot.personaId, personaId);
-    expect(snapshot.userHandle, isNotEmpty);
-
-    final qrCard = await api.userProfiles.getProfileQrCard(
-      const GetProfileQrCardQuery(),
-    );
-    expect(qrCard.qrTokenId, isNotEmpty);
-    expect(qrCard.qrPayload, isNotEmpty);
-    expect(Uri.parse(qrCard.publicProfileUrl).scheme, 'https');
-
-    final resolved = await api.userProfiles.resolveProfileQrToken(
-      ResolveProfileQrTokenQuery(
-        qr: qrCard.qrPayload,
-        handle: snapshot.userHandle,
-      ),
-    );
-    expect(resolved.personaId, personaId);
-    expect(resolved.userHandle, snapshot.userHandle);
-    expect(resolved.publicProfileUrl, qrCard.publicProfileUrl);
-    expect(resolved.scanStatus, isNotEmpty);
-
-    await _expectSuccessfulTelemetry(api, const <String>{
-      AppCloudOperationIds.userUserAccountGetProfileEditSnapshot,
-      AppCloudOperationIds.userUserAccountGetProfileQrCard,
-      AppCloudOperationIds.userUserAccountResolveProfileQrToken,
-    });
-  });
 
   test(
     'sync is typed and protected reads fail closed with exact telemetry',
@@ -217,7 +182,7 @@ void main() {
               .userUserAccountGetMeProfile]!;
       await expectLater(
         api.withTemporaryAccessToken(
-          accessToken: 'invalid-user-account-api-contract-token',
+          accessToken: 'invalid-token',
           action: () =>
               api.userProfiles.getMeProfile(const GetMeProfileQuery()),
         ),

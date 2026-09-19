@@ -172,7 +172,7 @@ def _manifest_entries(encoded: bytes) -> list[tuple[str, str, int | None]]:
     return entries
 
 
-def _seal_source_closure(source_root: Path) -> _ClosureSeal:
+def _seal_source_closure(source_root: Path, platforms: frozenset[str]) -> _ClosureSeal:
     manifest = _read_projection_file(
         source_root / _MANIFEST_RELATIVE,
         label="App launch generated closure manifest",
@@ -181,6 +181,10 @@ def _seal_source_closure(source_root: Path) -> _ClosureSeal:
     )
     files: list[tuple[str, tuple[bytes, int]]] = []
     for relative, expected_digest, expected_bytes in _manifest_entries(manifest[0]):
+        if relative.startswith("quwoquan_app/ios/") and "ios" not in platforms:
+            continue
+        if relative.startswith("quwoquan_app/android/") and "android" not in platforms:
+            continue
         sealed = _read_projection_file(
             source_root / relative,
             label=f"App launch generated closure source {relative}",
@@ -244,7 +248,12 @@ def _assert_no_link_escape(target_root: Path) -> None:
             raise _failure("link_escape", node.relative_to(target_root).as_posix())
 
 
-def project(repo_root: Path, destination: Path) -> Path:
+def project(
+    repo_root: Path,
+    destination: Path,
+    *,
+    platforms: frozenset[str],
+) -> Path:
     """Copy App sources plus the manifest-declared generated-code closure."""
 
     source_root = _canonical_real_directory(repo_root, reason="source_root_invalid")
@@ -256,7 +265,7 @@ def project(repo_root: Path, destination: Path) -> Path:
     target_root = target_parent / raw_target.name
     if target_root.exists() or target_root.is_symlink():
         raise _failure("must_be_fresh")
-    seal = _seal_source_closure(source_root)
+    seal = _seal_source_closure(source_root, platforms)
     app_source = source_root / "quwoquan_app"
     service_relative = Path(
         "quwoquan_service/contracts/runtime_errors/packages/dart/"

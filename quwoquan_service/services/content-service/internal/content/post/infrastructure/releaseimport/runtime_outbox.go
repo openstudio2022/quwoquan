@@ -1295,7 +1295,7 @@ func BuildImportedPostLifecycleEvents(
 	}
 	events := make([]postports.OutboxEvent, 0, len(posts)+len(deletedPosts))
 	for _, post := range posts {
-		contentIdentity, err := canonicalImportedContentIdentity(post.ContentIdentity)
+		contentType, err := canonicalImportedContentType(post.ContentType)
 		if err != nil {
 			return nil, fmt.Errorf("%s: %w", post.PostRef, err)
 		}
@@ -1328,8 +1328,7 @@ func BuildImportedPostLifecycleEvents(
 			"status":                    "published",
 			"visibility":                "public",
 			"moderationStatus":          importedModerationStatus,
-			"contentType":               post.ContentType,
-			"contentIdentity":           contentIdentity,
+			"contentType":               contentType,
 			"authorId":                  post.AuthorID,
 			"authorDisplayNameSnapshot": post.AuthorDisplayName,
 			"authorAvatarUrlSnapshot":   post.AuthorAvatarURL,
@@ -1374,26 +1373,22 @@ func BuildImportedPostLifecycleEvents(
 	for _, snapshot := range deletedPosts {
 		postID := strings.TrimSpace(snapshot.PostID)
 		authorID := strings.TrimSpace(snapshot.AuthorID)
-		contentType := strings.TrimSpace(snapshot.ContentType)
 		status := strings.TrimSpace(snapshot.Status)
-		contentIdentity, err := canonicalImportedContentIdentity(
-			snapshot.ContentIdentity,
-		)
+		contentType, err := canonicalImportedContentType(snapshot.ContentType)
 		if err != nil {
 			return nil, fmt.Errorf("deleted Post %q: %w", postID, err)
 		}
-		if postID == "" || authorID == "" || contentType == "" || status == "" {
+		if postID == "" || authorID == "" || status == "" {
 			return nil, fmt.Errorf(
 				"deleted Post lifecycle snapshot lacks canonical fields",
 			)
 		}
 		payload, err := json.Marshal(bson.M{
-			"postId":          postID,
-			"authorId":        authorID,
-			"contentType":     contentType,
-			"contentIdentity": contentIdentity,
-			"status":          status,
-			"deletedAt":       occurredAt,
+			"postId":      postID,
+			"authorId":    authorID,
+			"contentType": contentType,
+			"status":      status,
+			"deletedAt":   occurredAt,
 		})
 		if err != nil {
 			return nil, fmt.Errorf("encode imported Post deletion %s: %w", postID, err)
@@ -1650,12 +1645,11 @@ type releaseScopedImportedPostDeletedPayload struct {
 }
 
 type intermediateImportedPostDeletedPayload struct {
-	PostID          string `json:"postId"`
-	AuthorID        string `json:"authorId"`
-	ContentType     string `json:"contentType"`
-	ContentIdentity string `json:"contentIdentity"`
-	Status          string `json:"status"`
-	DeletedAt       string `json:"deletedAt"`
+	PostID      string `json:"postId"`
+	AuthorID    string `json:"authorId"`
+	ContentType string `json:"contentType"`
+	Status      string `json:"status"`
+	DeletedAt   string `json:"deletedAt"`
 }
 
 func validateRepairableImportedPostDeletedPayload(
@@ -1673,7 +1667,7 @@ func validateRepairableImportedPostDeletedPayload(
 	}
 	sort.Strings(gotKeys)
 	releaseScopedKeys := []string{"deletedAt", "postId", "releaseDigest", "releaseId", "sourceOwner"}
-	intermediateKeys := []string{"authorId", "contentIdentity", "contentType", "deletedAt", "postId", "status"}
+	intermediateKeys := []string{"authorId", "contentType", "deletedAt", "postId", "status"}
 	switch {
 	case slicesEqualStrings(gotKeys, releaseScopedKeys):
 		return validateReleaseScopedImportedPostDeletedPayload(existing, expected, opts)
@@ -1767,7 +1761,6 @@ func validateIntermediateImportedPostDeletedPayload(
 		current.PostID != want.PostID ||
 		current.AuthorID != want.AuthorID ||
 		current.ContentType != want.ContentType ||
-		current.ContentIdentity != want.ContentIdentity ||
 		current.Status != "deleted" || want.Status != "published" ||
 		!currentDeletedAt.Equal(wantDeletedAt) ||
 		!wantDeletedAt.Equal(expected.OccurredAt) {

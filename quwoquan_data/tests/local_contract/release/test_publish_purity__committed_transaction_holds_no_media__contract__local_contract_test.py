@@ -64,6 +64,7 @@ def _frozen_package(package_root: Path) -> dict[str, object]:
         "executionId": package["executionId"],
         "objectKind": package["target"]["objectKind"],
         "objectRef": package["target"]["objectRef"],
+        "objectPath": package["target"]["objectPath"],
         "objectRoot": package_root / package["target"]["packageObjectRef"],
         "creatorRefs": closure["creatorRefs"],
         "tagRefs": closure["tagRefs"],
@@ -93,7 +94,7 @@ def test_committed_transaction_leaves_no_media_bytes_in_canonical_publish(
     )
     apply_forward_delta(publish_root=publish, run_root=run_root, manifest=delta)
 
-    assert (publish / "entities" / OBJECT_REF / "manifest.json").is_file()
+    assert (publish / json.loads((package_root / "object_transaction_package.json").read_text())["target"]["objectPath"] / "manifest.json").is_file()
     assert (publish / "creators" / CREATOR_ID / "_creator.json").is_file()
     assert (publish / "tags" / TAG_REF / "_definition.json").is_file()
 
@@ -133,7 +134,7 @@ def test_published_object_reaches_its_body_through_the_content_library(
     apply_forward_delta(publish_root=publish, run_root=run_root, manifest=delta)
 
     manifest = json.loads(
-        (publish / "entities" / OBJECT_REF / "manifest.json").read_text(encoding="utf-8")
+        (publish / json.loads((package_root / "object_transaction_package.json").read_text())["target"]["objectPath"] / "manifest.json").read_text(encoding="utf-8")
     )
     asset = manifest["assets"][0]
     # Publish keeps the reference the consumer resolves, and only the reference.

@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/footprint_repository.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
@@ -79,7 +80,12 @@ class _ProfileFootprintTabState extends ConsumerState<ProfileFootprintTab> {
     final id = entry.postId.trim();
     if (id.isEmpty) return;
     widget.trackPostClick(id);
-    context.push(AppRoutePaths.workBrowser(workId: id, source: 'profileTab'));
+    context.push(
+      AppRoutePaths.workBrowser(
+        workId: id,
+        source: ReferralSource.authorProfile.value,
+      ),
+    );
   }
 
   @override

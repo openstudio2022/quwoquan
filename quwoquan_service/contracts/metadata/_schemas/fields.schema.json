@@ -160,6 +160,14 @@
     "field": {
       "type": "object",
       "additionalProperties": true,
+      "dependentSchemas": {
+        "model_encoding": {
+          "required": ["enum_ref"],
+          "properties": {
+            "type": {"const": "enum"}
+          }
+        }
+      },
       "required": [
         "name",
         "type"
@@ -176,6 +184,17 @@
         "enum_ref": {
           "type": "string",
           "minLength": 1
+        },
+        "model_encoding": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "minLength": 1
+          },
+          "additionalProperties": {
+            "type": "integer",
+            "minimum": 0
+          }
         },
         "constraints": {
           "type": "array",

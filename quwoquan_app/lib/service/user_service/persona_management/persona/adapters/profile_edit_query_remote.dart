@@ -27,22 +27,4 @@ final class RemoteProfileEditQuery implements ProfileEditQuery {
     );
     return ProfileQrCardData.fromWire(projection);
   }
-
-  @override
-  Future<ProfileQrResolveWire> resolveProfileQrToken({
-    required String token,
-    String handle = '',
-  }) async {
-    final normalizedToken = token.trim();
-    if (normalizedToken.isEmpty) {
-      throw ArgumentError.value(token, 'token', 'qr token required');
-    }
-    final normalizedHandle = handle.trim();
-    return publicProfileQuery.resolveProfileQrToken(
-      ResolveProfileQrTokenQuery(
-        qr: normalizedToken,
-        handle: normalizedHandle.isEmpty ? null : normalizedHandle,
-      ),
-    );
-  }
 }

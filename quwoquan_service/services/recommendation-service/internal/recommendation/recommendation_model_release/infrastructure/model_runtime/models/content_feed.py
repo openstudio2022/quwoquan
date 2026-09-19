@@ -14,6 +14,7 @@ from generated.recommendation.recommendation_model_release.models.request_respon
     ModelScoreRequest,
     ModelScoreResponse,
 )
+from generated.recommendation.recommendation_model_release.content_type_encoding import CONTENT_TYPE_MAP
 from api.metrics import observe_score_value
 from features.transformer import build_candidate_features
 from features.intersection_feature_encoder import append_intersection_features
@@ -30,8 +31,6 @@ try:
     from pymongo import MongoClient
 except ImportError:
     MongoClient = None
-
-CONTENT_TYPE_MAP = {"image": 0, "video": 1, "article": 2, "micro": 3}
 
 ITEM_NUMERIC = [
     "ageHours", "viewCount", "likeCount", "commentCount", "shareCount",
@@ -53,7 +52,7 @@ def _extract_feature_vector(row: dict, user_feat: dict, ctx_feat: dict) -> list[
         features.append(float(user_feat.get(f, 0) or 0))
     for f in CONTEXT_NUMERIC:
         features.append(float(ctx_feat.get(f, 0) or 0))
-    features.append(float(CONTENT_TYPE_MAP.get(row.get("contentType", ""), -1)))
+    features.append(float(CONTENT_TYPE_MAP[row.get("contentType")]))
     # hasCover 已退役（N3-3）：在线不可得，双侧同步移除保持特征向量同构。
     features.append(float(RECALL_PATH_MAP.get(row.get("recallPath", ""), -1)))
 
@@ -128,6 +127,13 @@ def _load_model_from_registry() -> tuple[Any | None, str | None]:
     return None, None
 
 
+def _validated_candidate_features(req: ModelScoreRequest) -> list[dict]:
+    rows = build_candidate_features(req)
+    if any(row.get("contentType") not in CONTENT_TYPE_MAP for row in rows):
+        raise ValueError("unsupported content type for recommendation scoring")
+    return rows
+
+
 class ContentFeedScorer:
     """Scorer for scenario=content_feed. Loads LightGBM model on init."""
 
@@ -148,7 +154,7 @@ class ContentFeedScorer:
         self._scorer_kind = "lgb" if self._model else "rule"
 
     def score(self, req: ModelScoreRequest) -> ModelScoreResponse:
-        rows = build_candidate_features(req)
+        rows = _validated_candidate_features(req)
         session = req.sessionSignals or {}
         tag_weights = session.get("tagWeights") or {}
         exposed_ids = set(session.get("exposedIds") or [])

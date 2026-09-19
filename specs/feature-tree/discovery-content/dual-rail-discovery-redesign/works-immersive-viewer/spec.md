@@ -4,7 +4,7 @@
 
 > Journey / Scenario：[`JNY-003 / SCN-007`](../../../spec.md#scn-007)
 
-> 设计归属：[L2 DEC-001](../design.md#dec-001)、[L2 DEC-002](../design.md#dec-002)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)、[L2 DEC-002](../design.md#dec-002)
 
 ## 1. 用户价值
 
@@ -17,7 +17,8 @@
 ### In Scope
 
 - “作品沉浸式浏览器”的输入、可观察主路径、失败语义以及与父能力的交接。
-- workBrowser 统一深链入口。
+- workBrowser 为媒体与文章聚焦面可复用的入口壳，目的面身份遵循 canonical ContentUiSurface，不代表内容身份。
+- 从内容流任意媒体预览进入时保留所选媒体和返回上下文；评论交接不使用毛玻璃评论抽屉。
 - 顶部系统层只保留返回/更多。
 - 更多菜单媒体筛选（全部作品/图片/视频/文章）
 - 图片书物理翻页、视频集胶囊、文章页尾页码。
@@ -178,6 +179,12 @@
 - `enable_article_page_curl` 的默认值只由 `quwoquan_service/services/content-service/contracts/content/post/ui_config.yaml#enable_article_page_curl` 声明并经 codegen 进入 production runtime fallback，默认必须为 `true`；端侧阅读宿主与 pageflip deck 不得再声明第二个默认值。
 - 远端 app config 只在显式携带 `enable_article_page_curl` 时覆盖该 fallback；字段缺席必须保留 metadata 默认值，显式 `false` 才可关闭卷角动效并进入既有降级分页器。
 - 创作预览与沉浸消费均必须从 `contentFeatureFlagProvider('enable_article_page_curl')` 读取同一 effective runtime value，禁止按页面、机型或环境另设本地开关。
+
+<a id="req-022"></a>
+### REQ-022 任意媒体定位进入与评论交接
+
+- 从来源列表点击任意媒体预览时，浏览器初始定位到所选 Post 和媒体，返回恢复列表位置；文章内图片浏览仍遵循 `REQ-018`，不得转成独立图片 Post。
+- 评论通过既有上压分屏交接，打开与关闭保持媒体或阅读位置；不使用 BackdropFilter 毛玻璃评论 Drawer，不复制评论状态 owner。
 
 ## 4. 契约引用
 
@@ -357,6 +364,14 @@
 - THEN 字段缺席时 page curl 保持启用，显式 `true` 时保持启用，只有显式 `false` 时关闭并进入既有降级分页器。
 - AND 阅读宿主、adapter 与 deck 的构造器均要求调用方显式传入该 effective value，不存在端侧第二默认值。
 
+<a id="gwt-021"></a>
+### GWT-021 所选媒体定位与评论关闭恢复
+
+- GIVEN 用户在列表点击多图 Post 的第二张图片，或打开视频后停留在已知播放位置。
+- WHEN 浏览器打开，用户进入评论、关闭评论并返回列表。
+- THEN 初始媒体定位与用户选择一致，评论通过既有上压分屏展示且没有毛玻璃评论 Drawer。
+- AND 关闭评论不重置媒体位置，返回列表保留原项与滚动位置；评论读取失败也保留关闭及返回动作。
+
 ## 6. 依赖
 
 - 前置要求：[`dual-rail-discovery-redesign`](../spec.md) 的范围、要求与 SIT。
@@ -364,6 +379,15 @@
 - 父级设计：[L2 DEC-001](../design.md#dec-001)、[L2 DEC-002](../design.md#dec-002)
 
 ## 7. 开放事项
+
+<a id="open-015"></a>
+### OPEN-015 媒体定位与评论交接保留证据
+
+- 类型：`capability_gap`
+- 优先级：`P1`
+- 准出影响：`track`
+- 影响或价值：尚缺任意媒体定位打开、上压分屏评论开关、评论失败恢复与返回上下文的真实交互证据，无法证明媒体位置在整条交接中保持一致。
+- 完成判定：`GWT-021` 的媒体定位、评论开关与失败恢复由当前真实测试直接绑定。
 
 <a id="open-001"></a>
 ### OPEN-001 统一作品导航与顶部系统层

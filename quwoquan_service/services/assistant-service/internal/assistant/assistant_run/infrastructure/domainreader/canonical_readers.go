@@ -117,7 +117,7 @@ func contentReaderSpec() objectReaderSpec {
 	return objectReaderSpec{
 		pathParameter: "postId", identityField: "postId",
 		projectionFields: []string{
-			"postId", "contentType", "contentIdentity", "assistantUsePolicy", "authorId", "authorDisplayName",
+			"postId", "contentType", "assistantUsePolicy", "authorId", "authorDisplayName",
 			"title", "body", "summary", "tagRefs", "entityRefs", "semanticMentions", "mediaAssetIds",
 			"coverUrl", "thumbnailUrl", "sourceAttribution", "articleMarkdown", "location", "locationName",
 			"geoTagRef", "visitedAt", "primaryHomepageId", "canonicalEntityId", "primaryHomepageType",

@@ -398,7 +398,7 @@ def test_gamma_local_producer_uses_real_local_signer_and_prod_or_missing_source_
         runtime.verify_runtime_authorization(raw=tampered_raw, evidence=tampered_ref, target=target(),
             expected_predecessor=captured["account_closure_authority"].accountClosureEvidence, keyring_path=signing.keyring_path)
 
-    with pytest.raises(PostSafetyRuntimeError, match="gamma-local only"):
+    with pytest.raises(PostSafetyRuntimeError, match="does not support"):
         runtime.produce_gamma_local_startup_material(current=PostSafetyTarget("prod", "prod-hosted", "sha256:"+"a"*64,
             "sha256:"+"b"*64, "mongo", "quwoquan_content", "generation", "attempt"), source_current=source,
             source_expected=object(), source_binding={}, database=Mongo(), account_material_root=(tmp_path/"prod-account").absolute(),

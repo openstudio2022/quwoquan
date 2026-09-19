@@ -28,23 +28,6 @@ func RankedRecommendationOptions(
 	)
 }
 
-// RankedRecommendationOptionsWithObjectCards freezes typed object-card
-// candidates into the same test RankedRecommendationWindow as ranked Post
-// identities. This mirrors the production cross-service boundary and prevents
-// Content tests from restoring a private Mongo recommendation reader.
-func RankedRecommendationOptionsWithObjectCards(
-	engine *rtrec.Engine,
-	cards []transport.RecommendationObjectCard,
-	options ...feedapp.FeedServiceOption,
-) []feedapp.FeedServiceOption {
-	gateway := newEngineRankedGateway(engine)
-	gateway.objectCards = cloneRecommendationObjectCards(cards)
-	return append(options,
-		feedapp.WithRankedRecommendationGateway(gateway),
-		feedapp.WithFeedPageDeliveredPublisher(noopDeliveryPublisher{}),
-	)
-}
-
 // CapturedRankedRecommendationOptions exposes the canonical outbound command
 // and final delivery event to local-contract tests. It intentionally records
 // only the new generated boundary; tests cannot assert retired in-process
@@ -118,19 +101,18 @@ func (noopDeliveryPublisher) Publish(
 }
 
 type engineRankedGateway struct {
-	engine      *rtrec.Engine
-	objectCards []transport.RecommendationObjectCard
-	mu          sync.Mutex
-	windows     map[string]engineWindow
+	engine  *rtrec.Engine
+	mu      sync.Mutex
+	windows map[string]engineWindow
 }
 
 type engineWindow struct {
 	subjectID    string
 	scenario     string
 	contentFence transport.ReleasePinnedQueryFence
+	contract     transport.ClientContentPresentationContract
 	metadata     testWindowMetadata
 	items        []rtrec.FeedItem
-	objectCards  []transport.RecommendationObjectCard
 }
 
 type testWindowMetadata struct {
@@ -158,6 +140,15 @@ func (gateway *engineRankedGateway) Create(
 	if gateway == nil || gateway.engine == nil {
 		return transport.RankedRecommendationPage{}, deliveryapp.ErrRecommendationUnavailable
 	}
+	// 建窗能力是窗口身份的一部分：缺席或伪造摘要在生产侧会被拒绝，
+	// 测试启动器同样不允许靠零值能力建窗。
+	if err := transport.ValidateClientContentPresentationContract(
+		command.ClientPresentationContract,
+	); err != nil {
+		return transport.RankedRecommendationPage{}, fmt.Errorf(
+			"test ranked window client presentation contract: %w", err,
+		)
+	}
 	digest := sha256.Sum256([]byte(strings.TrimSpace(command.IdempotencyKey)))
 	windowID := "test-ranked-" + hex.EncodeToString(digest[:8])
 	request := rtrec.GetFeedRequest{
@@ -184,9 +175,9 @@ func (gateway *engineRankedGateway) Create(
 		0,
 		command.Limit,
 		command.ContentFence,
+		command.ClientPresentationContract,
 		metadata,
 		response.Items,
-		gateway.objectCards,
 		nil,
 	)
 	gateway.mu.Lock()
@@ -194,11 +185,9 @@ func (gateway *engineRankedGateway) Create(
 		subjectID:    command.SubjectId,
 		scenario:     command.Scenario,
 		contentFence: command.ContentFence,
+		contract:     command.ClientPresentationContract,
 		metadata:     metadata,
 		items:        append([]rtrec.FeedItem(nil), response.Items...),
-		objectCards: cloneRecommendationObjectCards(
-			gateway.objectCards,
-		),
 	}
 	gateway.mu.Unlock()
 	return page, nil
@@ -221,6 +210,9 @@ func (gateway *engineRankedGateway) GetPage(
 		fromOrdinal >= len(state.items) || limit <= 0 {
 		return transport.RankedRecommendationPage{}, fmt.Errorf("test ranked window continuation is invalid")
 	}
+	// 与生产 read_page 同语义：窗口按建窗能力构造，续页必须回显建窗时的能力。
+	// 请求换了一份能力就不是同一个窗口，交由调用方按摘要不一致处理。
+	contract := state.contract
 	// 未来窗口精确过滤（与生产 read_page 同语义）：窗口与 ordinal 不可变，
 	// 但每次续页都按 subject 当前强负反馈投影过滤，页允许变短。
 	exclusions, err := gateway.engine.LoadFeedbackExclusions(
@@ -239,9 +231,9 @@ func (gateway *engineRankedGateway) GetPage(
 		fromOrdinal,
 		limit,
 		state.contentFence,
+		contract,
 		state.metadata,
 		state.items,
-		state.objectCards,
 		func(item rtrec.FeedItem) bool {
 			return exclusions.NegativeContentIDs[strings.TrimSpace(item.ContentID)] ||
 				exclusions.HiddenAuthors[strings.TrimSpace(item.AuthorID)] ||
@@ -257,9 +249,9 @@ func testRankedPage(
 	fromOrdinal int,
 	limit int,
 	contentFence transport.ReleasePinnedQueryFence,
+	contract transport.ClientContentPresentationContract,
 	metadata testWindowMetadata,
 	allItems []rtrec.FeedItem,
-	objectCards []transport.RecommendationObjectCard,
 	excluded func(rtrec.FeedItem) bool,
 ) transport.RankedRecommendationPage {
 	end := fromOrdinal + limit
@@ -272,10 +264,16 @@ func testRankedPage(
 		if excluded != nil && excluded(item) {
 			continue
 		}
+		envelope := testPostListItemEnvelope(item)
+		// 窗口只放建窗能力声明之内的候选；越界候选在生产侧不会进窗口，
+		// ordinal 保持原位不重排，页允许变短。
+		if !testEnvelopeWithinContract(envelope, contract) {
+			continue
+		}
 		featureDigest := sha256.Sum256([]byte(item.ContentID))
 		items = append(items, transport.RankedRecommendationItem{
 			Ordinal:               fromOrdinal + index,
-			ContentId:             item.ContentID,
+			Envelope:              envelope,
 			Score:                 item.Score,
 			FeatureSnapshotDigest: hex.EncodeToString(featureDigest[:]),
 			ItemFeatureSnapshot: map[string]any{
@@ -287,18 +285,18 @@ func testRankedPage(
 		})
 	}
 	page := transport.RankedRecommendationPage{
-		ContentFence:          contentFence,
-		WindowId:              windowID,
-		Scenario:              strings.TrimSpace(scenario),
-		ExperimentBucket:      metadata.experimentBucket,
-		ModelBucket:           metadata.modelBucket,
-		PolicyDigest:          metadata.policyDigest,
-		RankingSnapshotDigest: metadata.rankingSnapshotDigest,
-		FeatureSnapshotAt:     metadata.featureSnapshotAt,
-		UserFeatureSnapshot:   map[string]any{},
-		Items:                 items,
-		ObjectCards:           cloneRecommendationObjectCards(objectCards),
-		ExpiresAt:             metadata.expiresAt,
+		ContentFence:               contentFence,
+		WindowId:                   windowID,
+		Scenario:                   strings.TrimSpace(scenario),
+		ExperimentBucket:           metadata.experimentBucket,
+		ModelBucket:                metadata.modelBucket,
+		PolicyDigest:               metadata.policyDigest,
+		RankingSnapshotDigest:      metadata.rankingSnapshotDigest,
+		FeatureSnapshotAt:          metadata.featureSnapshotAt,
+		UserFeatureSnapshot:        map[string]any{},
+		Items:                      items,
+		ClientPresentationContract: contract,
+		ExpiresAt:                  metadata.expiresAt,
 	}
 	if metadata.modelBucket == "model" {
 		modelChannel := metadata.modelChannel
@@ -313,18 +311,56 @@ func testRankedPage(
 	return page
 }
 
-func cloneRecommendationObjectCards(
-	cards []transport.RecommendationObjectCard,
-) []transport.RecommendationObjectCard {
-	if len(cards) == 0 {
-		return nil
+// testPostListItemEnvelope 复刻 canonical 列表信封：objectKind 决定引用字段，
+// openSurface 是点击去向的唯一出站字段，contentType 只做筛选/媒体槽。
+func testEnvelopeWithinContract(
+	envelope transport.ListItemPresentationEnvelope,
+	contract transport.ClientContentPresentationContract,
+) bool {
+	declares := func(kind transport.ListObjectKind) bool {
+		for _, candidate := range contract.ListObjectKinds {
+			if candidate == kind {
+				return true
+			}
+		}
+		return false
 	}
-	cloned := make([]transport.RecommendationObjectCard, len(cards))
-	copy(cloned, cards)
-	for index := range cloned {
-		cloned[index].TagRefs = append([]string(nil), cards[index].TagRefs...)
+	opens := func(surface transport.ContentUiSurface) bool {
+		for _, candidate := range contract.OpenSurfaces {
+			if candidate == surface {
+				return true
+			}
+		}
+		return false
 	}
-	return cloned
+	renders := func(contentType transport.ContentType) bool {
+		for _, candidate := range contract.ContentTypes {
+			if candidate == contentType {
+				return true
+			}
+		}
+		return false
+	}
+	if !declares(envelope.ObjectKind) || !opens(envelope.OpenSurface) {
+		return false
+	}
+	return envelope.ContentType == nil || renders(*envelope.ContentType)
+}
+
+func testPostListItemEnvelope(item rtrec.FeedItem) transport.ListItemPresentationEnvelope {
+	envelope := transport.ListItemPresentationEnvelope{
+		ObjectKind:  transport.ListObjectKindPost,
+		OpenSurface: transport.ContentUiSurfaceMediaImmersive,
+		Post:        &transport.ListItemPostRef{PostId: strings.TrimSpace(item.ContentID)},
+	}
+	if raw := strings.TrimSpace(item.ContentType); raw != "" {
+		contentType := transport.ContentType(raw)
+		envelope.ContentType = &contentType
+		if contentType == transport.ContentTypeArticle {
+			envelope.OpenSurface = transport.ContentUiSurfaceArticleReader
+		}
+	}
+	return envelope
 }
 
 func newTestWindowMetadata(

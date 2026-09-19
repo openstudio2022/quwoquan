@@ -18,6 +18,7 @@ const (
 	responseBool
 	responseObject
 	responseList
+	responseSemanticDocument
 )
 
 type responseValueSpec struct {
@@ -95,6 +96,10 @@ func validateResponseValue(path string, value any, spec responseValueSpec) error
 		return fmt.Errorf("%s must not be null", path)
 	}
 	switch spec.kind {
+	case responseSemanticDocument:
+		// semantic_document 是 owner/App 共用的 canonical codec 原子值。
+		// Edge 不复制节点协议或裁剪递归树；外层字段、签名响应字节预算仍严格校验。
+		return validateSemanticDocumentScalar(path, value)
 	case responseString:
 		if _, ok := value.(string); !ok {
 			return fmt.Errorf("%s must be a string", path)
@@ -104,45 +109,69 @@ func validateResponseValue(path string, value any, spec responseValueSpec) error
 			return fmt.Errorf("%s must be a boolean", path)
 		}
 	case responseInt:
-		number, ok := value.(json.Number)
-		if !ok {
-			return fmt.Errorf("%s must be an integer", path)
-		}
-		if _, err := number.Int64(); err != nil {
-			return fmt.Errorf("%s must be an integer", path)
-		}
+		return validateResponseInt(path, value)
 	case responseFloat:
-		number, ok := value.(json.Number)
-		if !ok {
-			return fmt.Errorf("%s must be a finite number", path)
-		}
-		parsed, err := number.Float64()
-		if err != nil || math.IsInf(parsed, 0) || math.IsNaN(parsed) {
-			return fmt.Errorf("%s must be a finite number", path)
-		}
+		return validateResponseFloat(path, value)
 	case responseObject:
-		object, ok := value.(map[string]any)
-		if !ok || spec.object == nil {
-			return fmt.Errorf("%s must be an object", path)
-		}
-		if err := validateObjectResponse(path, object, *spec.object); err != nil {
-			return err
-		}
+		return validateResponseObject(path, value, spec)
 	case responseList:
-		items, ok := value.([]any)
-		if !ok || spec.item == nil {
-			return fmt.Errorf("%s must be a list", path)
-		}
-		if len(items) > spec.maxItems {
-			return fmt.Errorf("%s exceeds maximum item count %d", path, spec.maxItems)
-		}
-		for index, item := range items {
-			if err := validateResponseValue(fmt.Sprintf("%s[%d]", path, index), item, *spec.item); err != nil {
-				return err
-			}
-		}
+		return validateResponseList(path, value, spec)
 	default:
 		return fmt.Errorf("%s has an unsupported response contract", path)
+	}
+	return nil
+}
+
+func validateResponseInt(path string, value any) error {
+	number, ok := value.(json.Number)
+	if !ok {
+		return fmt.Errorf("%s must be an integer", path)
+	}
+	if _, err := number.Int64(); err != nil {
+		return fmt.Errorf("%s must be an integer", path)
+	}
+	return nil
+}
+
+func validateResponseFloat(path string, value any) error {
+	number, ok := value.(json.Number)
+	if !ok {
+		return fmt.Errorf("%s must be a finite number", path)
+	}
+	parsed, err := number.Float64()
+	if err != nil || math.IsInf(parsed, 0) || math.IsNaN(parsed) {
+		return fmt.Errorf("%s must be a finite number", path)
+	}
+	return nil
+}
+
+func validateResponseObject(path string, value any, spec responseValueSpec) error {
+	object, ok := value.(map[string]any)
+	if !ok || spec.object == nil {
+		return fmt.Errorf("%s must be an object", path)
+	}
+	return validateObjectResponse(path, object, *spec.object)
+}
+
+func validateResponseList(path string, value any, spec responseValueSpec) error {
+	items, ok := value.([]any)
+	if !ok || spec.item == nil {
+		return fmt.Errorf("%s must be a list", path)
+	}
+	if len(items) > spec.maxItems {
+		return fmt.Errorf("%s exceeds maximum item count %d", path, spec.maxItems)
+	}
+	for index, item := range items {
+		if err := validateResponseValue(fmt.Sprintf("%s[%d]", path, index), item, *spec.item); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateSemanticDocumentScalar(path string, value any) error {
+	if _, ok := value.(map[string]any); !ok {
+		return fmt.Errorf("%s must be a semantic_document envelope", path)
 	}
 	return nil
 }
@@ -150,8 +179,8 @@ func validateResponseValue(path string, value any, spec responseValueSpec) error
 func baseResponseSpec() objectSpec {
 	return exactObject(map[string]responseValueSpec{
 		"postId": requiredString(), "contentType": requiredString(),
-		"contentIdentity": nullableString(), "assistantUsePolicy": nullableString(),
-		"authorId": nullableString(), "authorDisplayName": nullableString(),
+		"assistantUsePolicy": nullableString(),
+		"authorId":           nullableString(), "authorDisplayName": nullableString(),
 		"authorAvatarUrl": nullableString(), "authorAvatarAssetId": nullableString(),
 		"authorAvatarAccessMode": nullableString(), "title": nullableString(), "body": nullableString(),
 		"summary": nullableString(), "coverUrl": nullableString(),
@@ -176,6 +205,7 @@ func semanticResponseSpec() objectSpec {
 		"tagRefs":          nullableList(30, requiredString()),
 		"entityRefs":       nullableList(30, requiredString()),
 		"semanticMentions": nullableList(30, requiredObject(semanticMentionSpec())),
+		"semanticDocument": {kind: responseSemanticDocument, nullable: true},
 	})
 }
 

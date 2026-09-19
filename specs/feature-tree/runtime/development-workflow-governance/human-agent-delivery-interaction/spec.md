@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：不直接参与用户 Journey；为全部 Journey 提供 Agent 主导且人类 authority 可理解的交付协议
 >
-> 设计归属：[L2 DEC-008](../design.md#dec-008)
+> 设计引用：[L2 DEC-008](../design.md#dec-008)
 
 ## 1. 用户价值
 

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:developer' as developer;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_feed_object_card.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart'
     show DiscoveryFeedRouteRegistry, kFeedSortRecommend;
@@ -148,7 +149,7 @@ class DiscoveryFeedState {
 
   /// 混合对象卡（B4 插卡模式）：anchorIndex 为 items 全量列表中的插入位。
   /// 只随首刷下发（分页续接不重复注入）。
-  final List<FeedObjectCard> objectCards;
+  final List<ContentFeedObjectCard> objectCards;
   final List<String> seenItemIds;
   final String? nextCursor;
 
@@ -203,7 +204,7 @@ class DiscoveryFeedState {
 
   DiscoveryFeedState copyWith({
     List<ContentPostViewData>? items,
-    List<FeedObjectCard>? objectCards,
+    List<ContentFeedObjectCard>? objectCards,
     List<String>? seenItemIds,
     Object? nextCursor = _unset,
     Object? feedRequestId = _unset,
@@ -265,30 +266,24 @@ class DiscoveryFeedState {
   }
 }
 
-typedef DiscoveryFeedQuery = ({
-  String category,
-  String? channel,
-  String? identity,
-  String? type,
-});
+typedef DiscoveryFeedQuery = ({String category, String? channel, String? type});
 
 /// 将 surface tab id 映射到统一 discovery feed 查询。
 ///
 /// 频道推荐主链路（首页频道）以 [DiscoveryFeedQuery.channel] 路由（服务端进
-/// 推荐引擎并按 channelId 归因）；发现页浏览流（moment/photo/video/article tab）
-/// 仍以 identity/type 走时间线具名查询，两者互斥。
+/// 推荐引擎并按 channelId 归因）；发现页浏览流（photo/video/article tab）
+/// 仍以 contentType 走时间线具名查询，两者互斥。
 DiscoveryFeedQuery toDiscoveryFeedQuery(String channelId) {
   final registeredRoute = DiscoveryFeedRouteRegistry.routeForSurface(channelId);
   if (registeredRoute != null) {
     return (
       category: registeredRoute.category,
       channel: registeredRoute.channelId,
-      identity: registeredRoute.identity,
       type: registeredRoute.type,
     );
   }
   // 首页频道由 metadata 下发，统一按 channel 语义路由推荐引擎。
-  return (category: channelId, channel: channelId, identity: null, type: null);
+  return (category: channelId, channel: channelId, type: null);
 }
 
 /// 按 channelId 管理多路 feed 的 Notifier

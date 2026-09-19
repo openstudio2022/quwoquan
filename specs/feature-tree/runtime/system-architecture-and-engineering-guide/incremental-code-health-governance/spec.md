@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：本 Story 为横切工程能力，不直接承接用户 Journey。
 >
-> 设计归属：[L2 DEC-031](../design.md#dec-031)
+> 设计引用：[L2 DEC-031](../design.md#dec-031)
 
 ## 1. 用户价值
 
@@ -53,7 +53,7 @@
 - advisory 指标只有达到最小时间/PR 样本、误报与耗时目标后，才能由显式策略版本人工升格；误报按 finding code 抽样评审判定（每个 code 至少 `minimum_reviewed_per_code` 条人工 verdict 且误报不超过上限），不要求评审全部 advisory。
 - weekly 报告只输出容量趋势、churn、health 与 Top hotspots，不阻断 PR、不提交 snapshot。
 - 连续出现且可行动的热点才进入最低 owner OPEN，不产生中央 backlog。
-- 周报保存所有模块事实，Top N 仅为展示排序；结构复用 scope 不冒充已解析的 Feature owner。未采集的架构、覆盖率或退役证据保持 unavailable，不能用规模和测试行数推导这些状态。
+- 周报保存所有模块事实，Top N 仅为展示排序；结构复用 scope 不冒充已解析的 Feature context。未采集的架构、覆盖率或退役证据保持 unavailable，不能用规模和测试行数推导这些状态。
 - 周报从 exact Git source 读取，当前工作树未提交字节不污染已提交统计。观察分支、head、策略、分析器与口径绑定历史比较；缺历史、跨分支或口径变化不得伪造改善。定时工作流部署和连续运行 readback 与本地实现分别报告。
 
 ## 4. 契约引用
@@ -128,7 +128,7 @@
 ## 6. 依赖
 
 - 前置要求：canonical impact planner 与 EvidenceFingerprint 可用。
-- 上游事实：exact base/head、changed paths、owner identity、candidate 字节与 policy/toolchain identity。
+- 上游事实：exact base/head、changed paths、context identity、candidate 字节与 policy/toolchain identity。
 - 下游结果：typed report、named evidence、Delivery Gate 结论与 report-only hotspots。
 - 父级设计：`DEC-031`。
 

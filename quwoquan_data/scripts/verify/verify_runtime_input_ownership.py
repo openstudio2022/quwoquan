@@ -18,7 +18,10 @@ def runtime_input_ownership_issues() -> list[str]:
             path = root / rel
             try:
                 value = read_json(path)
-                assert_valid(value, "execution", schema, label=str(path))
+                if schema == "task_init_request":
+                    assert_valid(value, "execution", "task_init_request", label=str(path))
+                else:
+                    assert_valid(value, "execution", "target_set", label=str(path))
             except Exception as exc:  # noqa: BLE001
                 issues.append(f"{path}: {exc}")
     return issues

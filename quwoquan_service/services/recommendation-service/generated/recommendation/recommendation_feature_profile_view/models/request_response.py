@@ -7,6 +7,71 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from enum import Enum
+from pydantic_core import core_schema
+
+
+class _ContractEnum(str, Enum):
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        return core_schema.no_info_before_validator_function(
+            cls._validate_wire,
+            handler(source_type),
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize_wire),
+        )
+
+    @classmethod
+    def _serialize_wire(cls, value):
+        return cls._validate_wire(value).value
+
+    @classmethod
+    def _validate_wire(cls, value):
+        if isinstance(value, cls):
+            return value
+        if type(value) is not str:
+            raise ValueError("enum wire value must be a string")
+        return cls(value)
+
+
+class ContentType(_ContractEnum):
+    VALUE_IMAGE = "image"
+    VALUE_VIDEO = "video"
+    VALUE_ARTICLE = "article"
+
+
+class GetRecommendationAuthorImpactQuery(BaseModel):
+    """RecommendationFeatureProfileView 作者影响摘要内部查询。"""
+    authorId: str
+    limit: int | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class GetRecommendationFlywheelFunnelQuery(BaseModel):
+    """北极星漏斗多维查询；时间窗必填，维度过滤全部可选，capacityTier 只接受 duo/group 闭集。"""
+    windowFrom: datetime
+    windowTo: datetime
+    sourceObjectKind: str | None = None
+    sourceObjectId: str | None = None
+    capacityTier: str | None = None
+    tagRef: str | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class GetRecommendationGatheringSocialProofQuery(BaseModel):
+    """四锚点社会证明内部查询；anchorKind 只接受 organizer/entity/content/creator。"""
+    anchorKind: str
+    objectId: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class GetRecommendationIntersectionSupplyQuery(BaseModel):
+    """按交集 kind 注册表中的供给口径读取去重对象数。"""
+    supplyKey: str
+
+    model_config = ConfigDict(extra="forbid")
 
 
 class IntersectionTarget(BaseModel):
@@ -19,72 +84,16 @@ class IntersectionTarget(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class IntersectionVisual(BaseModel):
-    """交集样本视觉标识（统一交互子契约 · A–E 横切复用值对象，Phase 0 §20.7 冻结）。 按 assetKind 渲染头像簇 / 圈子封面 / 校徽 / logo / 缩略图等对象级视觉信号， 禁用用户头像冒充非用户对象（与 §20.4 数字与视觉标识约束对齐）。 可点击进 target（对象主页）。R1/R2 人级 kind 必带结构化 sampleVisuals （注册表 sampleVisualsRequired=true），取代裸 sampleAvatarUrls 字符串簇。  闭集枚举（端按字符串解析，未知 assetKind 走通用占位）：   assetKind: avatar | circleAvatar | cover | emblem | logo | thumbnail | coverImage | icon """
-    assetKind: str
-    imageUrl: str
-    displayName: str
-    target: IntersectionTarget | None = None
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class IntersectionTextSpan(BaseModel):
-    """交集结论句的可交互片段（统一交互子契约 · A–E 横切复用值对象，Phase 0 §20.7 冻结）。 一句话 = List<IntersectionTextSpan>，是 primaryText / briefText 的「结构化富文本切分」， 不是第二文案通道（不违反 G2）：契约不变量 join(spans.text) == primaryText / briefText， 端契约测试强制断言。云侧同源产出，端只读渲染。  片段角色：   role=object 承载名字（点击进对象主页），可带 visual 句内 inline 头像（§21.5.1 槽②）；   role=count  承载数字（点击进维度 / sourceRef 下钻列表）； role=plain  普通文本（不可点击）。`displayBinding=host_plain` 时的当前宿主名也必须使用 plain，   不得用 object span 表示 self-target。 target 缺省（null）表示该片段不可点击；visual 缺省（null）表示无句内视觉， 且 visual 不计入 text，不破坏 join(spans.text)==primaryText/briefText 不变量。 端侧不得因 span target 缺省而回退到 reason.actionTargetId 或整行点击；可见交集句必须先通过 `IntersectionReason.displayBinding` 校验。缺 primarySpans 或 join 不成立时 fail-closed 隐藏。  闭集枚举（端按字符串解析，未知 role 当作 plain）：   role: plain | object | count """
-    text: str
-    role: str
-    target: IntersectionTarget | None = None
-    visual: IntersectionVisual | None = None
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class IntersectionPoint(BaseModel):
-    """交集点 / 证据组：IntersectionReason 的可见证据项真相源。事实交集点来自可枚举关系； 推荐交集点来自算法分桶后的可解释推荐点，必须标注 recommended，不能伪装事实。  维度与证据组类型为开放字符串（dimension / pointClass / sourceRef），端按字符串解析， 未来新增交集 kind 不需要改契约，端侧对未知 kind 优雅降级展示 displayText/label + count， 不得写死闭集枚举。sourceRef 是 IntersectionPoint 级的「交集 kind 一等引用」（§23：point 投影的 kind 真相源即 sourceRef，端查 IntersectionKindMetadata.of(point.sourceRef) 得 iconKey/objectKind/actionHints/tone/vertical， 禁止端再按点推导 kind）。sourceRef 取值必须先在交集词典 kind 唯一注册表登记 （specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md §5.4 与 recommendation/recommendation/recommendation_model_release/intersection_kind_registry.yaml，标准名如 sharedFollowees / sharedCircle / coCommented / coVisitedEntity / followeeInObject， 无兼容别名），登记后方可在云侧产出与 fixtures 铺设。  证据组语义：   count            该证据组聚合到的事实条数（如「共同关注的人 4」中的 4）；端侧数字真相源。   displayText      用户语言短句名词（≤6 汉字，如「共同关注的人」），云侧下发，端不本地拼装。   sampleText       实例化样本（如某用户名 / 某地点名 / 某篇内容标题），让交集"可感知"。   sampleAvatarUrls 头像簇（≤3），真实的人/对象信号，端侧视觉锚。 """
-    pointId: str
-    pointClass: str
-    dimension: str
+class IntersectionActionHint(BaseModel):
+    """交集/影响力下一步行动建议。云侧按 kind/helpType 选择主 CTA 与次 CTA，端只读 actionKey、label、target、actionTier、requiredGates 与 dispatch 渲染和分发，禁止按 kind 猜测行动。actionKey 与 dispatch 的唯一真相源是 intersection_kind_registry.yaml； 当前注册表只包含已有真实承接的行动，未就绪行动不进入 wire。 """
+    actionKey: str
     label: str
-    displayText: str
-    sourceRef: str
-    visibility: str
-    count: int
-    sampleText: str
-    sampleAvatarUrls: list[str]
-    sampleVisuals: list[IntersectionVisual]
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class IntersectionDimensionTally(BaseModel):
-    """「我的交集」单个维度的计数与未读统计（B1 契约）。 dimension 与 IntersectionReason.dimension 闭集对齐；count 为该维度可见事实交集总数； newCount 为自上次查看（已读水位）以来的新增数，端侧据此显示红点。 label 为后端提供的用户语言维度短名（如"身份""地点""内容""兴趣""关系"），端不本地拼装。 briefText 为云侧实例化的一句话动态简报（如"4 位校友正在讨论 AI 产品"）， 我的主页聚合卡按 briefText 渲染动态简报行；缺省时端回落 label + newCount，不本地编造事实。 subtitleText 为该动态简报的证据摘要（如"张晓明、王晨、阿远、陈璟"），端只读直出。 dimension 为开放字符串，端对未知维度优雅降级（briefText 缺省走 label）。 """
-    dimension: str
-    label: str
-    count: int
-    newCount: int
-    briefText: str
-    subtitleText: str
-    briefSpans: list[IntersectionTextSpan]
-    sampleVisuals: list[IntersectionVisual]
-    sourceRef: str
-    countObjectKind: str
-    strengthenedCount: int
-    reactivatedCount: int
-    iconKey: str
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class IntersectionRepresentativeActor(BaseModel):
-    """交集/影响力人数句的代表人锚点（统一交互子契约）。 所有包含人数的 primaryText 必须由云侧从同一证据快照中选出一个代表人： 代表人是用户最可能点击、最能解释这条连接的证据样本。 当同一人数句存在多种来源时，代表人按关系密切度择优，不代表所有计数对象来自同一来源： 联系人/共同联系人 > 你关注的人/共同关注的人 > 同圈圈友 > 你曾互动过其内容的用户。 人数 N 的解释归属于 IntersectionReason / IntersectionPoint 的同一快照，点击后列表必须逐人说明来源与动作。  隐私红线： - 不可见 actor、被拉黑、未授权通讯录联系人不得下发真实姓名或头像。 - 可降级为匿名但可证的锚点，如「一位校友」「一位联系人」。 - 端侧只读渲染，不得本地猜测代表人或重排代表人。 """
-    actorId: str
-    displayName: str
-    avatarUrl: str
-    relationLabel: str
-    privacyState: str
     target: IntersectionTarget | None = None
-    evidenceRank: int
-    snapshotVersion: str
+    isPrimary: bool
+    priority: int
+    actionTier: str
+    requiredGates: list[str]
+    dispatch: str
 
     model_config = ConfigDict(extra="forbid")
 
@@ -113,16 +122,41 @@ class IntersectionActorEvidence(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class IntersectionActionHint(BaseModel):
-    """交集/影响力下一步行动建议。云侧按 kind/helpType 选择主 CTA 与次 CTA，端只读 actionKey、label、target、actionTier、requiredGates 与 dispatch 渲染和分发，禁止按 kind 猜测行动。actionKey 与 dispatch 的唯一真相源是 intersection_kind_registry.yaml； 当前注册表只包含已有真实承接的行动，未就绪行动不进入 wire。 """
-    actionKey: str
-    label: str
+class IntersectionVisual(BaseModel):
+    """交集样本视觉标识（统一交互子契约 · A–E 横切复用值对象，Phase 0 §20.7 冻结）。 按 assetKind 渲染头像簇 / 圈子封面 / 校徽 / logo / 缩略图等对象级视觉信号， 禁用用户头像冒充非用户对象（与 §20.4 数字与视觉标识约束对齐）。 可点击进 target（对象主页）。R1/R2 人级 kind 必带结构化 sampleVisuals （注册表 sampleVisualsRequired=true），取代裸 sampleAvatarUrls 字符串簇。  闭集枚举（端按字符串解析，未知 assetKind 走通用占位）：   assetKind: avatar | circleAvatar | cover | emblem | logo | thumbnail | coverImage | icon """
+    assetKind: str
+    imageUrl: str
+    displayName: str
     target: IntersectionTarget | None = None
-    isPrimary: bool
-    priority: int
-    actionTier: str
-    requiredGates: list[str]
-    dispatch: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IntersectionTextSpan(BaseModel):
+    """交集结论句的可交互片段（统一交互子契约 · A–E 横切复用值对象，Phase 0 §20.7 冻结）。 一句话 = List<IntersectionTextSpan>，是 primaryText / briefText 的「结构化富文本切分」， 不是第二文案通道（不违反 G2）：契约不变量 join(spans.text) == primaryText / briefText， 端契约测试强制断言。云侧同源产出，端只读渲染。  片段角色：   role=object 承载名字（点击进对象主页），可带 visual 句内 inline 头像（§21.5.1 槽②）；   role=count  承载数字（点击进维度 / sourceRef 下钻列表）； role=plain  普通文本（不可点击）。`displayBinding=host_plain` 时的当前宿主名也必须使用 plain，   不得用 object span 表示 self-target。 target 缺省（null）表示该片段不可点击；visual 缺省（null）表示无句内视觉， 且 visual 不计入 text，不破坏 join(spans.text)==primaryText/briefText 不变量。 端侧不得因 span target 缺省而回退到 reason.actionTargetId 或整行点击；可见交集句必须先通过 `IntersectionReason.displayBinding` 校验。缺 primarySpans 或 join 不成立时 fail-closed 隐藏。  闭集枚举（端按字符串解析，未知 role 当作 plain）：   role: plain | object | count """
+    text: str
+    role: str
+    target: IntersectionTarget | None = None
+    visual: IntersectionVisual | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IntersectionDimensionTally(BaseModel):
+    """「我的交集」单个维度的计数与未读统计（B1 契约）。 dimension 与 IntersectionReason.dimension 闭集对齐；count 为该维度可见事实交集总数； newCount 为自上次查看（已读水位）以来的新增数，端侧据此显示红点。 label 为后端提供的用户语言维度短名（如"身份""地点""内容""兴趣""关系"），端不本地拼装。 briefText 为云侧实例化的一句话动态简报（如"4 位校友正在讨论 AI 产品"）， 我的主页聚合卡按 briefText 渲染动态简报行；缺省时端回落 label + newCount，不本地编造事实。 subtitleText 为该动态简报的证据摘要（如"张晓明、王晨、阿远、陈璟"），端只读直出。 dimension 为开放字符串，端对未知维度优雅降级（briefText 缺省走 label）。 """
+    dimension: str
+    label: str
+    count: int
+    newCount: int
+    briefText: str
+    subtitleText: str
+    briefSpans: list[IntersectionTextSpan]
+    sampleVisuals: list[IntersectionVisual]
+    sourceRef: str
+    countObjectKind: str
+    strengthenedCount: int
+    reactivatedCount: int
+    iconKey: str
 
     model_config = ConfigDict(extra="forbid")
 
@@ -135,6 +169,35 @@ class IntersectionEvidenceRow(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class IntersectionInboxSummary(BaseModel):
+    """我的主页「我的交集」聚合入口摘要（B1 契约）。 云侧据 viewer_object_intersections 读模型 + per-dimension 已读水位预生成： 总交集数 + 各维度计数与"自上次查看新增"未读数。端只读展示，禁止本地统计。  展示规则（端侧消费）：   - 我的主页最多展示 3 个维度 tally；超过 3 个收起，点击"展开更多"再展示其余。   - 红色数字仅用于未读 newCount；newCount=0 时不展示红点。   - 打开某维度列表后调用 visit 推进水位，对应 tally 的 newCount 清零。  维度闭集与 IntersectionReason.dimension 对齐：identity | location | content | interest | relationship。 """
+    totalCount: int
+    totalNewCount: int
+    dimensions: list[IntersectionDimensionTally]
+    generatedAt: str
+    totalStrengthenedCount: int
+    totalReactivatedCount: int
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IntersectionPoint(BaseModel):
+    """交集点 / 证据组：IntersectionReason 的可见证据项真相源。事实交集点来自可枚举关系； 推荐交集点来自算法分桶后的可解释推荐点，必须标注 recommended，不能伪装事实。  维度与证据组类型为开放字符串（dimension / pointClass / sourceRef），端按字符串解析， 未来新增交集 kind 不需要改契约，端侧对未知 kind 优雅降级展示 displayText/label + count， 不得写死闭集枚举。sourceRef 是 IntersectionPoint 级的「交集 kind 一等引用」（§23：point 投影的 kind 真相源即 sourceRef，端查 IntersectionKindMetadata.of(point.sourceRef) 得 iconKey/objectKind/actionHints/tone/vertical， 禁止端再按点推导 kind）。sourceRef 取值必须先在交集词典 kind 唯一注册表登记 （specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md §5.4 与 recommendation/recommendation/recommendation_model_release/intersection_kind_registry.yaml，标准名如 sharedFollowees / sharedCircle / coCommented / coVisitedEntity / followeeInObject， 无兼容别名），登记后方可在云侧产出与 fixtures 铺设。  证据组语义：   count            该证据组聚合到的事实条数（如「共同关注的人 4」中的 4）；端侧数字真相源。   displayText      用户语言短句名词（≤6 汉字，如「共同关注的人」），云侧下发，端不本地拼装。   sampleText       实例化样本（如某用户名 / 某地点名 / 某篇内容标题），让交集"可感知"。   sampleAvatarUrls 头像簇（≤3），真实的人/对象信号，端侧视觉锚。 """
+    pointId: str
+    pointClass: str
+    dimension: str
+    label: str
+    displayText: str
+    sourceRef: str
+    visibility: str
+    count: int
+    sampleText: str
+    sampleAvatarUrls: list[str]
+    sampleVisuals: list[IntersectionVisual]
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class IntersectionPropagationPath(BaseModel):
     """交集传播链当前值对象。 承载「沿边的可证下游传播」：路径节点视觉 + 跳数 + 二级传播绝对人数 + 一句话摘要。 红线（§21.4 / author·circle impact 对齐）：只承载可证绝对计数与路径节点视觉， 禁止 reach / conversion / 漏斗 / 增长率等运营比率指标进入本契约。 端只读渲染（传播视图件，复用 IntersectionVisualCluster / IntersectionTargetNavigator）， 云侧同源产出；本期端 Mock 原型，云侧多跳真算后置（§21.10）。  闭集枚举（端按字符串解析，未知值优雅降级为通用路径）：   pathKind: personToPerson | personToCircle | personToContentToPerson  字段语义：   summaryText 为云侧产出的一句话（如「8人通过你建立了新连接」），端只读直出（G2）。   summaryTarget 为该摘要的可点击下钻目标（可空表示不可点击）。   nodes 为传播路径节点视觉（起点 → 桥接 → 终点，按 assetKind 渲染头像/封面）。   hopCount 为路径跳数（单跳=1）；secondarySpreadCount 为二级传播绝对人数（守红线，非比率）。 """
     pathKind: str
@@ -143,6 +206,20 @@ class IntersectionPropagationPath(BaseModel):
     summaryText: str
     summaryTarget: IntersectionTarget | None = None
     nodes: list[IntersectionVisual]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class IntersectionRepresentativeActor(BaseModel):
+    """交集/影响力人数句的代表人锚点（统一交互子契约）。 所有包含人数的 primaryText 必须由云侧从同一证据快照中选出一个代表人： 代表人是用户最可能点击、最能解释这条连接的证据样本。 当同一人数句存在多种来源时，代表人按关系密切度择优，不代表所有计数对象来自同一来源： 联系人/共同联系人 > 你关注的人/共同关注的人 > 同圈圈友 > 你曾互动过其内容的用户。 人数 N 的解释归属于 IntersectionReason / IntersectionPoint 的同一快照，点击后列表必须逐人说明来源与动作。  隐私红线： - 不可见 actor、被拉黑、未授权通讯录联系人不得下发真实姓名或头像。 - 可降级为匿名但可证的锚点，如「一位校友」「一位联系人」。 - 端侧只读渲染，不得本地猜测代表人或重排代表人。 """
+    actorId: str
+    displayName: str
+    avatarUrl: str
+    relationLabel: str
+    privacyState: str
+    target: IntersectionTarget | None = None
+    evidenceRank: int
+    snapshotVersion: str
 
     model_config = ConfigDict(extra="forbid")
 
@@ -212,23 +289,12 @@ class IntersectionReason(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class IntersectionInboxSummary(BaseModel):
-    """我的主页「我的交集」聚合入口摘要（B1 契约）。 云侧据 viewer_object_intersections 读模型 + per-dimension 已读水位预生成： 总交集数 + 各维度计数与"自上次查看新增"未读数。端只读展示，禁止本地统计。  展示规则（端侧消费）：   - 我的主页最多展示 3 个维度 tally；超过 3 个收起，点击"展开更多"再展示其余。   - 红色数字仅用于未读 newCount；newCount=0 时不展示红点。   - 打开某维度列表后调用 visit 推进水位，对应 tally 的 newCount 清零。  维度闭集与 IntersectionReason.dimension 对齐：identity | location | content | interest | relationship。 """
-    totalCount: int
-    totalNewCount: int
-    dimensions: list[IntersectionDimensionTally]
-    generatedAt: str
-    totalStrengthenedCount: int
-    totalReactivatedCount: int
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ListRecommendationSubjectIntersectionsQuery(BaseModel):
-    """按可信主体与交集类别读取 RecommendationFeatureProfileView 物化的结构化交集理由；channel 是精确分片筛选，未物化该分片时读取 channel 为空的全局快照。"""
-    subjectId: str
-    intersectionClass: str
-    channel: str | None = None
+class ListRecommendationAuthorImpactEvidenceQuery(BaseModel):
+    """RecommendationFeatureProfileView 作者影响证据内部分页查询。"""
+    authorId: str
+    impactId: str
+    cursor: str | None = None
+    limit: int | None = None
 
     model_config = ConfigDict(extra="forbid")
 
@@ -242,58 +308,36 @@ class ListRecommendationObjectIntersectionsQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class GetRecommendationIntersectionSupplyQuery(BaseModel):
-    """按交集 kind 注册表中的供给口径读取去重对象数。"""
-    supplyKey: str
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class RecommendationIntersectionReasonSlice(BaseModel):
-    """同一主体与交集类别的有界结构化理由快照；channel 非空为精确分片，channel 为空为 canonical 全局快照。"""
+class ListRecommendationSubjectIntersectionsQuery(BaseModel):
+    """按可信主体与交集类别读取 RecommendationFeatureProfileView 物化的结构化交集理由；channel 是精确分片筛选，未物化该分片时读取 channel 为空的全局快照。"""
     subjectId: str
     intersectionClass: str
     channel: str | None = None
-    reasons: list[IntersectionReason]
-    generatedAt: datetime
 
     model_config = ConfigDict(extra="forbid")
 
 
-class RecommendationObjectIntersectionReasonSlice(BaseModel):
-    """同一主体与目标对象的有界结构化交集理由快照。"""
-    subjectId: str
-    objectType: str
-    objectId: str
-    reasons: list[IntersectionReason]
-    generatedAt: datetime
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class RecommendationIntersectionSupply(BaseModel):
-    """交集冷启动稀释闸门使用的权威供给计数快照。"""
-    supplyKey: str
-    distinctObjectCount: int
-    computedAt: datetime
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class GetRecommendationAuthorImpactQuery(BaseModel):
-    """RecommendationFeatureProfileView 作者影响摘要内部查询。"""
-    authorId: str
-    limit: int | None = None
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class ListRecommendationAuthorImpactEvidenceQuery(BaseModel):
-    """RecommendationFeatureProfileView 作者影响证据内部分页查询。"""
-    authorId: str
+class RecommendationAuthorImpactEvidence(BaseModel):
+    """不含 viewer 身份的单条作者影响事实；Content 仅按 contentId 执行当前权限 hydration。"""
+    evidenceId: str
     impactId: str
-    cursor: str | None = None
-    limit: int | None = None
+    contentId: str
+    contentType: ContentType | None = None
+    helpType: str
+    action: str
+    intersectionDimension: str | None = None
+    occurredAt: datetime
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class RecommendationAuthorImpactEvidencePage(BaseModel):
+    """作者影响证据的稳定 keyset 分页结果。"""
+    impactId: str
+    totalCount: int
+    items: list[RecommendationAuthorImpactEvidence]
+    nextCursor: str | None = None
+    hasMore: bool
 
     model_config = ConfigDict(extra="forbid")
 
@@ -322,35 +366,18 @@ class RecommendationAuthorImpactSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class RecommendationAuthorImpactEvidence(BaseModel):
-    """不含 viewer 身份的单条作者影响事实；Content 仅按 contentId 执行当前权限 hydration。"""
-    evidenceId: str
-    impactId: str
-    contentId: str
-    contentType: str | None = None
-    helpType: str
-    action: str
-    intersectionDimension: str | None = None
-    occurredAt: datetime
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class RecommendationAuthorImpactEvidencePage(BaseModel):
-    """作者影响证据的稳定 keyset 分页结果。"""
-    impactId: str
-    totalCount: int
-    items: list[RecommendationAuthorImpactEvidence]
-    nextCursor: str | None = None
-    hasMore: bool
-
-    model_config = ConfigDict(extra="forbid")
-
-
-class GetRecommendationGatheringSocialProofQuery(BaseModel):
-    """四锚点社会证明内部查询；anchorKind 只接受 organizer/entity/content/creator。"""
-    anchorKind: str
-    objectId: str
+class RecommendationFlywheelFunnelSnapshot(BaseModel):
+    """北极星漏斗诚实快照；只给分子分母不下发百分比，越界以 truncated 标注，比例①=wishlistToJoined/wishlisted，②=experienced/formed，③=creatorRepublished/facilitationNotified。"""
+    windowFrom: datetime
+    windowTo: datetime
+    wishlistedPersonaCount: int
+    wishlistToJoinedCount: int
+    publishedCount: int
+    formedCount: int
+    experiencedCount: int
+    facilitationNotifiedCount: int
+    creatorRepublishedCount: int
+    truncated: bool
 
     model_config = ConfigDict(extra="forbid")
 
@@ -366,29 +393,32 @@ class RecommendationGatheringSocialProofSummary(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class GetRecommendationFlywheelFunnelQuery(BaseModel):
-    """北极星漏斗多维查询；时间窗必填，维度过滤全部可选，capacityTier 只接受 duo/group 闭集。"""
-    windowFrom: datetime
-    windowTo: datetime
-    sourceObjectKind: str | None = None
-    sourceObjectId: str | None = None
-    capacityTier: str | None = None
-    tagRef: str | None = None
+class RecommendationIntersectionReasonSlice(BaseModel):
+    """同一主体与交集类别的有界结构化理由快照；channel 非空为精确分片，channel 为空为 canonical 全局快照。"""
+    subjectId: str
+    intersectionClass: str
+    channel: str | None = None
+    reasons: list[IntersectionReason]
+    generatedAt: datetime
 
     model_config = ConfigDict(extra="forbid")
 
 
-class RecommendationFlywheelFunnelSnapshot(BaseModel):
-    """北极星漏斗诚实快照；只给分子分母不下发百分比，越界以 truncated 标注，比例①=wishlistToJoined/wishlisted，②=experienced/formed，③=creatorRepublished/facilitationNotified。"""
-    windowFrom: datetime
-    windowTo: datetime
-    wishlistedPersonaCount: int
-    wishlistToJoinedCount: int
-    publishedCount: int
-    formedCount: int
-    experiencedCount: int
-    facilitationNotifiedCount: int
-    creatorRepublishedCount: int
-    truncated: bool
+class RecommendationIntersectionSupply(BaseModel):
+    """交集冷启动稀释闸门使用的权威供给计数快照。"""
+    supplyKey: str
+    distinctObjectCount: int
+    computedAt: datetime
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class RecommendationObjectIntersectionReasonSlice(BaseModel):
+    """同一主体与目标对象的有界结构化交集理由快照。"""
+    subjectId: str
+    objectType: str
+    objectId: str
+    reasons: list[IntersectionReason]
+    generatedAt: datetime
 
     model_config = ConfigDict(extra="forbid")

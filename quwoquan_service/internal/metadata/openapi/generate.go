@@ -9,6 +9,7 @@ import (
 
 	"quwoquan_service/internal/metadata/ast"
 	"quwoquan_service/internal/metadata/graph"
+	"quwoquan_service/internal/metadata/requestbinding"
 
 	"gopkg.in/yaml.v3"
 )
@@ -82,7 +83,7 @@ func Generate(contractGraph *graph.ContractGraph) ([]Snapshot, error) {
 				operations[right].ID
 			return leftKey < rightKey
 		})
-		content, err := renderDomain(domain, operations)
+		content, err := renderDomain(domain, operations, contractGraph.Documents)
 		if err != nil {
 			return nil, err
 		}
@@ -96,7 +97,7 @@ func Generate(contractGraph *graph.ContractGraph) ([]Snapshot, error) {
 	return snapshots, nil
 }
 
-func renderDomain(domain string, operations []ast.Operation) ([]byte, error) {
+func renderDomain(domain string, operations []ast.Operation, documents []ast.SourceDocument) ([]byte, error) {
 	document := openAPIDocument{
 		OpenAPI: openAPIVersion,
 		Info: openAPIInfo{
@@ -133,6 +134,9 @@ func renderDomain(domain string, operations []ast.Operation) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
+		if err := projectJSONQueryParameters(rendered, operation, documents); err != nil {
+			return nil, err
+		}
 		item := document.Paths[operation.PathTemplate]
 		if err := item.set(strings.ToUpper(operation.Method), rendered); err != nil {
 			return nil, fmt.Errorf("operation %q: %w", operation.ID, err)
@@ -145,6 +149,31 @@ func renderDomain(domain string, operations []ast.Operation) ([]byte, error) {
 		return nil, fmt.Errorf("marshal %s OpenAPI: %w", domain, err)
 	}
 	return append([]byte(generatedHeader), raw...), nil
+}
+
+func projectJSONQueryParameters(rendered *openAPIOperation, operation ast.Operation, documents []ast.SourceDocument) error {
+	if operation.RequestBindings == nil {
+		return nil
+	}
+	for _, binding := range operation.RequestBindings.Query {
+		if binding.Encoding == "" {
+			continue
+		}
+		schema, err := requestbinding.Resolve(documents, operation, binding)
+		if err != nil {
+			return err
+		}
+		for i := range rendered.Parameters {
+			parameter := &rendered.Parameters[i]
+			if parameter.In != "query" || parameter.Name != binding.Name {
+				continue
+			}
+			parameter.Schema = openAPISchema{}
+			parameter.Content = map[string]openAPIMediaType{"application/json": {Schema: schema}}
+			parameter.MaxBytes = binding.MaxBytes
+		}
+	}
+	return nil
 }
 
 func renderOperation(

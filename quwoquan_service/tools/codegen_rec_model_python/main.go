@@ -300,7 +300,10 @@ func run(
 		return err
 	}
 
-	reqRespPy := generateRequestResponsePy(fields)
+	if _, err := resolveNamedTransportClosure(fields, requestResponseOrder); err != nil {
+		return err
+	}
+	reqRespPy := generateRequestResponsePyForNames(fields, transportOrder(fields))
 	if err := os.WriteFile(filepath.Join(outputDir, "models", "request_response.py"), []byte(reqRespPy), 0644); err != nil {
 		return err
 	}
@@ -334,43 +337,8 @@ func run(
 		return err
 	}
 
-	rankedWindowPath := filepath.Join(filepath.Dir(servicePath), "ranked_recommendation_window")
-	if source.Has(filepath.Join(rankedWindowPath, "fields.yaml")) {
-		rankedOutputDir := filepath.Join(filepath.Dir(outputDir), "ranked_recommendation_window")
-		if err := generateObjectTransportPackage(
-			source,
-			rankedWindowPath,
-			rankedOutputDir,
-			nil,
-		); err != nil {
-			return fmt.Errorf("generate ranked recommendation window: %w", err)
-		}
-		if strings.TrimSpace(contentRankedWindowGoOutput) != "" {
-			rankedFields, err := loadFields(
-				source,
-				filepath.Join(rankedWindowPath, "fields.yaml"),
-			)
-			if err != nil {
-				return fmt.Errorf("load ranked recommendation window Go fields: %w", err)
-			}
-			rankedOperations, err := loadOperations(
-				source,
-				filepath.Join(rankedWindowPath, "operations.yaml"),
-			)
-			if err != nil {
-				return fmt.Errorf("load ranked recommendation window Go operations: %w", err)
-			}
-			if _, err := resolveTransportClosure(rankedFields, rankedFields.Shared, rankedOperations); err != nil {
-				return err
-			}
-			if err := writeRankedWindowGoTransport(
-				contentRankedWindowGoOutput,
-				rankedFields,
-				rankedOperations,
-			); err != nil {
-				return fmt.Errorf("generate Content ranked window Go transport: %w", err)
-			}
-		}
+	if err := generateRankedWindowArtifacts(source, servicePath, outputDir, contentRankedWindowGoOutput); err != nil {
+		return err
 	}
 
 	featureProfilePath := filepath.Join(filepath.Dir(servicePath), "recommendation_feature_profile_view")
@@ -453,6 +421,10 @@ func run(
 		}
 	}
 
+	if err := writeContentTypeEncoding(source, servicePath, outputDir); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -480,15 +452,14 @@ func generateRankedWindowGoTransport(
 	b.WriteString("// Source: recommendation-service/contracts/recommendation/ranked_recommendation_window.\n\n")
 	b.WriteString("package feeddeliverypage\n\n")
 	b.WriteString("import \"time\"\n\n")
+	writeGoEnumImports(&b, fields, transportOrder(fields))
+	writeGoTransportEnums(&b, fields, transportOrder(fields))
 	for _, route := range operations.APIRoutes {
 		name := route.Operation
 		b.WriteString(fmt.Sprintf("const %sPath = %q\n", name, route.Path))
 		b.WriteString(fmt.Sprintf("const %sMethod = %q\n", name, strings.ToUpper(route.Method)))
 	}
-	entityNames := make(map[string]bool, len(fields.Entities))
-	for name := range fields.Entities {
-		entityNames[name] = true
-	}
+	entityNames := transportTypeNames(fields)
 	for _, name := range transportOrder(fields) {
 		entity, ok := fields.Entities[name]
 		if !ok {
@@ -499,7 +470,7 @@ func generateRankedWindowGoTransport(
 			b.WriteString(fmt.Sprintf(
 				"\t%s %s `json:%q`\n",
 				goExportedName(field.Name),
-				goTransportType(field.Type, isRequired(field.Constraints), entityNames),
+				goTransportType(enumFieldType(field), isRequired(field.Constraints), entityNames),
 				field.Name+goJSONOmitEmpty(field.Constraints),
 			))
 		}
@@ -525,7 +496,7 @@ func generateRankedWindowGoTransport(
 			b.WriteString(fmt.Sprintf(
 				"\t%s %s `json:%q`\n",
 				goExportedName(field.Name),
-				goTransportType(field.Type, isRequired(field.Constraints), entityNames),
+				goTransportType(enumFieldType(field), isRequired(field.Constraints), entityNames),
 				field.Name+goJSONOmitEmpty(field.Constraints),
 			))
 		}
@@ -539,6 +510,9 @@ func writeFeatureProfileGoTransport(
 	fields *fieldsFile,
 	operations *operationsFile,
 ) error {
+	if _, err := resolveNamedTransportClosure(fields, featureProfileTransportOrder); err != nil {
+		return err
+	}
 	generated, err := format.Source([]byte(generateFeatureProfileGoTransport(fields, operations)))
 	if err != nil {
 		return fmt.Errorf("format generated Go transport: %w", err)
@@ -558,15 +532,18 @@ func generateFeatureProfileGoTransport(
 	b.WriteString("// Source: recommendation-service/contracts/recommendation/recommendation_feature_profile_view.\n\n")
 	b.WriteString("package generated\n\n")
 	b.WriteString("import \"time\"\n\n")
+	writeGoEnumImports(&b, fields, transportOrder(fields))
+	writeGoTransportEnums(&b, fields, transportOrder(fields))
 	for _, route := range operations.APIRoutes {
 		b.WriteString(fmt.Sprintf("const %sPath = %q\n", route.Operation, route.Path))
 		b.WriteString(fmt.Sprintf("const %sMethod = %q\n", route.Operation, strings.ToUpper(route.Method)))
 	}
-	entityNames := make(map[string]bool, len(fields.Entities))
-	for name := range fields.Entities {
-		entityNames[name] = true
+	entityNames := transportTypeNames(fields)
+	names := fields.Order
+	if names == nil {
+		names = featureProfileTransportOrder
 	}
-	for _, name := range featureProfileTransportOrder {
+	for _, name := range names {
 		entity, ok := fields.Entities[name]
 		if !ok {
 			continue
@@ -576,7 +553,7 @@ func generateFeatureProfileGoTransport(
 			b.WriteString(fmt.Sprintf(
 				"\t%s %s `json:%q`\n",
 				goExportedName(field.Name),
-				goTransportType(field.Type, isRequired(field.Constraints), entityNames),
+				goTransportType(enumFieldType(field), isRequired(field.Constraints), entityNames),
 				field.Name+goJSONOmitEmpty(field.Constraints),
 			))
 		}
@@ -647,6 +624,7 @@ func resolveContentBehaviors(source *contractcodegen.Source) string {
 // --- YAML structs ---
 
 type fieldsFile struct {
+	Enums        enumDefinitions      `yaml:"enums"`
 	Fields       []fieldDef           `yaml:"fields"`
 	ValueObjects map[string]entityDef `yaml:"value_objects"`
 	Order        []string
@@ -661,6 +639,7 @@ type entityDef struct {
 }
 
 type fieldDef struct {
+	EnumRef     string   `yaml:"enum_ref"`
 	Values      []string `yaml:"values"`
 	Min         *int64   `yaml:"min"`
 	Format      string   `yaml:"format"`
@@ -702,10 +681,12 @@ type projectionFile struct {
 }
 
 type projField struct {
-	Name        string `yaml:"name"`
-	Type        string `yaml:"type"`
-	Description string `yaml:"description"`
-	Nullable    bool   `yaml:"nullable"`
+	EnumRef     string   `yaml:"enum_ref"`
+	Values      []string `yaml:"values"`
+	Name        string   `yaml:"name"`
+	Type        string   `yaml:"type"`
+	Description string   `yaml:"description"`
+	Nullable    bool     `yaml:"nullable"`
 }
 
 type projectionSpec struct {
@@ -738,6 +719,9 @@ func loadFields(source *contractcodegen.Source, path string) (*fieldsFile, error
 		}
 	}
 	f.Shared = shared.Types
+	if err := mergeSharedEnums(&f, &shared); err != nil {
+		return nil, err
+	}
 	return &f, nil
 }
 
@@ -791,7 +775,7 @@ func resolveTransportClosure(f *fieldsFile, shared map[string]entityDef, ops *op
 		}
 		states[name] = 1
 		for _, field := range entity.Fields {
-			if err := visit(field.Type); err != nil {
+			if err := visitTransportField(f, shared, field, visit); err != nil {
 				return fmt.Errorf("%s.%s: %w", name, field.Name, err)
 			}
 		}
@@ -996,7 +980,7 @@ func mergeProjectionEntities(
 				constraints = []string{"NULLABLE"}
 			}
 			entity.Fields = append(entity.Fields, fieldDef{
-				Name: field.Name, Type: field.Type,
+				Name: field.Name, Type: field.Type, EnumRef: field.EnumRef, Values: field.Values,
 				Constraints: constraints, Description: field.Description,
 			})
 		}
@@ -1162,10 +1146,8 @@ func generateRequestResponsePyForNames(f *fieldsFile, names []string, requireNul
 		b.WriteString("from pydantic import BaseModel, ConfigDict\n\n")
 	}
 
-	entityNames := make(map[string]bool)
-	for name := range f.Entities {
-		entityNames[name] = true
-	}
+	entityNames := transportTypeNames(f)
+	writePythonTransportEnums(&b, f, names)
 
 	for _, entityName := range names {
 		ent, ok := f.Entities[entityName]
@@ -1178,13 +1160,13 @@ func generateRequestResponsePyForNames(f *fieldsFile, names []string, requireNul
 		}
 		for _, fd := range ent.Fields {
 			req := isRequired(fd.Constraints)
-			pyT := pyTransportType(fd.Type, req, entityNames)
+			pyT := pyTransportType(enumFieldType(fd), req, entityNames)
 			def := ""
 			if !req && !(len(requireNullablePresence) > 0 && requireNullablePresence[0]) {
 				def = " = None"
 			}
 			if strict {
-				if fd.Type == "enum" && len(fd.Values) > 0 {
+				if inlineEnumValues(fd) {
 					members := make([]string, len(fd.Values))
 					for i, v := range fd.Values {
 						members[i] = fmt.Sprintf("%q", v)
@@ -1357,9 +1339,11 @@ func generateObjectTransportPackage(
 	}
 	if order == nil {
 		order, err = resolveTransportClosure(fields, fields.Shared, operations)
-		if err != nil {
-			return err
-		}
+	} else {
+		order, err = resolveNamedTransportClosure(fields, order)
+	}
+	if err != nil {
+		return err
 	}
 	for _, directory := range []string{
 		filepath.Join(outputDir, "models"),

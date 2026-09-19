@@ -427,8 +427,6 @@ class ContentEngagementTracker {
         }
         if (total <= 0 || session.lastPlayPositionMs <= 0) return 0;
         return session.lastPlayPositionMs / total;
-      case ContentType.micro:
-        return -1;
     }
   }
 
@@ -440,8 +438,6 @@ class ContentEngagementTracker {
         return session.totalImages ?? 0;
       case ContentType.video:
         return ((session.totalDurationMs ?? 0) / 1000).round();
-      case ContentType.micro:
-        return 1;
     }
   }
 
@@ -457,12 +453,6 @@ class ContentEngagementTracker {
         if (dwellMs < 8000) return 1;
         if (dwellMs < 15000) return 2;
         return 3;
-      case ContentType.micro:
-        if (dwellMs < 2000) return 0;
-        if (dwellMs < 5000) return 1;
-        if (dwellMs < 10000) return 2;
-        if (dwellMs < 20000) return 3;
-        return 4;
       case ContentType.video:
         if (dwellMs < 3000) return 0;
         if (dwellMs < 10000) return 1;

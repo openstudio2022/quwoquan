@@ -8,6 +8,75 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from enum import Enum
+from pydantic_core import core_schema
+
+
+class _ContractEnum(str, Enum):
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        return core_schema.no_info_before_validator_function(
+            cls._validate_wire,
+            handler(source_type),
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize_wire),
+        )
+
+    @classmethod
+    def _serialize_wire(cls, value):
+        return cls._validate_wire(value).value
+
+    @classmethod
+    def _validate_wire(cls, value):
+        if isinstance(value, cls):
+            return value
+        if type(value) is not str:
+            raise ValueError("enum wire value must be a string")
+        return cls(value)
+
+
+class BehaviorEventType(_ContractEnum):
+    VALUE_IMPRESSION = "impression"
+    VALUE_CLICK = "click"
+    VALUE_DWELL = "dwell"
+    VALUE_LIKE = "like"
+    VALUE_DISLIKE = "dislike"
+    VALUE_UNDO_DISLIKE = "undo_dislike"
+    VALUE_HIDE_AUTHOR = "hide_author"
+    VALUE_HIDE_CONTENT_TYPE = "hide_content_type"
+    VALUE_REPORT = "report"
+    VALUE_SHARE = "share"
+    VALUE_COMMENT = "comment"
+    VALUE_INTERSECTION_EXPAND = "intersection_expand"
+    VALUE_INTERSECTION_FEEDBACK = "intersection_feedback"
+    VALUE_WISHLIST_ADD = "wishlist_add"
+    VALUE_WISHLIST_REMOVE = "wishlist_remove"
+    VALUE_SKIP = "skip"
+    VALUE_FOLLOW = "follow"
+    VALUE_JOIN_CIRCLE = "join_circle"
+    VALUE_LEAVE_CIRCLE = "leave_circle"
+    VALUE_ADD_CONTACT = "add_contact"
+    VALUE_AUTHOR_VIEW = "author_view"
+    VALUE_ENTITY_PAGE_VIEW = "entity_page_view"
+    VALUE_TAG_CLICK = "tag_click"
+    VALUE_CONTENT_DEPTH = "content_depth"
+    VALUE_PLAY_PROGRESS = "play_progress"
+    VALUE_EFFECTIVE_PLAY = "effective_play"
+    VALUE_ASSISTANT_INTEREST = "assistant_interest"
+    VALUE_ONBOARDING_INTEREST = "onboarding_interest"
+
+
+class ContentType(_ContractEnum):
+    VALUE_IMAGE = "image"
+    VALUE_VIDEO = "video"
+    VALUE_ARTICLE = "article"
+
+
+class IntersectionDimension(_ContractEnum):
+    VALUE_IDENTITY = "identity"
+    VALUE_LOCATION = "location"
+    VALUE_CONTENT = "content"
+    VALUE_INTEREST = "interest"
+    VALUE_RELATIONSHIP = "relationship"
 
 
 class ContentBehaviorFact(BaseModel):
@@ -16,12 +85,12 @@ class ContentBehaviorFact(BaseModel):
     deviceActorId: str | None = None
     sessionId: str
     contentId: str | None = None
-    contentType: str | None = None
+    contentType: ContentType | None = None
     objectId: str | None = None
     objectKind: str | None = None
     displayName: str | None = None
     sourceSurface: str | None = None
-    action: str
+    action: BehaviorEventType
     state: str | None = None
     duration: float | None = None
     feedRequestId: str | None = None
@@ -33,7 +102,7 @@ class ContentBehaviorFact(BaseModel):
     recallPath: str | None = None
     contentVertical: str | None = None
     supplySource: str | None = None
-    intersectionDimension: str | None = None
+    intersectionDimension: IntersectionDimension | None = None
     intersectionTagRefs: list[str] | None = None
     intersectionId: str | None = None
     intersectionClass: str | None = None

@@ -363,7 +363,7 @@ func main() {
 	}
 	contentTypes := shared.Enums["ContentType"]
 	if len(contentTypes) == 0 {
-		contentTypes = []string{"image", "video", "micro", "article"}
+		exitErr(fmt.Errorf("canonical ContentType enum is empty"))
 	}
 	feedDefaultLimit := paginationLimitDefault(shared, 20)
 	feedCategoryToType := uiDef.FeedRequestTypeByCategory
@@ -576,6 +576,7 @@ func main() {
 		)
 	}
 	writeEntityCircleUIConfigs(metadataDir, appDir)
+	generateSurfaceLayoutPolicies(metadataDir, appDir, shared.Enums["ContentUiSurface"], uiDef, userUIDef)
 	if userErrsDef, err := readUserDomainErrors(metadataDir); err == nil {
 		writeFile(
 			runtimeErrorOutputPath(appDir, "user", "user_errors.g.dart"),
@@ -734,6 +735,7 @@ func main() {
 	); err != nil {
 		exitErr(err)
 	}
+	writeClientPresentationContractDartOrExit(appDir, metadataDir)
 	if err := removeUntrackedGeneratedOutputs(); err != nil {
 		exitErr(err)
 	}

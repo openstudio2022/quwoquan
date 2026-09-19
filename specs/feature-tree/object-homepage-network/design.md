@@ -20,7 +20,7 @@
 ## 4. 架构与数据流
 
 - [`intersection-unified-experience`](./intersection-unified-experience/spec.md)：以统一的交集事实、置信度、保鲜期和展示契约驱动发现、对象主页、圈子、聊天、个人主页与助理场景
-- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
+- Feature 层表达业务与设计边界；工程影响由 current actual diff 与 dependency closure 推导。
 
 ## 5. 关键决策
 

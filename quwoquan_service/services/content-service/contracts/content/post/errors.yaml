@@ -76,7 +76,7 @@ errors:
   http_status: 404
   emitted_by:
   - surface: http
-    operations: [GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetCounters, GetHelperRead, content.comment.CreateComment]
+    operations: [GetPost, DeletePost, UpdatePostSettings, GetCounters, GetHelperRead, content.comment.CreateComment]
   - surface: graphql
     operations: [GetPostSemantic, GetPostMedia, GetPostArticleRenderAssets, GetPostArticleEntities]
   recovery_action: surface
@@ -91,7 +91,7 @@ errors:
   http_status: 403
   emitted_by:
   - surface: http
-    operations: [SubmitPostPublication, UpdatePostSettings, PromotePostToWork]
+    operations: [SubmitPostPublication, UpdatePostSettings]
   recovery_action: surface
   disruption_level: inlineCard
   dart_const: forbiddenEdit
@@ -135,7 +135,6 @@ errors:
     - SubmitPostPublication
     - DeletePost
     - UpdatePostSettings
-    - PromotePostToWork
     - GetAuthorImpact
     - ListAuthorImpactEvidence
     - GetMyFootprint
@@ -215,7 +214,6 @@ errors:
     - GetGatheringSocialProof
     - GetPost
     - UpdatePostSettings
-    - PromotePostToWork
     - GetAuthorImpact
     - ListAuthorImpactEvidence
     - GetMyFootprint
@@ -264,7 +262,7 @@ errors:
   http_status: 400
   emitted_by:
   - surface: http
-    operations: [SubmitPostPublication, PromotePostToWork]
+    operations: [SubmitPostPublication]
   recovery_action: surface
   disruption_level: inlineCard
   dart_const: invalidContentType
@@ -272,6 +270,32 @@ errors:
   user_message:
     zh: 不支持的内容类型
     en: Unsupported content type
+- code: CONTENT.USER.presentation_unsupported
+  reason: presentation_unsupported
+  http_status: 426
+  emitted_by:
+  - {surface: http, operations: [GetPost]}
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: presentationUnsupported
+  go_const: ErrPresentationUnsupported
+  description: 已授权可见对象的类型或目的面超出有效能力声明；不等同于删除或无权限，不以封面卡替代。客户端呈现版本不支持终态并保留返回路径。
+  user_message:
+    zh: 当前版本暂不支持此内容，请更新后查看
+    en: This content requires a newer app version
+- code: CONTENT.USER.presentation_contract_changed
+  reason: presentation_contract_changed
+  http_status: 409
+  emitted_by:
+  - {surface: http, operations: [GetFeed, ListUserPosts]}
+  recovery_action: surface
+  disruption_level: inlineCard
+  dart_const: presentationContractChanged
+  go_const: ErrPresentationContractChanged
+  description: 合法请求能力摘要与窗口或游标绑定不一致；必须弃用旧游标从首屏刷新，禁止跨摘要续页或自动使用固定基线。
+  user_message:
+    zh: 内容展示能力已变化，请刷新列表
+    en: Content capabilities changed; refresh the list
 - code: CONTENT.USER.rate_limited
   reason: rate_limited
   http_status: 429
@@ -335,7 +359,6 @@ errors:
     - SubmitPostPublication
     - DeletePost
     - UpdatePostSettings
-    - PromotePostToWork
     - content.comment.BindMediaAssetsToComment
     - content.comment.CreateComment
     - content.comment.DeleteComment
@@ -375,7 +398,6 @@ errors:
     - SubmitPostPublication
     - DeletePost
     - UpdatePostSettings
-    - PromotePostToWork
     - content.comment.BindMediaAssetsToComment
     - content.comment.CreateComment
     - content.comment.DeleteComment
@@ -421,7 +443,6 @@ errors:
     - SubmitPostPublication
     - DeletePost
     - UpdatePostSettings
-    - PromotePostToWork
     - content.comment.BindMediaAssetsToComment
     - content.comment.CreateComment
     - content.comment.DeleteComment
@@ -528,7 +549,7 @@ errors:
   http_status: 500
   emitted_by:
   - surface: http
-    operations: [GetFeed, SubmitPostPublication, ListUserPosts, ListPostsByGathering, GetGatheringSocialProof, GetPost, DeletePost, UpdatePostSettings, PromotePostToWork, GetAuthorImpact, ListAuthorImpactEvidence, GetAppConfig, GetCounters, GetMyFootprint, GetEntityWishlistState, GenerateArticleSummary, GetHelperRead, content.intersection_visit_state.GetMyIntersectionSummary, content.intersection_visit_state.ListMyIntersections, content.intersection_visit_state.GetObjectIntersections, content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter]
+    operations: [GetFeed, SubmitPostPublication, ListUserPosts, ListPostsByGathering, GetGatheringSocialProof, GetPost, DeletePost, UpdatePostSettings, GetAuthorImpact, ListAuthorImpactEvidence, GetAppConfig, GetCounters, GetMyFootprint, GetEntityWishlistState, GenerateArticleSummary, GetHelperRead, content.intersection_visit_state.GetMyIntersectionSummary, content.intersection_visit_state.ListMyIntersections, content.intersection_visit_state.GetObjectIntersections, content.content_account_closure_workflow.RecoverContentAccountClosureDeadLetter]
   - surface: graphql
     operations: [GetPostSemantic, GetPostMedia, GetPostArticleRenderAssets, GetPostArticleEntities]
   recovery_action: surface

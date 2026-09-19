@@ -1,17 +1,23 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: 706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31
 
 library;
 
+import 'dart:convert';
+
 import '../operation_request_payload.dart';
+import "../entity/entity_operation_contracts.g.dart";
 import "../entity/semantic_document.g.dart";
 import "../generated/recommendation/intersection_contract_vocabulary.g.dart";
 import "../generated/shared_operation_enums.g.dart";
+import "../generated/shared_operation_types.g.dart";
 import "../recommendation/recommendation_operation_contracts.g.dart";
 
+export "../entity/entity_operation_contracts.g.dart";
 export "../entity/semantic_document.g.dart";
 export "../generated/recommendation/intersection_contract_vocabulary.g.dart";
 export "../generated/shared_operation_enums.g.dart";
+export "../generated/shared_operation_types.g.dart";
 export "../recommendation/recommendation_operation_contracts.g.dart";
 
 part '../generated/requests/content/content_operation_contracts.g.requests.g.dart';
@@ -146,44 +152,6 @@ enum ContentFeedOutcome {
     return switch (value) {
       "content" => ContentFeedOutcome.content,
       "empty" => ContentFeedOutcome.empty,
-      _ => throw FormatException('$path has an invalid enum value'),
-    };
-  }
-}
-
-enum ContentIdentity {
-  moment("moment"),
-  work("work");
-
-  const ContentIdentity(this.wireName);
-
-  final String wireName;
-
-  static ContentIdentity fromWire(Object? value, String path) {
-    return switch (value) {
-      "moment" => ContentIdentity.moment,
-      "work" => ContentIdentity.work,
-      _ => throw FormatException('$path has an invalid enum value'),
-    };
-  }
-}
-
-enum ContentType {
-  image("image"),
-  video("video"),
-  micro("micro"),
-  article("article");
-
-  const ContentType(this.wireName);
-
-  final String wireName;
-
-  static ContentType fromWire(Object? value, String path) {
-    return switch (value) {
-      "image" => ContentType.image,
-      "video" => ContentType.video,
-      "micro" => ContentType.micro,
-      "article" => ContentType.article,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }
@@ -1175,7 +1143,7 @@ final class AuthorPostPageSlice {
     required this.hasMore,
   });
 
-  final List<ContentPostProjection> items;
+  final List<ContentListItemProjection> items;
   final String? nextCursor;
   final bool hasMore;
 
@@ -1189,9 +1157,9 @@ final class AuthorPostPageSlice {
       "hasMore",
     }, path);
     return AuthorPostPageSlice(
-      items: List<ContentPostProjection>.unmodifiable(
+      items: List<ContentListItemProjection>.unmodifiable(
         _requiredList(map["items"], '$path.items').asMap().entries.map(
-          (entry) => ContentPostProjection.fromWire(
+          (entry) => ContentListItemProjection.fromWire(
             _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
             '$path.items' + '[${entry.key}]',
           ),
@@ -2460,12 +2428,11 @@ final class ContentDiscoveryFeedPageSlice {
     this.paginationExpiresAt,
     required this.feedRequestId,
     this.policyDigest,
-    required this.objectCards,
     this.releaseId,
     this.manifestDigest,
   });
 
-  final List<ContentPostProjection> items;
+  final List<ContentListItemProjection> items;
   final ContentFeedOutcome outcome;
   final ContentFeedEmptyReason? emptyReason;
   final String? nextCursor;
@@ -2473,7 +2440,6 @@ final class ContentDiscoveryFeedPageSlice {
   final DateTime? paginationExpiresAt;
   final String feedRequestId;
   final String? policyDigest;
-  final List<FeedObjectCard> objectCards;
   final String? releaseId;
   final String? manifestDigest;
 
@@ -2490,14 +2456,13 @@ final class ContentDiscoveryFeedPageSlice {
       "paginationExpiresAt",
       "feedRequestId",
       "policyDigest",
-      "objectCards",
       "releaseId",
       "manifestDigest",
     }, path);
     return ContentDiscoveryFeedPageSlice(
-      items: List<ContentPostProjection>.unmodifiable(
+      items: List<ContentListItemProjection>.unmodifiable(
         _requiredList(map["items"], '$path.items').asMap().entries.map(
-          (entry) => ContentPostProjection.fromWire(
+          (entry) => ContentListItemProjection.fromWire(
             _requiredObject(entry.value, '$path.items' + '[${entry.key}]'),
             '$path.items' + '[${entry.key}]',
           ),
@@ -2529,20 +2494,6 @@ final class ContentDiscoveryFeedPageSlice {
       policyDigest: map["policyDigest"] == null
           ? null
           : _requiredString(map["policyDigest"], '$path.policyDigest'),
-      objectCards: List<FeedObjectCard>.unmodifiable(
-        _requiredList(
-          map["objectCards"],
-          '$path.objectCards',
-        ).asMap().entries.map(
-          (entry) => FeedObjectCard.fromWire(
-            _requiredObject(
-              entry.value,
-              '$path.objectCards' + '[${entry.key}]',
-            ),
-            '$path.objectCards' + '[${entry.key}]',
-          ),
-        ),
-      ),
       releaseId: map["releaseId"] == null
           ? null
           : _requiredString(map["releaseId"], '$path.releaseId'),
@@ -2562,9 +2513,6 @@ final class ContentDiscoveryFeedPageSlice {
       "paginationExpiresAt": paginationExpiresAt!.toUtc().toIso8601String(),
     "feedRequestId": feedRequestId,
     if (policyDigest != null) "policyDigest": policyDigest!,
-    "objectCards": objectCards
-        .map((value) => value.toWire())
-        .toList(growable: false),
     if (releaseId != null) "releaseId": releaseId!,
     if (manifestDigest != null) "manifestDigest": manifestDigest!,
   };
@@ -2646,11 +2594,57 @@ final class ContentFootprintPageSlice {
   };
 }
 
+final class ContentListItemProjection {
+  const ContentListItemProjection({
+    required this.envelope,
+    this.post,
+    this.homepage,
+  });
+
+  final ListItemPresentationEnvelope envelope;
+  final ContentPostProjection? post;
+  final HomepageSearchItemView? homepage;
+
+  factory ContentListItemProjection.fromWire(
+    Map<String, Object?> map, [
+    String path = "ContentListItemProjection",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "envelope",
+      "post",
+      "homepage",
+    }, path);
+    return ContentListItemProjection(
+      envelope: ListItemPresentationEnvelope.fromWire(
+        _requiredObject(map["envelope"], '$path.envelope'),
+        '$path.envelope',
+      ),
+      post: map["post"] == null
+          ? null
+          : ContentPostProjection.fromWire(
+              _requiredObject(map["post"], '$path.post'),
+              '$path.post',
+            ),
+      homepage: map["homepage"] == null
+          ? null
+          : HomepageSearchItemView.fromWire(
+              _requiredObject(map["homepage"], '$path.homepage'),
+              '$path.homepage',
+            ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "envelope": envelope.toWire(),
+    if (post != null) "post": post!.toWire(),
+    if (homepage != null) "homepage": homepage!.toWire(),
+  };
+}
+
 final class ContentPostDetailSlice {
   const ContentPostDetailSlice({
     required this.postId,
     required this.contentType,
-    this.contentIdentity,
     this.assistantUsePolicy,
     this.authorId,
     this.authorDisplayName,
@@ -2674,6 +2668,7 @@ final class ContentPostDetailSlice {
     this.height,
     this.durationMs,
     this.articleMarkdown,
+    this.semanticDocument,
     this.markdownDialect,
     this.articleMarkdownDigest,
     this.articleAssetManifest,
@@ -2707,8 +2702,7 @@ final class ContentPostDetailSlice {
   });
 
   final String postId;
-  final String contentType;
-  final String? contentIdentity;
+  final ContentType contentType;
   final AssistantUsePolicy? assistantUsePolicy;
   final String? authorId;
   final String? authorDisplayName;
@@ -2732,6 +2726,7 @@ final class ContentPostDetailSlice {
   final int? height;
   final int? durationMs;
   final String? articleMarkdown;
+  final DocumentEnvelope? semanticDocument;
   final String? markdownDialect;
   final String? articleMarkdownDigest;
   final PostArticleAssetManifest? articleAssetManifest;
@@ -2770,7 +2765,6 @@ final class ContentPostDetailSlice {
     _rejectUnknownFields(map, const <String>{
       "postId",
       "contentType",
-      "contentIdentity",
       "assistantUsePolicy",
       "authorId",
       "authorDisplayName",
@@ -2794,6 +2788,7 @@ final class ContentPostDetailSlice {
       "height",
       "durationMs",
       "articleMarkdown",
+      "semanticDocument",
       "markdownDialect",
       "articleMarkdownDigest",
       "articleAssetManifest",
@@ -2827,10 +2822,10 @@ final class ContentPostDetailSlice {
     }, path);
     return ContentPostDetailSlice(
       postId: _requiredString(map["postId"], '$path.postId'),
-      contentType: _requiredString(map["contentType"], '$path.contentType'),
-      contentIdentity: map["contentIdentity"] == null
-          ? null
-          : _requiredString(map["contentIdentity"], '$path.contentIdentity'),
+      contentType: ContentType.fromWire(
+        map["contentType"],
+        '$path.contentType',
+      ),
       assistantUsePolicy: map["assistantUsePolicy"] == null
           ? null
           : AssistantUsePolicy.fromWire(
@@ -2984,6 +2979,15 @@ final class ContentPostDetailSlice {
       articleMarkdown: map["articleMarkdown"] == null
           ? null
           : _requiredString(map["articleMarkdown"], '$path.articleMarkdown'),
+      semanticDocument: map["semanticDocument"] == null
+          ? null
+          : documentEnvelopeFromWire(
+              _requiredObject(
+                map["semanticDocument"],
+                '$path.semanticDocument',
+              ),
+              '$path.semanticDocument',
+            ),
       markdownDialect: map["markdownDialect"] == null
           ? null
           : _requiredString(map["markdownDialect"], '$path.markdownDialect'),
@@ -3125,8 +3129,7 @@ final class ContentPostDetailSlice {
 
   Map<String, Object?> toWire() => <String, Object?>{
     "postId": postId,
-    "contentType": contentType,
-    if (contentIdentity != null) "contentIdentity": contentIdentity!,
+    "contentType": contentType.wireName,
     if (assistantUsePolicy != null)
       "assistantUsePolicy": assistantUsePolicy!.wireName,
     if (authorId != null) "authorId": authorId!,
@@ -3166,6 +3169,8 @@ final class ContentPostDetailSlice {
     if (height != null) "height": height!,
     if (durationMs != null) "durationMs": durationMs!,
     if (articleMarkdown != null) "articleMarkdown": articleMarkdown!,
+    if (semanticDocument != null)
+      "semanticDocument": documentEnvelopeToWire(semanticDocument!),
     if (markdownDialect != null) "markdownDialect": markdownDialect!,
     if (articleMarkdownDigest != null)
       "articleMarkdownDigest": articleMarkdownDigest!,
@@ -3215,7 +3220,6 @@ final class ContentPostProjection {
   const ContentPostProjection({
     required this.postId,
     required this.contentType,
-    this.contentIdentity,
     this.assistantUsePolicy,
     this.authorId,
     this.authorDisplayName,
@@ -3260,8 +3264,7 @@ final class ContentPostProjection {
   });
 
   final String postId;
-  final String contentType;
-  final String? contentIdentity;
+  final ContentType contentType;
   final AssistantUsePolicy? assistantUsePolicy;
   final String? authorId;
   final String? authorDisplayName;
@@ -3311,7 +3314,6 @@ final class ContentPostProjection {
     _rejectUnknownFields(map, const <String>{
       "postId",
       "contentType",
-      "contentIdentity",
       "assistantUsePolicy",
       "authorId",
       "authorDisplayName",
@@ -3356,10 +3358,10 @@ final class ContentPostProjection {
     }, path);
     return ContentPostProjection(
       postId: _requiredString(map["postId"], '$path.postId'),
-      contentType: _requiredString(map["contentType"], '$path.contentType'),
-      contentIdentity: map["contentIdentity"] == null
-          ? null
-          : _requiredString(map["contentIdentity"], '$path.contentIdentity'),
+      contentType: ContentType.fromWire(
+        map["contentType"],
+        '$path.contentType',
+      ),
       assistantUsePolicy: map["assistantUsePolicy"] == null
           ? null
           : AssistantUsePolicy.fromWire(
@@ -3558,8 +3560,7 @@ final class ContentPostProjection {
 
   Map<String, Object?> toWire() => <String, Object?>{
     "postId": postId,
-    "contentType": contentType,
-    if (contentIdentity != null) "contentIdentity": contentIdentity!,
+    "contentType": contentType.wireName,
     if (assistantUsePolicy != null)
       "assistantUsePolicy": assistantUsePolicy!.wireName,
     if (authorId != null) "authorId": authorId!,
@@ -3748,83 +3749,6 @@ final class EntityWishlistState {
     "objectId": objectId,
     "objectKind": objectKind,
     "wishlisted": wishlisted,
-  };
-}
-
-final class FeedObjectCard {
-  const FeedObjectCard({
-    required this.objectKind,
-    required this.objectId,
-    required this.title,
-    this.subtitle,
-    this.coverUrl,
-    required this.tagRefs,
-    this.reasonText,
-    this.recallPath,
-    required this.anchorIndex,
-  });
-
-  final String objectKind;
-  final String objectId;
-  final String title;
-  final String? subtitle;
-  final String? coverUrl;
-  final List<String> tagRefs;
-  final String? reasonText;
-  final String? recallPath;
-  final int anchorIndex;
-
-  factory FeedObjectCard.fromWire(
-    Map<String, Object?> map, [
-    String path = "FeedObjectCard",
-  ]) {
-    _rejectUnknownFields(map, const <String>{
-      "objectKind",
-      "objectId",
-      "title",
-      "subtitle",
-      "coverUrl",
-      "tagRefs",
-      "reasonText",
-      "recallPath",
-      "anchorIndex",
-    }, path);
-    return FeedObjectCard(
-      objectKind: _requiredString(map["objectKind"], '$path.objectKind'),
-      objectId: _requiredString(map["objectId"], '$path.objectId'),
-      title: _requiredString(map["title"], '$path.title'),
-      subtitle: map["subtitle"] == null
-          ? null
-          : _requiredString(map["subtitle"], '$path.subtitle'),
-      coverUrl: map["coverUrl"] == null
-          ? null
-          : _requiredString(map["coverUrl"], '$path.coverUrl'),
-      tagRefs: List<String>.unmodifiable(
-        _requiredList(map["tagRefs"], '$path.tagRefs').asMap().entries.map(
-          (entry) =>
-              _requiredString(entry.value, '$path.tagRefs' + '[${entry.key}]'),
-        ),
-      ),
-      reasonText: map["reasonText"] == null
-          ? null
-          : _requiredString(map["reasonText"], '$path.reasonText'),
-      recallPath: map["recallPath"] == null
-          ? null
-          : _requiredString(map["recallPath"], '$path.recallPath'),
-      anchorIndex: _requiredInt(map["anchorIndex"], '$path.anchorIndex'),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "objectKind": objectKind,
-    "objectId": objectId,
-    "title": title,
-    if (subtitle != null) "subtitle": subtitle!,
-    if (coverUrl != null) "coverUrl": coverUrl!,
-    "tagRefs": tagRefs.map((value) => value).toList(growable: false),
-    if (reasonText != null) "reasonText": reasonText!,
-    if (recallPath != null) "recallPath": recallPath!,
-    "anchorIndex": anchorIndex,
   };
 }
 
@@ -4316,6 +4240,118 @@ final class IntersectionReasonPageSlice {
     if (dimension != null) "dimension": dimension!,
     if (nextCursor != null) "nextCursor": nextCursor!,
     "hasMore": hasMore,
+  };
+}
+
+final class ListItemHomepageRef {
+  const ListItemHomepageRef({required this.homepageId});
+
+  final String homepageId;
+
+  factory ListItemHomepageRef.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListItemHomepageRef",
+  ]) {
+    _rejectUnknownFields(map, const <String>{"homepageId"}, path);
+    return ListItemHomepageRef(
+      homepageId: _requiredNonBlankString(
+        map["homepageId"],
+        '$path.homepageId',
+      ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{"homepageId": homepageId};
+}
+
+final class ListItemPostRef {
+  const ListItemPostRef({required this.postId});
+
+  final String postId;
+
+  factory ListItemPostRef.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListItemPostRef",
+  ]) {
+    _rejectUnknownFields(map, const <String>{"postId"}, path);
+    return ListItemPostRef(
+      postId: _requiredNonBlankString(map["postId"], '$path.postId'),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{"postId": postId};
+}
+
+final class ListItemPresentationEnvelope {
+  const ListItemPresentationEnvelope({
+    required this.objectKind,
+    this.contentType,
+    this.presentationRecipe,
+    required this.openSurface,
+    this.post,
+    this.homepage,
+  });
+
+  final ListObjectKind objectKind;
+  final ContentType? contentType;
+  final FeedPresentationRecipe? presentationRecipe;
+  final ContentUiSurface openSurface;
+  final ListItemPostRef? post;
+  final ListItemHomepageRef? homepage;
+
+  factory ListItemPresentationEnvelope.fromWire(
+    Map<String, Object?> map, [
+    String path = "ListItemPresentationEnvelope",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "objectKind",
+      "contentType",
+      "presentationRecipe",
+      "openSurface",
+      "post",
+      "homepage",
+    }, path);
+    return ListItemPresentationEnvelope(
+      objectKind: ListObjectKind.fromWire(
+        map["objectKind"],
+        '$path.objectKind',
+      ),
+      contentType: map["contentType"] == null
+          ? null
+          : ContentType.fromWire(map["contentType"], '$path.contentType'),
+      presentationRecipe: map["presentationRecipe"] == null
+          ? null
+          : FeedPresentationRecipe.fromWire(
+              map["presentationRecipe"],
+              '$path.presentationRecipe',
+            ),
+      openSurface: ContentUiSurface.fromWire(
+        map["openSurface"],
+        '$path.openSurface',
+      ),
+      post: map["post"] == null
+          ? null
+          : ListItemPostRef.fromWire(
+              _requiredObject(map["post"], '$path.post'),
+              '$path.post',
+            ),
+      homepage: map["homepage"] == null
+          ? null
+          : ListItemHomepageRef.fromWire(
+              _requiredObject(map["homepage"], '$path.homepage'),
+              '$path.homepage',
+            ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "objectKind": objectKind.wireName,
+    if (contentType != null) "contentType": contentType!.wireName,
+    if (presentationRecipe != null)
+      "presentationRecipe": presentationRecipe!.wireName,
+    "openSurface": openSurface.wireName,
+    if (post != null) "post": post!.toWire(),
+    if (homepage != null) "homepage": homepage!.toWire(),
   };
 }
 
@@ -6408,7 +6444,6 @@ final class SourceAttribution {
     required this.attributionText,
     required this.rightsBasis,
     required this.commercialAuthorizationStatus,
-    required this.publicationAdmission,
     this.authorizationProofUrl,
     this.termsUrl,
     required this.derivedModifications,
@@ -6432,7 +6467,6 @@ final class SourceAttribution {
   final String attributionText;
   final String rightsBasis;
   final String commercialAuthorizationStatus;
-  final String publicationAdmission;
   final String? authorizationProofUrl;
   final String? termsUrl;
   final List<SourceDerivedModification> derivedModifications;
@@ -6460,7 +6494,6 @@ final class SourceAttribution {
       "attributionText",
       "rightsBasis",
       "commercialAuthorizationStatus",
-      "publicationAdmission",
       "authorizationProofUrl",
       "termsUrl",
       "derivedModifications",
@@ -6508,10 +6541,6 @@ final class SourceAttribution {
       commercialAuthorizationStatus: _requiredString(
         map["commercialAuthorizationStatus"],
         '$path.commercialAuthorizationStatus',
-      ),
-      publicationAdmission: _requiredString(
-        map["publicationAdmission"],
-        '$path.publicationAdmission',
       ),
       authorizationProofUrl: map["authorizationProofUrl"] == null
           ? null
@@ -6578,7 +6607,6 @@ final class SourceAttribution {
     "attributionText": attributionText,
     "rightsBasis": rightsBasis,
     "commercialAuthorizationStatus": commercialAuthorizationStatus,
-    "publicationAdmission": publicationAdmission,
     if (authorizationProofUrl != null)
       "authorizationProofUrl": authorizationProofUrl!,
     if (termsUrl != null) "termsUrl": termsUrl!,

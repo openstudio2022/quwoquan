@@ -9,6 +9,8 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
+from support.semantic_review_fixture import approved_semantic_judgement
+
 import pytest
 
 DATA_ROOT = next(parent for parent in Path(__file__).resolve().parents if parent.name == "quwoquan_data")
@@ -488,7 +490,7 @@ def test_real_seals_allow_second_batch_but_review_does_not_release_end_to_end_ca
         store.claim_batch(_tokens(claim, [targets[0]]), execution_id=_execution(0), actor=actor_key(_actor("qa-b")), nonce="steal", task_digest=digest, review=True)
     _env(context, monkeypatch, 0, actor="qa", review=True)
     review = inputs / "review.json"
-    review.write_text(json.dumps({"actor": _actor("qa"), "verdict": "pass", "reviews": {targets[0]: {"decision": "approved", "blockingIssues": [], "advisories": []}}}))
+    review.write_text(json.dumps({"actor": _actor("qa"), "verdict": "pass", "reviews": {targets[0]: approved_semantic_judgement(root, targets[0])}}))
     _handle_seal(argparse.Namespace(execution_id=_execution(0), input=str(review), stage="5.review"))
     assert batch_facts(review_batch, roots)["review_sealed"]
     assert not batch_facts(review_batch, roots)["closed"]
@@ -688,12 +690,12 @@ def test_actual_homepage_publish_proof_frees_capacity_and_drift_retains_it(tmp_p
     monkeypatch.setenv("QWQ_CONTENT_ACTOR", json.dumps(_actor("qa")))
     monkeypatch.setenv("QWQ_CONTENT_BATCH_NONCES", json.dumps({execution_id: "home-review"}))
     review = tmp_path / "home-review.json"
-    judgements = {ref: {"decision": "approved", "blockingIssues": [], "advisories": []}}
+    judgements = {ref: approved_semantic_judgement(root, ref)}
     if mixed:
-        judgements[refs[1]] = {"decision": "rejected", "blockingIssues": ["关键事实缺少来源证据"], "advisories": []}
+        judgements[refs[1]] = {**approved_semantic_judgement(root, refs[1]), "decision": "rejected", "blockingIssues": ["关键事实缺少来源证据"]}
     payload = {"actor": _actor("qa"), "verdict": "pass", "reviews": judgements}
     if mixed == "all-rejected":
-        judgements[ref] = {"decision": "rejected", "blockingIssues": ["关键事实缺证"], "advisories": []}
+        judgements[ref] = {**approved_semantic_judgement(root, ref), "decision": "rejected", "blockingIssues": ["关键事实缺证"]}
         payload.update(verdict="blocked", typedIssues=[{"code": "DATA.SEAL.REVIEW_REJECTED", "message": "本批无批准对象"}])
     review.write_text(json.dumps(payload))
     _handle_seal(argparse.Namespace(execution_id=execution_id, stage="5.review", input=str(review)))

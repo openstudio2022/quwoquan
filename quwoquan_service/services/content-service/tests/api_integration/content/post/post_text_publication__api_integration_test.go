@@ -62,7 +62,7 @@ func TestTextPublicationLengthAndRateAdmissionThroughHTTP(t *testing.T) {
 		"intent-over-length",
 		"draft-over-length",
 		map[string]any{
-			"contentType": "micro",
+			"contentType": "article",
 			"title": strings.Repeat(
 				"文",
 				contentgenerated.PostPublicationTitleMaxRunes+1,
@@ -86,7 +86,7 @@ func TestTextPublicationLengthAndRateAdmissionThroughHTTP(t *testing.T) {
 			fmt.Sprintf("intent-rate-%d", index),
 			fmt.Sprintf("draft-rate-%d", index),
 			map[string]any{
-				"contentType": "micro",
+				"contentType": "article",
 				"body":        fmt.Sprintf("窗口内文字发布 %d", index),
 				"visibility":  "public",
 			},
@@ -107,7 +107,7 @@ func TestTextPublicationLengthAndRateAdmissionThroughHTTP(t *testing.T) {
 		"intent-rate-over-limit",
 		"draft-rate-over-limit",
 		map[string]any{
-			"contentType": "micro",
+			"contentType": "article",
 			"body":        "窗口外额外发布",
 			"visibility":  "public",
 		},
@@ -197,7 +197,7 @@ func TestTextPublicationSafetyAndModerationRoundTripThroughHTTP(t *testing.T) {
 				intentID,
 				fmt.Sprintf("draft-text-safety-%d", index),
 				map[string]any{
-					"contentType": "micro",
+					"contentType": "article",
 					"body":        fmt.Sprintf("文字安全准入场景 %d", index),
 					"visibility":  "public",
 				},
@@ -420,7 +420,7 @@ func TestTextPublicationSemanticMentionProjectionRoundTripThroughHTTP(t *testing
 		"intent-semantic-mentions",
 		"draft-semantic-mentions",
 		map[string]any{
-			"contentType": "micro",
+			"contentType": "article",
 			"body":        "九寨沟的秋天值得专程去一次",
 			"visibility":  "public",
 			"semanticMentions": []map[string]any{
@@ -507,7 +507,7 @@ func publishTextThroughHarness(
 		http.MethodPost,
 		"/content/posts:publish",
 		authorID,
-		strings.NewReader(string(encoded)),
+		strings.NewReader(completePublicationFixturePrerequisites(t, authorID, string(encoded))),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Idempotency-Key", intentID)

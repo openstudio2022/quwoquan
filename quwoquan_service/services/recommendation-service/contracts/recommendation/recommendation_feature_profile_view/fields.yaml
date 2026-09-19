@@ -139,7 +139,7 @@ types:
     - {name: evidenceId, source: evidenceId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: impactId, source: impactId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: read, ops_exposure: read}
     - {name: contentId, source: contentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
-    - {name: contentType, source: contentType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+    - {name: contentType, source: contentType, type: enum, enum_ref: ContentType, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: helpType, source: helpType, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: action, source: action, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}
     - {name: intersectionDimension, source: intersectionDimension, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: allow, api_exposure: read, ops_exposure: read}

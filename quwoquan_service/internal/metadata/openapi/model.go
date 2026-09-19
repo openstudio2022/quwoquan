@@ -73,11 +73,13 @@ type openAPIApplicationBinding struct {
 }
 
 type openAPIParameter struct {
-	Name        string        `yaml:"name"`
-	In          string        `yaml:"in"`
-	Required    bool          `yaml:"required"`
-	Description string        `yaml:"description,omitempty"`
-	Schema      openAPISchema `yaml:"schema"`
+	Name        string                      `yaml:"name"`
+	In          string                      `yaml:"in"`
+	Required    bool                        `yaml:"required"`
+	Description string                      `yaml:"description,omitempty"`
+	Schema      openAPISchema               `yaml:"schema,omitempty"`
+	Content     map[string]openAPIMediaType `yaml:"content,omitempty"`
+	MaxBytes    int                         `yaml:"x-max-bytes,omitempty"`
 }
 
 type openAPIRequestBody struct {
@@ -91,7 +93,7 @@ type openAPIResponse struct {
 }
 
 type openAPIMediaType struct {
-	Schema openAPISchema `yaml:"schema"`
+	Schema any `yaml:"schema"`
 }
 
 type openAPISchema struct {

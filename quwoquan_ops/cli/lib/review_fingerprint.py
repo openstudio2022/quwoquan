@@ -113,7 +113,7 @@ def validate_git_range(value: dict[str, str], *, repo_root: Path) -> dict[str, s
 
 def build_review_fingerprint(
     *, workflow: str, deliverable: str, scope: str,
-    owner_identity: dict[str, Any], candidate_evidence_identity: dict[str, Any],
+    candidate_evidence_identity: dict[str, Any],
     human_decision_projection: dict[str, Any], terminal: dict[str, Any],
     changed_paths: list[str], profiles: list[str], contexts: list[dict[str, Any]],
     initial_reviewers: list[dict[str, Any]], evidence: list[dict[str, Any]],

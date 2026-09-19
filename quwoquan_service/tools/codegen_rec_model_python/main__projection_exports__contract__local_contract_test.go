@@ -136,6 +136,9 @@ func TestCanonicalReleaseReadinessEmission(t *testing.T) {
 	f.Entities = f.Types
 	read(filepath.Join(root, "contracts/metadata/_shared/types.yaml"), &shared)
 	read(filepath.Join(base, "operations.yaml"), &ops)
+	if err := mergeSharedEnums(&f, &shared); err != nil {
+		t.Fatal(err)
+	}
 	order, err := resolveTransportClosure(&f, shared.Types, &ops)
 	if err != nil {
 		t.Fatal(err)

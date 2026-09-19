@@ -320,7 +320,7 @@ def test_weekly_r2_generated_outputs_bind_exact_commit_bytes(tmp_path: Path) -> 
 def test_self_reported_exact_evidence_never_grants_verified_owner() -> None:
     from quwoquan_ops.gate.code_health_delta.weekly import _optional_evidence, _attach_owner_evidence
     evidence = {"headSha": "head", "exactRef": "nonexistent:sha256:fake", "modules": {
-        "scope": {"ownerIdentityRef": "missing.json", "resolvedOwner": "fake-owner", "status": "available"}}}
+        "scope": {"contextRef": "missing.json", "resolvedOwner": "fake-owner", "status": "available"}}}
     measurement = _optional_evidence(evidence, "head")
     assert measurement["status"] == "supplied-unverified"
     modules = {"scope": {"owner": {"status": "unavailable"}}}

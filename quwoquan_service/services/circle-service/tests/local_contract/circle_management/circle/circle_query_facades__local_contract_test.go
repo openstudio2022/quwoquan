@@ -10,6 +10,8 @@ package local_contract
 
 import (
 	"context"
+	"encoding/json"
+	"reflect"
 	"testing"
 
 	"quwoquan_service/runtime/operation"
@@ -52,10 +54,15 @@ func TestCircleQueryFacadesExecuteEveryPublicReadOperation(t *testing.T) {
 		t.Fatalf("SearchCircles drift: %+v", searched)
 	}
 	feedSlice, err := service.GetCircleFeed(
-		context.Background(), "circle-alpha", 10, "", "latest", "", "",
+		context.Background(), "circle-alpha", 10, "page-1", "latest", "article",
 	)
 	if err != nil || len(feedSlice.Items) != 1 || feedSlice.Items[0].PostID != "post-1" {
 		t.Fatalf("GetCircleFeed drift: result=%+v err=%v", feedSlice, err)
+	}
+	if feed.lastCircleID != "circle-alpha" || feed.lastQuery != (app.ListCirclePostsQuery{
+		Type: "article", Sort: "latest", Cursor: "page-1", Limit: 10,
+	}) {
+		t.Fatalf("GetCircleFeed query drift: circleID=%q query=%+v", feed.lastCircleID, feed.lastQuery)
 	}
 	discoveryContext := operation.WithContext(context.Background(), operation.Context{
 		Actor: operation.ActorContext{PersonaID: "persona-viewer"},
@@ -68,6 +75,36 @@ func TestCircleQueryFacadesExecuteEveryPublicReadOperation(t *testing.T) {
 	)
 	if err != nil || len(discoverySlice.Circles) != 1 || discovery.lastQuery.PersonaID != "persona-viewer" {
 		t.Fatalf("ListCircleDiscoveryFeed drift: result=%+v query=%+v err=%v", discoverySlice, discovery.lastQuery, err)
+	}
+}
+
+// spec_ref: specs/feature-tree/discovery-content/content-type-framework/unified-presentation-model/spec.md#req-003
+func TestCircleFeedProjectionOmitsRetiredContentIdentity(t *testing.T) {
+	if _, exists := reflect.TypeOf(app.CircleFeedPost{}).FieldByName("ContentIdentity"); exists {
+		t.Fatal("圈子动态投影不得保留已退役的内容身份字段")
+	}
+	if _, exists := reflect.TypeOf(app.ListCirclePostsQuery{}).FieldByName("Identity"); exists {
+		t.Fatal("圈子动态查询不得保留已退役的身份筛选")
+	}
+	payload, err := json.Marshal(app.CircleFeedPost{
+		ContentType: "article", AuthorIdentityTags: []string{"photographer"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(payload, &fields); err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := fields["contentIdentity"]; exists {
+		t.Fatalf("圈子动态不得输出已退役的内容身份: %s", payload)
+	}
+	if fields["contentType"] != "article" {
+		t.Fatalf("圈子动态必须保留内容类型: %s", payload)
+	}
+	tags, ok := fields["authorIdentityTags"].([]any)
+	if !ok || len(tags) != 1 || tags[0] != "photographer" {
+		t.Fatalf("内容身份退役不得改变作者身份标签: %s", payload)
 	}
 }
 
@@ -95,14 +132,18 @@ func (double *circleQueryRecordDouble) List(
 }
 
 type circleFeedDouble struct {
-	items []app.CircleFeedPost
+	items        []app.CircleFeedPost
+	lastCircleID string
+	lastQuery    app.ListCirclePostsQuery
 }
 
 func (double *circleFeedDouble) ListCirclePosts(
 	_ context.Context,
-	_ string,
-	_ app.ListCirclePostsQuery,
+	circleID string,
+	query app.ListCirclePostsQuery,
 ) ([]app.CircleFeedPost, string, error) {
+	double.lastCircleID = circleID
+	double.lastQuery = query
 	return append([]app.CircleFeedPost(nil), double.items...), "", nil
 }
 

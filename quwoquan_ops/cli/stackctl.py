@@ -297,6 +297,7 @@ from quwoquan_ops.cli.lib.service_core_composition import (
 )
 from quwoquan_ops.cli.lib.deployment_candidate_manifest import (
     canonical_contract_graph_digest,
+    resolve_package_release_binding,
     canonical_local_observability_log_sink_composition, load_candidate_manifest,
     load_provider_binding_overlay, materialize_mutable_provider_binding_overlay,
     materialize_observability_log_sink_package,

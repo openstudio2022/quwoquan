@@ -19,7 +19,12 @@ from internal.recommendation.ranked_recommendation_window.domain.discovery_tunin
     WHITELIST_SUPPLY_SOURCE,
 )
 from internal.recommendation.ranked_recommendation_window.domain.model import (
-    RecommendationObjectCard,
+    ClientContentPresentationContract,
+    post_envelope,
+    homepage_envelope,
+    envelope_identity,
+    supports_presentation,
+    validate_presentation_contract,
     RankedCandidate,
     RankingResult,
     ReleasePinnedQueryFence,
@@ -50,6 +55,7 @@ class CandidateReader(Protocol):
         subject_id: str,
         scenario: str,
         limit: int,
+        eligible_content_types: tuple[str, ...],
     ) -> list[dict[str, Any]]: ...
 
     def list_for_ranking_by_content_ids(
@@ -58,9 +64,15 @@ class CandidateReader(Protocol):
         scenario: str,
         content_ids: tuple[str, ...],
         limit: int,
+        eligible_content_types: tuple[str, ...],
     ) -> list[dict[str, Any]]: ...
 
-    def list_object_card_candidates(self, *, limit: int) -> list[dict[str, Any]]: ...
+    def list_homepage_candidates(self, *, limit: int) -> list[dict[str, Any]]: ...
+
+    def list_release_for_ranking(
+        self, fence: ReleasePinnedQueryFence, *, scenario: str, subject_id: str,
+        limit: int, eligible_content_types: tuple[str, ...],
+    ) -> list[dict[str, Any]]: ...
 
 
 class FeatureProfileReader(Protocol):
@@ -142,8 +154,10 @@ class MongoCandidateRanker:
         session_id: str,
         limit: int,
         content_fence: ReleasePinnedQueryFence,
+        client_presentation_contract: ClientContentPresentationContract,
     ) -> RankingResult:
         content_fence = validate_content_fence(content_fence)
+        contract = validate_presentation_contract(client_presentation_contract)
         now = self._now().astimezone(timezone.utc)
         # RankedWindowSubjectID uses '\x00' as an internal namespace separator.
         # ExperimentAssignmentObserved crosses into Product Ops Postgres text
@@ -160,12 +174,13 @@ class MongoCandidateRanker:
             "travel_photography",
         }:
             raise ValueError("unsupported recommendation ranking scenario")
+        eligible_content_types = self._eligible_post_types(contract)
         profile = self._feature_profiles.read_for_scoring(subject_id.strip())
         if content_fence.release is not None:
-            documents = self._candidates.list_release_for_ranking(content_fence, subject_id=subject_id.strip(), scenario=normalized_scenario, limit=limit)
+            documents = self._candidates.list_release_for_ranking(content_fence, subject_id=subject_id.strip(), scenario=normalized_scenario, limit=limit, eligible_content_types=eligible_content_types)
         else:
-            documents = self._candidates.list_for_ranking(subject_id=subject_id.strip(), scenario=normalized_scenario, limit=limit)
-            documents = self._merge_collaborative_lane(documents, profile=profile, scenario=normalized_scenario, limit=limit)
+            documents = self._candidates.list_for_ranking(subject_id=subject_id.strip(), scenario=normalized_scenario, limit=limit, eligible_content_types=eligible_content_types)
+            documents = self._merge_collaborative_lane(documents, profile=profile, scenario=normalized_scenario, limit=limit, eligible_content_types=eligible_content_types)
         negative_content_ids = {
             str(value).strip()
             for value in profile.get("negativeContentIds") or []
@@ -200,7 +215,8 @@ class MongoCandidateRanker:
             and str(document.get("contentType") or "").strip()
             not in hidden_content_types
         ]
-        object_cards = self._object_cards(profile)
+        documents = self._supported_documents(documents, contract)
+        homepage_candidates = self._homepage_candidates(profile, contract)
         candidates = [self._candidate(document, now) for document in documents]
         candidate_ids = [str(candidate.contentId or "").strip() for candidate in candidates]
         if any(not content_id for content_id in candidate_ids) or len(set(candidate_ids)) != len(candidate_ids):
@@ -272,7 +288,7 @@ class MongoCandidateRanker:
         model_channel = "champion" if model_release_id else None
         ranked_candidates = tuple(
             RankedCandidate(
-                content_id=content_id,
+                envelope=post_envelope(content_id, item_snapshots[content_id]["contentType"]),
                 score=score,
                 feature_snapshot_digest=self._snapshot_digester(
                     user_snapshot,
@@ -282,7 +298,12 @@ class MongoCandidateRanker:
             )
             for content_id, score in ranked
         )
+        ranked_candidates = tuple(sorted(
+            (*ranked_candidates, *homepage_candidates),
+            key=lambda candidate: (-candidate.score, envelope_identity(candidate.envelope)),
+        )[:limit])
         ranking_snapshot = {
+            "clientPresentationContract": contract.model_dump(mode="json"),
             "candidateSequences": [
                 int(document.get("sourceSequence") or 0) for document in documents
             ],
@@ -302,7 +323,7 @@ class MongoCandidateRanker:
             "profileCheckpoint": int(profile.get("checkpoint") or 0),
             "ranked": [
                 {
-                    "contentId": candidate.content_id,
+                    "envelope": candidate.envelope.model_dump(mode="json"),
                     "featureSnapshotDigest": candidate.feature_snapshot_digest,
                     "score": candidate.score,
                 }
@@ -329,7 +350,6 @@ class MongoCandidateRanker:
             ranking_snapshot_digest=ranking_snapshot_digest,
             user_feature_snapshot=user_snapshot,
             candidates=ranked_candidates,
-            object_cards=object_cards,
         )
 
     # 协同召回路的点查上限：collaborativeFeatures 是离线物化的 per-subject
@@ -343,8 +363,9 @@ class MongoCandidateRanker:
         profile: Mapping[str, Any],
         scenario: str,
         limit: int,
+        eligible_content_types: tuple[str, ...],
     ) -> list[dict[str, Any]]:
-        if scenario != "content_feed":
+        if any((scenario != "content_feed", len(documents) >= limit)):
             return documents
         collaborative = {
             str(key).strip(): float(value)
@@ -372,6 +393,7 @@ class MongoCandidateRanker:
             scenario=scenario,
             content_ids=wanted,
             limit=self.COLLABORATIVE_RECALL_LIMIT,
+            eligible_content_types=eligible_content_types,
         )
         merged = list(documents)
         for document in extra:
@@ -448,99 +470,67 @@ class MongoCandidateRanker:
             adjusted.append((content_id, score * (weight**occurrence)))
         return sorted(adjusted, key=lambda item: (-item[1], item[0]))
 
-    def _object_cards(
-        self,
-        profile: Mapping[str, Any],
-    ) -> tuple[RecommendationObjectCard, ...]:
-        sparse = dict(profile.get("sparseFeatures") or {})
-        affinities = {
+    @staticmethod
+    def _eligible_post_types(contract):
+        return tuple(
+            content_type for content_type in contract.contentTypes
+            if supports_presentation(contract, post_envelope("admission", content_type))
+        )
+
+    @staticmethod
+    def _supported_documents(documents, contract):
+        supported = []
+        for document in documents:
+            envelope = post_envelope(
+                str(document.get("contentId") or "").strip(),
+                str(document.get("contentType") or "").strip(),
+            )
+            if supports_presentation(contract, envelope):
+                supported.append(document)
+        return supported
+
+    @staticmethod
+    def _entity_affinities(profile):
+        return {
             key.removeprefix("entity:"): float(value)
-            for key, value in sparse.items()
-            if key.startswith("entity:")
-            and key.removeprefix("entity:").strip()
-            and isinstance(value, (int, float))
-            and math.isfinite(float(value))
-            and float(value) > 0
+            for key, value in (profile.get("sparseFeatures") or {}).items()
+            if key.startswith("entity:") and key.removeprefix("entity:").strip()
+            and isinstance(value, (int, float)) and math.isfinite(float(value)) and float(value) > 0
         }
-        selected: dict[tuple[str, str], tuple[float, RecommendationObjectCard]] = {}
-        for ordinal, document in enumerate(
-            self._candidates.list_object_card_candidates(limit=400)
-        ):
-            object_kind = str(document.get("objectKind") or "").strip()
-            if object_kind == "gathering":
-                gathering_id = str(document.get("sourceKey") or "").strip()
-                title = str(document.get("title") or "").strip()
-                card_digest = str(document.get("cardDigest") or "").strip()
-                source_version = int(document.get("sourceVersion") or 0)
-                if (
-                    not gathering_id
-                    or not title
-                    or source_version <= 0
-                    or len(card_digest) != 64
-                ):
-                    continue
-                tags = tuple(
-                    dict.fromkeys(
-                        str(tag).strip()
-                        for tag in document.get("tagRefs") or []
-                        if str(tag).strip()
-                    )
-                )
-                gathering_card = RecommendationObjectCard(
-                    object_kind="gathering",
-                    object_id=gathering_id,
-                    title=title,
-                    subtitle=(
-                        str(document.get("summary") or "").strip() or None
-                    ),
-                    # Circle signs a canonical cover reference. Recommendation
-                    # must not turn that reference into a fabricated media URL.
-                    cover_url=None,
-                    tag_refs=tags,
-                    reason_key="public_gathering",
-                    recall_path="gathering_candidate_index",
-                )
-                selected[("gathering", gathering_id)] = (
-                    0.25 / float(ordinal + 1),
-                    gathering_card,
-                )
+
+    def _homepage_candidates(
+        self, profile: Mapping[str, Any], contract: ClientContentPresentationContract,
+    ) -> tuple[RankedCandidate, ...]:
+        if not supports_presentation(contract, homepage_envelope("admission")):
+            return ()
+        sparse = dict(profile.get("sparseFeatures") or {})
+        affinities = self._entity_affinities(profile)
+        selected: dict[str, RankedCandidate] = {}
+        for document in self._candidates.list_homepage_candidates(limit=400):
+            # 窄 reader 只产出主页；污染/未来未知对象逐项隔离，不中断合法候选。
+            if document.get("objectKind") != "entity_homepage":
                 continue
             snapshot = document.get("primaryHomepageSnapshot")
             if not isinstance(snapshot, Mapping):
                 continue
-            homepage_id = str(
-                document.get("primaryHomepageId") or snapshot.get("homepageId") or ""
-            ).strip()
+            homepage_id = str(document.get("primaryHomepageId") or snapshot.get("homepageId") or "").strip()
             entity_id = str(snapshot.get("canonicalEntityId") or "").strip()
-            title = str(snapshot.get("title") or "").strip()
             score = affinities.get(entity_id, 0.0)
-            if not homepage_id or not entity_id or not title or score <= 0:
+            if not all((homepage_id, entity_id, str(snapshot.get("title") or "").strip(), score > 0)):
                 continue
-            tags = tuple(
-                dict.fromkeys(
-                    str(tag).strip()
-                    for tag in snapshot.get("tagRefs") or []
-                    if str(tag).strip()
-                )
+            envelope = homepage_envelope(homepage_id)
+            if not supports_presentation(contract, envelope):
+                continue
+            item_snapshot = {
+                "homepageSnapshot": dict(snapshot), "reasonKey": "affinity",
+                "recallPath": "entity_card_affinity",
+            }
+            candidate = RankedCandidate(
+                envelope=envelope, score=score,
+                feature_snapshot_digest=self._snapshot_digester(sparse, item_snapshot),
+                item_feature_snapshot=item_snapshot,
             )
-            card = RecommendationObjectCard(
-                object_kind="entity_homepage",
-                object_id=homepage_id,
-                title=title,
-                subtitle=(str(snapshot.get("subtitle") or "").strip() or None),
-                cover_url=(str(snapshot.get("coverUrl") or "").strip() or None),
-                tag_refs=tags,
-                reason_key="affinity",
-                recall_path="entity_card_affinity",
-            )
-            identity = ("entity_homepage", homepage_id)
-            previous = selected.get(identity)
-            if previous is None or score > previous[0]:
-                selected[identity] = (score, card)
-        return tuple(
-            card
-            for _, card in sorted(
-                selected.values(),
-                key=lambda item: (-item[0], item[1].object_id),
-            )[:20]
-        )
+            previous = selected.get(homepage_id)
+            if previous is None or score > previous.score:
+                selected[homepage_id] = candidate
+        return tuple(sorted(selected.values(), key=lambda item: (-item.score, item.envelope.homepage.homepageId))[:20])

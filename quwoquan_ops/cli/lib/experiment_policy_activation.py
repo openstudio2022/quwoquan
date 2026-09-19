@@ -319,7 +319,7 @@ def activate_search_experiment_policy_via_published_port(
         published_port = int(ports["product-ops-service"])
         redis_published_port = int(ports["redis"])
         from quwoquan_ops.cli.commands.source_allocation import prepare_gamma_local_redis_acl
-        redis_acl_binding = prepare_gamma_local_redis_acl()
+        redis_acl_binding = prepare_gamma_local_redis_acl(target)
         redis_runtime_password = redis_acl_binding["runtimePassword"]
     except (KeyError, OSError, TypeError, ValueError) as exc:
         raise ExperimentPolicyActivationError(

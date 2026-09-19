@@ -4,7 +4,7 @@
 
 > Journey / Scenario：横切工程能力，不直接拥有 AppRoot Scenario。
 
-> 设计归属：[L2 DEC-001](../design.md#dec-001)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 

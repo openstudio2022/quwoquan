@@ -1,3 +1,5 @@
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentType;
 import 'package:quwoquan_app/service/content_service/content/post/presentation/generated/content_ui_config.g.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/link_templates.g.dart';
 import 'package:quwoquan_app/l10n/copy/chat_text_constants.dart';
@@ -29,7 +31,6 @@ class ContentShareTemplate {
     required this.shareSummary,
     required this.coverUrl,
     required this.actions,
-    required this.isIdentityTemplate,
     required this.isBlocked,
     this.notice,
   });
@@ -50,7 +51,6 @@ class ContentShareTemplate {
   final String shareSummary;
   final String coverUrl;
   final List<ContentShareAction> actions;
-  final bool isIdentityTemplate;
   final bool isBlocked;
   final String? notice;
 }
@@ -69,7 +69,6 @@ class ContentShareTemplateBuilder {
 
   static ContentShareTemplate build({
     required ContentSurfaceView surfaceView,
-    required bool enableIdentityTemplate,
     String visibility = 'public',
     PublicContentLinkBuilder? publicLinks,
   }) {
@@ -78,7 +77,7 @@ class ContentShareTemplateBuilder {
       final blockedSeed = _shareSeedForSurfaceView(surfaceView);
       return ContentShareTemplate(
         postId: surfaceView.postId,
-        profileId: surfaceView.contentIdentity,
+        profileId: surfaceView.contentType.wireName,
         layout: 'blocked',
         permission: permission,
         deeplink: '',
@@ -91,13 +90,12 @@ class ContentShareTemplateBuilder {
         shareSummary: blockedSeed.summary,
         coverUrl: blockedSeed.coverUrl,
         actions: const <ContentShareAction>[],
-        isIdentityTemplate: enableIdentityTemplate,
         isBlocked: true,
         notice: ChatText.sharePrivateBlocked,
       );
     }
 
-    final profile = _profileForIdentity(surfaceView.contentIdentity);
+    final profile = _profileForContentType(surfaceView.contentType);
     final shareSeed = _shareSeedForSurfaceView(surfaceView);
     final deeplink = AppLinkTemplates.postAppDeepLink(surfaceView.postId);
     // 注入单次分享归因（share_id + UTM），使站外回流可按 share_id/渠道归因。
@@ -127,9 +125,7 @@ class ContentShareTemplateBuilder {
       permission: permission,
       deeplink: deeplink,
       landingUrl: landingUrl,
-      landingPage: surfaceView.contentIdentity == 'moment'
-          ? 'moment_landing'
-          : 'work_landing',
+      landingPage: 'work_landing',
       shareId: attribution.shareId,
       title: UITextConstants.contentLabelForKey(profile.titleKey),
       subtitle: UITextConstants.contentLabelForKey(profile.subtitleKey),
@@ -147,16 +143,35 @@ class ContentShareTemplateBuilder {
           label: ChatText.shareActionSystemShare,
         ),
       ],
-      isIdentityTemplate: enableIdentityTemplate,
       isBlocked: false,
       notice: null,
     );
   }
 
-  static ShareTemplateProfileConfig _profileForIdentity(String identity) {
-    return ContentUIConfig.shareTemplateProfiles.firstWhere(
-      (profile) => profile.id == identity,
-      orElse: () => ContentUIConfig.shareTemplateProfiles.last,
+  /// 分享模板档位只按写入时确定的 [ContentType] 选，不再按已退役的内容身份轴。
+  ///
+  /// 契约 `shareTemplateProfiles` 目前是空集（identity 档位随 ContentIdentity
+  /// 一同退役），档位重新按 ContentType 声明前，端侧按对象类型取默认档位。
+  static ShareTemplateProfileConfig _profileForContentType(ContentType type) {
+    final declared = ContentUIConfig.shareTemplateProfiles
+        .where((profile) => profile.id == type.wireName)
+        .toList(growable: false);
+    if (declared.isNotEmpty) {
+      return declared.first;
+    }
+    return ShareTemplateProfileConfig(
+      id: type.wireName,
+      titleKey: 'share_template_work_title',
+      subtitleKey: 'share_template_work_subtitle',
+      layout: switch (type) {
+        ContentType.article => 'article_card',
+        ContentType.video => 'video_card',
+        ContentType.image => 'image_card',
+      },
+      coverStrategy: 'post_cover',
+      includeAuthor: true,
+      includeTimeContext: type != ContentType.article,
+      includeTags: true,
     );
   }
 
@@ -186,14 +201,14 @@ class ContentShareTemplateBuilder {
         : (view.video?.thumbnailUrl.isNotEmpty == true
               ? view.video!.thumbnailUrl
               : (view.images.isNotEmpty ? view.images.first.url : ''));
-    switch (view.kind) {
-      case ContentSurfaceKind.article:
+    switch (view.contentType) {
+      case ContentType.article:
         return _ShareSeed(
           title: _clip(title, fallback: ContentText.shareSeedWorkFallbackTitle),
           summary: _clip(body, maxLength: 48),
           coverUrl: cover,
         );
-      case ContentSurfaceKind.video:
+      case ContentType.video:
         return _ShareSeed(
           title: _clip(
             body,
@@ -202,20 +217,11 @@ class ContentShareTemplateBuilder {
           summary: _clip(body, maxLength: 48),
           coverUrl: cover,
         );
-      case ContentSurfaceKind.image:
+      case ContentType.image:
         return _ShareSeed(
           title: _clip(
             body,
             fallback: UITextConstants.shareSeedImageWorkTitle(displayName),
-          ),
-          summary: _clip(body, maxLength: 48),
-          coverUrl: cover,
-        );
-      case ContentSurfaceKind.micro:
-        return _ShareSeed(
-          title: _clip(
-            body,
-            fallback: UITextConstants.shareSeedMomentTitle(displayName),
           ),
           summary: _clip(body, maxLength: 48),
           coverUrl: cover,

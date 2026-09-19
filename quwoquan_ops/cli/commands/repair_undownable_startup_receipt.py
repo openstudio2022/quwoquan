@@ -355,6 +355,105 @@ def _reconcile_failed_executor(args: argparse.Namespace, *, report_dir: Path) ->
                         summary="OPS.RUNTIME.executor_reconcile_required: fence reconciliation blocked")
 
 
+_OWNER_PATTERN = re.compile(r"pid=([1-9][0-9]*) target=(\S+) startedAt=(\S+) worktree=(\S+) lane=(\S+) headSha=([0-9a-f]{40})")
+
+
+def _takeover_inputs(args: argparse.Namespace) -> dict[str, Any]:
+    """Freeze an alpha-local-only CAS handoff without weakening other fences."""
+    from quwoquan_ops.cli.lib.candidate_evidence import validate_candidate_ref
+
+    target = str(args.target)
+    if target != "alpha-local" or os.environ.get("QWQ_OUTPUT_ROOT"):
+        raise ValueError("executor takeover is available only for canonical alpha-local")
+    fence_path = local_runtime_operation_lock_path(target).with_suffix(".executor.json")
+    raw = _required_bytes(fence_path)
+    fence = json.loads(raw)
+    expected_ref = str(getattr(args, "executor_fence_ref", "") or "")
+    if expected_ref != f"{fence_path}={_digest(raw)}":
+        raise ValueError("executor takeover requires the exact current fence digest")
+    if set(fence) != {"target", "executorNonce", "owner", "executionClaimId"} or fence.get("target") != target:
+        raise ValueError("executor takeover fence shape/target mismatch")
+    owner = str(fence.get("owner") or "")
+    match = _OWNER_PATTERN.fullmatch(owner)
+    if not match or match[2] != target:
+        raise ValueError("executor takeover previous owner is malformed")
+    expected_owner = str(getattr(args, "expected_previous_owner", "") or "")
+    expected_worktree = str(getattr(args, "expected_previous_worktree", "") or "")
+    expected_lane = str(getattr(args, "expected_previous_lane", "") or "")
+    if expected_owner != owner or expected_worktree != match[4] or expected_lane != match[5]:
+        raise ValueError("executor takeover previous owner/worktree/lane CAS mismatch")
+    try:
+        os.kill(int(match[1]), 0)
+    except ProcessLookupError:
+        pass
+    else:
+        raise ValueError("executor still exists; takeover denied")
+    _require_absent(output_paths.deployment_target_path(target, "process", "environment-execution", "execution-slot.json"))
+    # A stale consumer lease can only be released through the normal consumer
+    # command after this executor fence is archived. Takeover does not mutate
+    # device/runtime resources; the lease keeps its own exact generation CAS.
+    candidate_ref = str(getattr(args, "candidate_evidence", "") or "")
+    canonical_ref, candidate_raw, candidate, _ = validate_candidate_ref(candidate_ref, repo_root=output_paths.ROOT)
+    current = output_paths._read_secure_json_object(fence_path, label="target executor fence")
+    if current != fence:
+        raise ValueError("executor takeover fence changed during validation")
+    return {
+        "target": target,
+        "previousFence": {"source": str(fence_path), "digest": _digest(raw), "owner": owner, "executorNonce": fence["executorNonce"]},
+        "expectedPrevious": {"worktree": expected_worktree, "lane": expected_lane},
+        "candidateEvidence": {"ref": canonical_ref, "digest": _digest(candidate_raw), "leadLane": candidate["lead_lane"]},
+        "executorInactive": True,
+    }
+
+
+def _reconcile_takeover(args: argparse.Namespace, *, report_dir: Path) -> dict[str, Any]:
+    applying = args.worktree_startup_reconciliation == "takeover-apply"
+    try:
+        confirmed = bool(getattr(args, "confirm_undownable_startup_receipt_reclaim", False))
+        plan_ref = str(getattr(args, "worktree_startup_plan_ref", "") or "")
+        if applying != confirmed or applying != bool(plan_ref):
+            raise ValueError("takeover apply requires exact plan and explicit confirmation")
+        with _fence_reconciliation_locks(str(args.target)):
+            inputs = _takeover_inputs(args)
+            payload = {"schema": _PLAN_SCHEMA + "-takeover", **inputs}
+            if applying:
+                text, digest = plan_ref.rsplit("=", 1)
+                plan_path = _plan_path(Path(text), target=str(args.target))
+                raw = _required_bytes(plan_path)
+                if _digest(raw) != digest or json.loads(raw) != payload:
+                    raise ValueError("executor takeover plan or expected inputs changed")
+                if _takeover_inputs(args) != inputs:
+                    raise ValueError("executor takeover inputs drifted before CAS")
+                fence_path = Path(inputs["previousFence"]["source"])
+                archive = plan_path.parent / "archive"
+                _move_originals([{
+                    "source": str(fence_path),
+                    "digest": inputs["previousFence"]["digest"],
+                    "destination": str(archive / "previous-executor-fence.json"),
+                }], plan_path)
+                receipt = {
+                    "schema": "stackctl-executor-takeover-receipt-v1",
+                    **inputs,
+                    "newOwner": {"worktree": str(output_paths.ROOT), "lane": inputs["candidateEvidence"]["leadLane"]},
+                    "status": "applied",
+                }
+                receipt_path = plan_path.parent / "executor-takeover-receipt.json"
+                _write_transaction_journal_exclusive(receipt_path, (json.dumps(receipt, sort_keys=True, indent=2) + "\n").encode())
+                receipt_ref = f"{receipt_path}={_digest(_required_bytes(receipt_path))}"
+            else:
+                plan_path = _plan_path(report_dir / "worktree-startup-reconciliation-plan.json", target=str(args.target))
+                raw = (json.dumps(payload, sort_keys=True, indent=2) + "\n").encode()
+                _write_transaction_journal_exclusive(plan_path, raw)
+                plan_ref = f"{plan_path}={_digest(raw)}"
+                receipt_ref = ""
+        return {"exitCode": 0, "summary": "alpha-local executor takeover " + ("applied" if applying else "planned"),
+                "planRef": plan_ref, "receiptRef": receipt_ref, "details": [plan_ref] + ([receipt_ref] if receipt_ref else []),
+                "destructiveRepairPerformed": False, "reportDir": str(report_dir)}
+    except (OSError, RuntimeError, TypeError, ValueError, KeyError) as error:
+        return _blocked(report_dir=report_dir, target=str(args.target), details=[str(error)],
+                        summary="OPS.RUNTIME.executor_reconcile_required: managed takeover blocked")
+
+
 def _current_fence_inputs(target: str, exact_ref: str) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as stackctl
 
@@ -653,6 +752,8 @@ def repair_undownable_startup_receipt(
     import quwoquan_ops.cli.stackctl as _stackctl
 
     target = str(args.target)
+    if getattr(args, "worktree_startup_reconciliation", "") in {"takeover-plan", "takeover-apply"}:
+        return _reconcile_takeover(args, report_dir=report_dir)
     if getattr(args, "worktree_startup_reconciliation", "") in {"current-fence-plan", "current-fence-apply"}:
         return _reconcile_current_fence(args, report_dir=report_dir)
     if getattr(args, "worktree_startup_reconciliation", "") in {"fence-plan", "fence-apply"}:

@@ -111,12 +111,11 @@ func TestReplayRepairRequiresContentIDDerivedPostBinding(
 ) {
 	t.Parallel()
 	post := releaseimport.PostDoc{
-		PostRef:         "posts/article/体验/发布身份/1",
-		ContentID:       "qwq_release_content_001",
-		ContentVersion:  1,
-		ContentType:     "article",
-		ContentIdentity: "work",
-		AuthorID:        "builtin_travel_blogger",
+		PostRef:        "posts/article/体验/发布身份/1",
+		ContentID:      "qwq_release_content_001",
+		ContentVersion: 1,
+		ContentType:    "article",
+		AuthorID:       "builtin_travel_blogger",
 		Admission: releaseimport.ContentAdmission{
 			ProcessResult: "completed",
 			QualityResult: "passed",
@@ -148,8 +147,7 @@ func TestReplaySourceImportReportIsStrictAndCountBound(t *testing.T) {
 	t.Parallel()
 	post := releaseimport.PostDoc{
 		PostRef: "posts/video/体验/prior-video/1", ContentID: "prior-video-content",
-		ContentVersion: 2, ContentType: "video", ContentIdentity: "work",
-		AuthorID: "builtin_video_author",
+		ContentVersion: 2, ContentType: "video", AuthorID: "builtin_video_author",
 		Admission: releaseimport.ContentAdmission{
 			ProcessResult: "completed", QualityResult: "passed", UsageScope: "production",
 		},
@@ -216,25 +214,23 @@ func TestBuildImportedPostLifecycleEventsUsesOneDurablePostFactStream(t *testing
 			QualityResult: "passed",
 			UsageScope:    "production",
 		},
-		ContentType:     "video",
-		ContentIdentity: "work",
-		AuthorID:        "builtin_travel_blogger",
-		TagRefs:         []string{"Topic/旅行"},
-		EntityRefs:      []string{"entity/travel"},
-		Angle:           "体验",
-		CreatedAt:       now.Add(-2 * time.Hour),
-		PublishedAt:     now.Add(-time.Hour),
-		UpdatedAt:       now.Add(-time.Minute),
+		ContentType: "video",
+		AuthorID:    "builtin_travel_blogger",
+		TagRefs:     []string{"Topic/旅行"},
+		EntityRefs:  []string{"entity/travel"},
+		Angle:       "体验",
+		CreatedAt:   now.Add(-2 * time.Hour),
+		PublishedAt: now.Add(-time.Hour),
+		UpdatedAt:   now.Add(-time.Minute),
 	}
 
 	events, err := releaseimport.BuildImportedPostLifecycleEvents(
 		[]releaseimport.PostDoc{post},
 		[]releaseimport.ImportedPostDeletionSnapshot{{
-			PostID:          "removed-post",
-			AuthorID:        "removed-author",
-			ContentType:     "image",
-			ContentIdentity: "work",
-			Status:          "published",
+			PostID:      "removed-post",
+			AuthorID:    "removed-author",
+			ContentType: "image",
+			Status:      "published",
 		}},
 		releaseimport.ImportOptions{
 			ReleaseID:         "release-a",
@@ -282,7 +278,7 @@ func TestBuildImportedPostLifecycleEventsUsesOneDurablePostFactStream(t *testing
 		t.Fatalf("decode deleted payload: %v", err)
 	}
 	wantDeletedKeys := []string{
-		"authorId", "contentIdentity", "contentType", "deletedAt", "postId", "status",
+		"authorId", "contentType", "deletedAt", "postId", "status",
 	}
 	gotDeletedKeys := make([]string, 0, len(deletedPayload))
 	for key := range deletedPayload {
@@ -294,7 +290,6 @@ func TestBuildImportedPostLifecycleEventsUsesOneDurablePostFactStream(t *testing
 	}
 	if deletedPayload["authorId"] != "removed-author" ||
 		deletedPayload["contentType"] != "image" ||
-		deletedPayload["contentIdentity"] != "work" ||
 		deletedPayload["status"] != "published" {
 		t.Fatalf("deleted payload lost canonical Post snapshot: %#v", deletedPayload)
 	}
@@ -305,11 +300,10 @@ func TestFourImportedPostTombstonesKeepStableReplayIdentities(t *testing.T) {
 	snapshots := make([]releaseimport.ImportedPostDeletionSnapshot, 0, 4)
 	for index := 0; index < 4; index++ {
 		snapshots = append(snapshots, releaseimport.ImportedPostDeletionSnapshot{
-			PostID:          fmt.Sprintf("removed-post-%d", index),
-			AuthorID:        fmt.Sprintf("removed-author-%d", index),
-			ContentType:     []string{"article", "image", "video", "image"}[index],
-			ContentIdentity: "work",
-			Status:          "published",
+			PostID:      fmt.Sprintf("removed-post-%d", index),
+			AuthorID:    fmt.Sprintf("removed-author-%d", index),
+			ContentType: []string{"article", "image", "video", "image"}[index],
+			Status:      "published",
 		})
 	}
 	opts := releaseimport.ImportOptions{
@@ -342,11 +336,10 @@ func TestAlreadyTombstonedPostKeepsPublishedStatusBeforeDelete(t *testing.T) {
 	events, err := releaseimport.BuildImportedPostLifecycleEvents(
 		nil,
 		[]releaseimport.ImportedPostDeletionSnapshot{{
-			PostID:          "already-tombstoned-post",
-			AuthorID:        "release-author",
-			ContentType:     "article",
-			ContentIdentity: "work",
-			Status:          "published",
+			PostID:      "already-tombstoned-post",
+			AuthorID:    "release-author",
+			ContentType: "article",
+			Status:      "published",
 		}},
 		releaseimport.ImportOptions{
 			ReleaseID:         "release-retombstone",
@@ -670,11 +663,10 @@ func fourDeletionSnapshots() []releaseimport.ImportedPostDeletionSnapshot {
 	snapshots := make([]releaseimport.ImportedPostDeletionSnapshot, 0, 4)
 	for index := 0; index < 4; index++ {
 		snapshots = append(snapshots, releaseimport.ImportedPostDeletionSnapshot{
-			PostID:          fmt.Sprintf("data-post-removed-%d", index),
-			AuthorID:        fmt.Sprintf("data-author-%d", index),
-			ContentType:     []string{"article", "image", "video", "image"}[index],
-			ContentIdentity: "work",
-			Status:          "published",
+			PostID:      fmt.Sprintf("data-post-removed-%d", index),
+			AuthorID:    fmt.Sprintf("data-author-%d", index),
+			ContentType: []string{"article", "image", "video", "image"}[index],
+			Status:      "published",
 		})
 	}
 	return snapshots

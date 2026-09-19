@@ -4,7 +4,7 @@ enum ContentPublicationSafetyDecision { allow, review, reject, unavailable }
 
 abstract final class ContentPublicationPolicy {
   static const int titleMaxRunes = 80;
-  static const int microBodyMaxRunes = 5000;
+  static const int articleBodyMaxRunes = 5000;
   static const int articleMarkdownMaxRunes = 20000;
   static const int summaryMaxRunes = 240;
   static const int semanticMentionsMaxItems = 30;
@@ -12,7 +12,6 @@ abstract final class ContentPublicationPolicy {
   static const int articleParagraphMinCount = 2;
   static const bool articleWhenTitlePresent = true;
   static const bool articleWhenMediaPresent = true;
-  static const bool userConfirmationRequired = true;
   static const Duration personaRateWindow = Duration(seconds: 60);
   static const int personaMaxPublications = 5;
   static const String rejectErrorCode = "CONTENT.USER.publication_rejected";

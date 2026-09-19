@@ -296,7 +296,6 @@ CircleFeedItemView _feedItem({
     placementId: placementId,
     postId: _text(raw['postId']),
     contentType: contentType,
-    contentIdentity: _optionalText(raw['contentIdentity']),
     assistantUsePolicy: raw['assistantUsePolicy'] == null
         ? null
         : AssistantUsePolicy.fromWire(

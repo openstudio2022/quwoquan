@@ -39,11 +39,6 @@ _OUTPUT_ROOT = _REPO_ROOT / ".qwq_output/env/repo/local/review-dispatch-tests"
 _MANIFEST_REFS: dict[int, str] = {}
 
 
-def _owner_manifest_ref(raw: bytes) -> str:
-    prefix = ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
-    return prefix + hashlib.sha256(raw).hexdigest() + ".json"
-
-
 def _load_cli() -> ModuleType:
     spec = importlib.util.spec_from_file_location("_review_dispatch", _CLI)
     assert spec is not None and spec.loader is not None
@@ -62,81 +57,19 @@ from lib.feature_tree.nodes import discover_nodes as _discover_feature_nodes
 _DISCOVERED_NODES = tuple(_discover_feature_nodes())
 
 
-def _write_owner_fixture(manifest: dict[str, object]) -> str:
-    raw = canonical_json_bytes(manifest)
-    root = _REPO_ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint"
-    root.mkdir(parents=True, exist_ok=True)
-    path = root / (hashlib.sha256(raw).hexdigest() + ".json")
-    path.write_bytes(raw)
-    ref = path.relative_to(_REPO_ROOT).as_posix()
-    _MANIFEST_REFS[id(manifest)] = ref
-    return ref
-
-
-def _plan(
-    workflow: str, segment: str, paths: list[str],
-    deliverable: str | None = None, **kwargs: object,
-) -> dict:
-    auto_identity = bool(kwargs.pop("auto_identity", True))
+def _plan(workflow: str, segment: str, paths: list[str], deliverable: str | None = None, **kwargs: object) -> dict:
     automatic = _registry["workflows"][workflow].get("automatic_review") is not False
-    previous = kwargs.get("previous_plan")
-    if isinstance(previous, dict) and "context_manifest_ref" not in kwargs:
-        owner_ref = (previous.get("owner_identity") or {}).get("ref")
-        if isinstance(owner_ref, str) and owner_ref:
-            kwargs["context_manifest_ref"] = owner_ref
-            kwargs["context_manifest"] = json.loads((_REPO_ROOT / owner_ref).read_text(encoding="utf-8"))
-    if segment == "POST" and automatic and auto_identity and "context_manifest" not in kwargs:
-        exact_target = paths[0] if paths else "specs/feature-tree/spec.md"
-        if exact_target.startswith(".qwq_output/"):
-            exact_target = "README.md"
-        from lib.feature_tree.nodes import parent_chain
-        from lib.feature_tree.ownership import resolve_target_details
-        discovered = _DISCOVERED_NODES
-        resolution = resolve_target_details(exact_target, discovered)
-        by_dir = {node.directory.resolve(): node for node in discovered}
-        manifest = {
-            "schema_version": _governance_contract["feature_context_manifest"]["schema_version"],
-            "target": resolution.target.resolve().relative_to(_REPO_ROOT.resolve()).as_posix(),
-            "resolved_owner": resolution.node.rel,
-            "owner_chain": [
-                {"level": item.level, "node_id": item.node_id, "path": item.rel}
-                for item in parent_chain(resolution.node, by_dir)
-            ],
-            "canonical_contexts": [{"path": resolution.node.rel, "anchor": None, "kind": "spec"}],
-            "applicable_agents": ["AGENTS.md"],
-            "open_items": [],
-        }
-        manifest["evidence_fingerprint"] = _cli.embedded_fingerprint_binding(
-            _cli.build_feature_context_fingerprint(manifest, repo_root=_REPO_ROOT)
-        )
-        kwargs["context_manifest"] = manifest
-        kwargs["context_manifest_ref"] = _write_owner_fixture(manifest)
-    manifest = kwargs.get("context_manifest")
-    if isinstance(manifest, dict) and "context_manifest_ref" not in kwargs:
-        ref = _MANIFEST_REFS.get(id(manifest)) or _write_owner_fixture(manifest)
-        kwargs["context_manifest_ref"] = ref
-    candidate_override = kwargs.pop("candidate_paths", None)
-    candidate_paths = list(candidate_override or paths or ([str(manifest.get("target"))] if isinstance(manifest, dict) else []))
-    review_paths = candidate_paths if candidate_override is not None else paths
-    if candidate_paths and candidate_paths[0].startswith(".qwq_output/"):
-        candidate_paths = [str(manifest.get("target"))]
-    if segment == "POST" and automatic and auto_identity and "candidate_evidence_ref" not in kwargs:
-        ref = kwargs.get("context_manifest_ref")
-        if isinstance(ref, str):
-            candidate = build_candidate_evidence(ref, candidate_paths, repo_root=_REPO_ROOT)
-            candidate_raw = canonical_json_bytes(candidate)
-            candidate_path = (_REPO_ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/candidates/by-fingerprint" / (hashlib.sha256(candidate_raw).hexdigest() + ".json"))
-            candidate_path.parent.mkdir(parents=True, exist_ok=True)
-            candidate_path.write_bytes(candidate_raw)
-            kwargs["candidate_evidence_ref"] = candidate_path.relative_to(_REPO_ROOT).as_posix()
-    return _cli.build_plan(_registry, workflow, segment, deliverable, review_paths, **kwargs)
-
+    if segment == "POST" and automatic and "candidate_evidence_ref" not in kwargs:
+        ref = subprocess.run(
+            [sys.executable, str(_REPO_ROOT / "quwoquan_ops/cli/feature_tree.py"), "candidate-evidence", *sum((["--changed-path", path] for path in paths), [])],
+            cwd=_REPO_ROOT, check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        kwargs["candidate_evidence_ref"] = ref
+    return _cli.build_plan(_registry, workflow, segment, deliverable, paths, **kwargs)
 
 def _context_manifest(*contexts: dict[str, str | None]) -> dict[str, object]:
     from lib.feature_tree.commands import _context_manifest as build_manifest
-    from lib.feature_tree.ownership import resolve_target_details
-    nodes = _DISCOVERED_NODES
-    manifest = build_manifest("README.md", resolve_target_details("README.md", nodes), nodes)
+    manifest = build_manifest("README.md", list(_DISCOVERED_NODES))
     existing = list(manifest["canonical_contexts"])
     for item in contexts:
         if item not in existing:
@@ -145,8 +78,8 @@ def _context_manifest(*contexts: dict[str, str | None]) -> dict[str, object]:
     manifest["evidence_fingerprint"] = _cli.embedded_fingerprint_binding(
         _cli.build_feature_context_fingerprint(manifest, repo_root=_REPO_ROOT)
     )
-    _write_owner_fixture(manifest)
     return manifest
+
 
 
 class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
@@ -225,51 +158,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 ),
             )
 
-    def test_manifest_and_previous_plan_inputs_fail_closed(self) -> None:
-        legacy_manifest = {
-            "contexts": [{"path": "README.md", "anchor": None, "kind": "spec"}]
-        }
-        with self.assertRaises(_cli.ReviewDispatchError) as legacy:
-            _plan(
-                "dev",
-                "POST",
-                ["README.md"],
-                context_manifest=legacy_manifest,
-                auto_identity=False,
-            )
-        self.assertEqual("IDENTITY.MIGRATION_REQUIRED", legacy.exception.code)
-
-        version_drift = _context_manifest(
-            {"path": "README.md", "anchor": None, "kind": "spec"}
-        )
-        version_drift["schema_version"] = 999
-        with self.assertRaises(_cli.ReviewDispatchError) as invalid_manifest:
-            _plan(
-                "dev",
-                "POST",
-                ["README.md"],
-                context_manifest=version_drift,
-                auto_identity=False,
-            )
-        self.assertEqual(
-            "IDENTITY.MIGRATION_REQUIRED",
-            invalid_manifest.exception.code,
-        )
-
-        stale_manifest = _context_manifest(
-            {"path": "README.md", "anchor": None, "kind": "spec"}
-        )
-        stale_manifest["target"] = "AGENTS.md"
-        with self.assertRaises(_cli.ReviewDispatchError) as stale:
-            _plan(
-                "dev",
-                "POST",
-                ["README.md"],
-                context_manifest=stale_manifest,
-                auto_identity=False,
-            )
-        self.assertEqual("REVIEW.OWNER_MANIFEST_STALE", stale.exception.code)
-
+    def test_previous_plan_input_fails_closed(self) -> None:
         initial = _plan("dev", "POST", ["README.md"])
         invalid_previous = json.loads(json.dumps(initial))
         invalid_previous["schema_version"] = 1
@@ -585,8 +474,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             workflow="dev",
             deliverable="code",
             scope="",
-            owner_identity={"ref": None, "canonical_bytes_sha256": None, "target": "", "scope": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None},
-            candidate_evidence_identity={"ref": None, "canonical_bytes_sha256": None, "schema_version": None, "owner_identity_ref": None, "delivery_owner": None, "lead_lane": None, "delivery_policy_digests": None, "target": "", "resolved_owner": "", "impacted_owner_groups_digest": None, "changed_paths_digest": None, "workspace_digests": None, "fingerprint_ref": None, "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
+            candidate_evidence_identity=_cli._review_context_manifest.empty_candidate_identity(),
             terminal={"status": "READY", "codes": [], "failed_evidence": []},
             changed_paths=["README.md"],
             profiles=[],
@@ -598,8 +486,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             workflow="dev",
             deliverable="code",
             scope="",
-            owner_identity={"ref": None, "canonical_bytes_sha256": None, "target": "", "scope": "", "resolved_owner": "", "fingerprint_ref": None, "fingerprint_digest": None},
-            candidate_evidence_identity={"ref": None, "canonical_bytes_sha256": None, "schema_version": None, "owner_identity_ref": None, "delivery_owner": None, "lead_lane": None, "delivery_policy_digests": None, "target": "", "resolved_owner": "", "impacted_owner_groups_digest": None, "changed_paths_digest": None, "workspace_digests": None, "fingerprint_ref": None, "fingerprint_digest": None, "impact_plan_ref": None, "impact_plan_digest": None},
+            candidate_evidence_identity=_cli._review_context_manifest.empty_candidate_identity(),
             terminal={"status": "READY", "codes": [], "failed_evidence": []},
             changed_paths=["README.md"],
             profiles=[],
@@ -694,7 +581,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
                 previous_plan=initial,
             )
         self.assertEqual(
-            "REVIEW.OWNER_MANIFEST_SCOPE_MISMATCH",
+            "REVIEW.NEW_REVIEW_REQUIRED",
             changed_scope.exception.code,
         )
 
@@ -815,7 +702,6 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
         self.assertEqual(len(raw), long_finding["assembled_input_byte_count"])
         self.assertEqual(sha256_digest(raw), long_finding["assembled_input_digest"])
         identity = long_finding["assembled_input"]["identity"]
-        self.assertEqual(plan["owner_identity"], identity["owner_identity"])
         self.assertEqual(
             plan["candidate_evidence_identity"],
             identity["candidate_evidence_identity"],
@@ -833,7 +719,7 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
             )
         self.assertEqual("REVIEW.CONTEXT_BUDGET_EXCEEDED", blocked.exception.code)
 
-    def test_plan_fields_context_budget_and_old_cli_arguments_remain_supported(self) -> None:
+    def test_plan_fields_context_budget_and_cli_candidate_contract(self) -> None:
         plan = _plan("dev", "POST", ["README.md"])
         required_fields = {
             "contexts",
@@ -867,119 +753,30 @@ class ReviewDispatchBoundedAssemblyTest(unittest.TestCase):
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertEqual(5, json.loads(result.stdout)["schema_version"])
 
-    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t3
-    def test_post_requires_current_owner_manifest_and_matches_scope(self) -> None:
+    def test_post_requires_candidate_and_rejects_stale_candidate(self) -> None:
         with self.assertRaises(_cli.ReviewDispatchError) as missing:
             _cli.build_plan(_registry, "dev", "POST", None, ["README.md"])
-        self.assertEqual("REVIEW.OWNER_MANIFEST_REQUIRED", missing.exception.code)
+        self.assertEqual("IDENTITY.MIGRATION_REQUIRED", missing.exception.code)
 
-        manifest = _context_manifest(
-            {"path": "README.md", "anchor": None, "kind": "spec"}
-        )
-        with self.assertRaises(_cli.ReviewDispatchError) as mismatch:
-            _plan(
-                "dev",
-                "POST",
-                ["README.md"],
-                scope="AGENTS.md",
-                context_manifest=manifest,
-            )
-        self.assertEqual(
-            "REVIEW.OWNER_MANIFEST_SCOPE_MISMATCH", mismatch.exception.code
-        )
-
-
-    def test_plan_identity_binds_owner_manifest_and_terminal(self) -> None:
-        manifest = _context_manifest(
-            {"path": "README.md", "anchor": None, "kind": "spec"}
-        )
-        plan = _plan("dev", "POST", ["README.md"], context_manifest=manifest)
-        identity = plan["owner_identity"]
-        self.assertEqual(manifest["target"], identity["target"])
-        self.assertEqual(
-            manifest["evidence_fingerprint"]["digest"],
-            identity["fingerprint_digest"],
-        )
-        terminal_mutation = json.loads(json.dumps(plan))
-        terminal_mutation["terminal"] = {
-            "status": "GATE_BLOCK",
-            "codes": ["REVIEW.CANCELLED"],
-            "failed_evidence": [],
-        }
-        with self.assertRaises(_cli.ReviewDispatchError) as blocked:
-            _cli.validate_current_review_plan(
-                terminal_mutation, _registry, phase="evidence"
-            )
-        self.assertEqual("REVIEW.TERMINAL_CONTRACT_INVALID", blocked.exception.code)
-
-    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t4
-    def test_owner_manifest_ref_replacement_is_stale(self) -> None:
-        manifest = _context_manifest()
-        plan = _plan("dev", "POST", ["README.md"], context_manifest=manifest)
-        ref = _REPO_ROOT / plan["owner_identity"]["ref"]
-        original = ref.read_text(encoding="utf-8")
+        plan = _plan("dev", "POST", ["README.md"])
+        ref = _REPO_ROOT / plan["candidate_evidence_identity"]["ref"]
+        original = ref.read_bytes()
         try:
-            ref.write_text(original + " ", encoding="utf-8")
+            ref.write_bytes(original + b" ")
             with self.assertRaises(_cli.ReviewDispatchError) as stale:
                 _cli.validate_current_review_plan(plan, _registry)
-            self.assertEqual("IDENTITY.MIGRATION_REQUIRED", stale.exception.code)
+            self.assertEqual("CANDIDATE.STALE", stale.exception.code)
         finally:
-            ref.write_text(original, encoding="utf-8")
+            ref.write_bytes(original)
 
-    def test_plan_and_revalidation_share_owner_manifest_reader(self) -> None:
-        manifest = _context_manifest()
-        ref = _MANIFEST_REFS[id(manifest)]
-        raw = (_REPO_ROOT / ref).read_bytes()
-        identity = {
-            "ref": ref,
-            "canonical_bytes_sha256": "sha256:"
-            + hashlib.sha256(raw).hexdigest(),
-            "target": manifest["target"],
-            "scope": manifest["target"],
-            "resolved_owner": manifest["resolved_owner"],
-            "fingerprint_ref": manifest["evidence_fingerprint"]["ref"],
-            "fingerprint_digest": manifest["evidence_fingerprint"]["digest"],
-        }
-        with (
-            mock.patch.object(
-                _cli,
-                "_read_owner_manifest_exact_bytes",
-                wraps=_cli._read_owner_manifest_exact_bytes,
-            ) as reader,
-            mock.patch.object(_cli, "validate_feature_context_manifest"),
-            mock.patch.object(
-                _cli, "validate_current_feature_context_fingerprint"
-            ),
-        ):
-            candidate = build_candidate_evidence(ref, [str(manifest["target"])], repo_root=_REPO_ROOT)
-            candidate_raw = canonical_json_bytes(candidate)
-            candidate_path = _REPO_ROOT / ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/candidates/by-fingerprint" / (hashlib.sha256(candidate_raw).hexdigest() + ".json")
-            candidate_path.parent.mkdir(parents=True, exist_ok=True)
-            candidate_path.write_bytes(candidate_raw)
-            _cli._normalize_contexts(
-                manifest,
-                manifest_ref=ref,
-                candidate_evidence_ref=candidate_path.relative_to(_REPO_ROOT).as_posix(),
-                changed_paths=[str(manifest["target"])],
-                expected_scope=str(manifest["target"]),
-                required=True,
-            )
-            self.assertEqual(1, reader.call_count)
-
-            from lib.feature_tree import commands as feature_tree_commands
-            from lib.feature_tree import ownership as feature_tree_ownership
-
-            _relative, candidate_bytes, candidate_payload, candidate_fp = _cli._review_owner_manifest.validate_candidate_ref(
-                candidate_path.relative_to(_REPO_ROOT).as_posix(), repo_root=_REPO_ROOT
-            )
-            candidate_identity = _cli._review_owner_manifest.candidate_identity(
-                candidate_path.relative_to(_REPO_ROOT).as_posix(), candidate_bytes, candidate_payload, candidate_fp
-            )
-            _cli._validate_current_owner_manifest({
-                "owner_identity": identity, "candidate_evidence_identity": candidate_identity,
-                "scope": manifest["target"], "changed_paths": [manifest["target"]],
-            })
-            self.assertEqual(2, reader.call_count)
+    def test_plan_identity_binds_candidate_and_terminal(self) -> None:
+        plan = _plan("dev", "POST", ["README.md"])
+        self.assertTrue(plan["candidate_evidence_identity"]["ref"])
+        terminal_mutation = json.loads(json.dumps(plan))
+        terminal_mutation["terminal"] = {"status": "GATE_BLOCK", "codes": ["REVIEW.CANCELLED"], "failed_evidence": []}
+        with self.assertRaises(_cli.ReviewDispatchError) as blocked:
+            _cli.validate_current_review_plan(terminal_mutation, _registry, phase="evidence")
+        self.assertEqual("REVIEW.TERMINAL_CONTRACT_INVALID", blocked.exception.code)
 
     def test_control_workflow_cannot_wrap_delivery_deliverable(self) -> None:
         with self.assertRaises(_cli.ReviewDispatchError) as forbidden:

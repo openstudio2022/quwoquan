@@ -6,6 +6,20 @@ description: 'UserProfile 实体端侧 UI 可配置项声明。
   端侧个人主页通过 UserProfileUIConfig 消费配置，消除主页 Tab/子筛选硬编码。
 
   '
+# ContentUiSurface 的布局策略（DEC-003）。本文件只拥有个人主页「记录」作品格这一个面。
+# mine / other 是 viewer 模式，不是两种 Surface；compact 2 列是现网 AppSpacing.gridMinColumns
+# 的收口，不改变产品数值。该面 chrome 由自身声明，不消费首页的 presentationRecipe。
+surface_layout_policies:
+- surface: profile_works
+  layout_kind: responsive_grid
+  compact_columns: 2
+  chrome_family: preview_grid_card
+  recipe_driven_chrome: false
+  responsive_grid:
+    expanded_breakpoint_dp: 600
+    min_columns: 2
+    max_columns: 4
+    ideal_column_width_dp: 220
 header_layout:
   base_height_ratio: 0.25
   max_stretch_height_ratio: 0.333

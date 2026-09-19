@@ -626,7 +626,7 @@ def validate_contract(value: object) -> None:
     audit_terms = _string_list(interaction.get("audit_only_internal_terms"), "RoleInteractionEnvelope.audit_only_internal_terms")
     required_audit_terms = {
         "digest", "cas", "gate_block", "typed_blocker", "fingerprint",
-        "owner_manifest", "receipt", "readback", "exact_byte", "sha",
+        "receipt", "readback", "exact_byte", "sha",
         "internal_absolute_path", "internal_command", "internal_tool_name",
     }
     if set(audit_terms) != required_audit_terms:

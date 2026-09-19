@@ -48,15 +48,6 @@ extension _CreatePageStateMediaHelpers on _CreatePageState {
     if (!mounted) return;
     state = ref.read(createEditorProvider);
     final confirmedSettings = state.settings;
-    // GWT-001 fail-closed：文字发布的最终形态必须来自确认页固化的确认值，
-    // 提交阶段不得再次静默推导。确认页 initState 恒固化建议值，此处为
-    // 合同防线而非可达分支。
-    if (state.editorKind == CreateEditorKind.text &&
-        confirmedSettings.textContentType.trim().isEmpty) {
-      throw StateError(
-        'text publication requires explicit content form confirmation',
-      );
-    }
     final publishState = state.copyWith(settings: confirmedSettings);
     final expectedContentType =
         buildPostPublicationPayloadMap(

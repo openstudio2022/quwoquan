@@ -27,7 +27,6 @@ type PostPublicationCommandFacade interface {
 
 type PostLifecycleCommandFacade interface {
 	UpdatePostSettings(context.Context, string, string, map[string]any) (*postmodel.Post, error)
-	PromotePostToWork(context.Context, string, string, map[string]any) (*postmodel.Post, error)
 	DeletePost(context.Context, string, string) (PostDeletionReceipt, error)
 }
 

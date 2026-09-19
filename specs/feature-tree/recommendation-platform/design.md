@@ -27,7 +27,7 @@
 - [`evaluation-and-flywheel`](./evaluation-and-flywheel/spec.md)：推荐准确性评估、在线 AB 和真实流量训练晋升闭环。
 - [`rec-model-service`](./rec-model-service/spec.md)：**定位**：推荐平台下的模型推理服务，装载不同 scenario 的模型，对接 Go 业务服务（content-service 等）提供统一打分能力。
 - [`rec-model-training`](./rec-model-training/spec.md)：**定位**：推荐平台下的训练工程服务，对接不同模型训练场景（content_feed / circle_discovery / friend_suggestion），产出模型与元信息写入 ModelRegistry + OSS/TOS，供模型服务加载。
-- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
+- Feature 层表达业务与设计边界；工程影响由 current actual diff 与 dependency closure 推导。
 
 ## 5. 关键决策
 

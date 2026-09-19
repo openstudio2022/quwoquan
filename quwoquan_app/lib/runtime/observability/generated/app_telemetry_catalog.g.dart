@@ -154,7 +154,7 @@ abstract final class AppTelemetryValueChatSource {
   };
 }
 
-abstract final class AppTelemetryValueContentIdentityOutcome {
+abstract final class AppTelemetryValueContentReleaseIdentityOutcome {
   static const String bound = "bound";
   static const String absent = "absent";
   static const String protocolFailure = "protocol_failure";
@@ -168,18 +168,11 @@ abstract final class AppTelemetryValueContentIdentityOutcome {
 }
 
 abstract final class AppTelemetryValueContentType {
-  static const String micro = "micro";
   static const String article = "article";
   static const String image = "image";
   static const String video = "video";
   static const String unknown = "unknown";
-  static const Set<String> values = <String>{
-    micro,
-    article,
-    image,
-    video,
-    unknown,
-  };
+  static const Set<String> values = <String>{article, image, video, unknown};
 }
 
 abstract final class AppTelemetryValueDecoderQueueMode {
@@ -659,7 +652,7 @@ class AppTelemetryPayload {
     String? buildNumber,
     String? launchManifestDigest,
     String? terminalState,
-    String? contentIdentityOutcome,
+    String? contentReleaseIdentityOutcome,
   }) {
     return AppTelemetryPayload._('app_startup', 'event', <String, Object?>{
       'tClickToFirstFrameMs': tClickToFirstFrameMs,
@@ -675,8 +668,8 @@ class AppTelemetryPayload {
       if (launchManifestDigest != null)
         'launchManifestDigest': launchManifestDigest,
       if (terminalState != null) 'terminalState': terminalState,
-      if (contentIdentityOutcome != null)
-        'contentIdentityOutcome': contentIdentityOutcome,
+      if (contentReleaseIdentityOutcome != null)
+        'contentReleaseIdentityOutcome': contentReleaseIdentityOutcome,
     });
   }
 
@@ -1484,7 +1477,7 @@ abstract final class AppTelemetryCatalog {
         'buildNumber',
         'launchManifestDigest',
         'terminalState',
-        'contentIdentityOutcome',
+        'contentReleaseIdentityOutcome',
       },
       normalSampleRate: 1,
       slowThresholdMs: 3000,
@@ -1940,43 +1933,45 @@ abstract final class AppTelemetryCatalog {
     ),
   };
 
-  static const Map<String, Set<String>>
-  extensionEnumValues = <String, Set<String>>{
-    "backgroundRetryTerminal": AppTelemetryValueBackgroundRetryTerminal.values,
-    "buildMode": AppTelemetryValueBuildMode.values,
-    "cacheAgeBucket": AppTelemetryValueCacheAgeBucket.values,
-    "cacheSource": AppTelemetryValueCacheSource.values,
-    "callType": AppTelemetryValueCallType.values,
-    "catalogSource": AppTelemetryValueCatalogSource.values,
-    "chatAction": AppTelemetryValueChatAction.values,
-    "chatOutcome": AppTelemetryValueChatOutcome.values,
-    "chatSource": AppTelemetryValueChatSource.values,
-    "contentIdentityOutcome": AppTelemetryValueContentIdentityOutcome.values,
-    "contentType": AppTelemetryValueContentType.values,
-    "decoderQueueMode": AppTelemetryValueDecoderQueueMode.values,
-    "detectionSource": AppTelemetryValueDetectionSource.values,
-    "devicePlatform": AppTelemetryValueDevicePlatform.values,
-    "distributionClass": AppTelemetryValueDistributionClass.values,
-    "environment": AppTelemetryValueEnvironment.values,
-    "governanceAction": AppTelemetryValueGovernanceAction.values,
-    "mediaFailureKind": AppTelemetryValueMediaFailureKind.values,
-    "mediaType": AppTelemetryValueMediaType.values,
-    "memberCountBucket": AppTelemetryValueMemberCountBucket.values,
-    "mentionScope": AppTelemetryValueMentionScope.values,
-    "networkQuality": AppTelemetryValueNetworkQuality.values,
-    "objectState": AppTelemetryValueObjectState.values,
-    "publicationStage": AppTelemetryValuePublicationStage.values,
-    "rendererMode": AppTelemetryValueRendererMode.values,
-    "resourceKind": AppTelemetryValueResourceKind.values,
-    "resourceProfile": AppTelemetryValueResourceProfile.values,
-    "seekEvidenceSource": AppTelemetryValueSeekEvidenceSource.values,
-    "terminalState": AppTelemetryValueTerminalState.values,
-    "transport": AppTelemetryValueTransport.values,
-    "turnAction": AppTelemetryValueTurnAction.values,
-    "unreadCountBucket": AppTelemetryValueUnreadCountBucket.values,
-    "userScene": AppTelemetryValueUserScene.values,
-    "watermarkResult": AppTelemetryValueWatermarkResult.values,
-  };
+  static const Map<String, Set<String>> extensionEnumValues =
+      <String, Set<String>>{
+        "backgroundRetryTerminal":
+            AppTelemetryValueBackgroundRetryTerminal.values,
+        "buildMode": AppTelemetryValueBuildMode.values,
+        "cacheAgeBucket": AppTelemetryValueCacheAgeBucket.values,
+        "cacheSource": AppTelemetryValueCacheSource.values,
+        "callType": AppTelemetryValueCallType.values,
+        "catalogSource": AppTelemetryValueCatalogSource.values,
+        "chatAction": AppTelemetryValueChatAction.values,
+        "chatOutcome": AppTelemetryValueChatOutcome.values,
+        "chatSource": AppTelemetryValueChatSource.values,
+        "contentReleaseIdentityOutcome":
+            AppTelemetryValueContentReleaseIdentityOutcome.values,
+        "contentType": AppTelemetryValueContentType.values,
+        "decoderQueueMode": AppTelemetryValueDecoderQueueMode.values,
+        "detectionSource": AppTelemetryValueDetectionSource.values,
+        "devicePlatform": AppTelemetryValueDevicePlatform.values,
+        "distributionClass": AppTelemetryValueDistributionClass.values,
+        "environment": AppTelemetryValueEnvironment.values,
+        "governanceAction": AppTelemetryValueGovernanceAction.values,
+        "mediaFailureKind": AppTelemetryValueMediaFailureKind.values,
+        "mediaType": AppTelemetryValueMediaType.values,
+        "memberCountBucket": AppTelemetryValueMemberCountBucket.values,
+        "mentionScope": AppTelemetryValueMentionScope.values,
+        "networkQuality": AppTelemetryValueNetworkQuality.values,
+        "objectState": AppTelemetryValueObjectState.values,
+        "publicationStage": AppTelemetryValuePublicationStage.values,
+        "rendererMode": AppTelemetryValueRendererMode.values,
+        "resourceKind": AppTelemetryValueResourceKind.values,
+        "resourceProfile": AppTelemetryValueResourceProfile.values,
+        "seekEvidenceSource": AppTelemetryValueSeekEvidenceSource.values,
+        "terminalState": AppTelemetryValueTerminalState.values,
+        "transport": AppTelemetryValueTransport.values,
+        "turnAction": AppTelemetryValueTurnAction.values,
+        "unreadCountBucket": AppTelemetryValueUnreadCountBucket.values,
+        "userScene": AppTelemetryValueUserScene.values,
+        "watermarkResult": AppTelemetryValueWatermarkResult.values,
+      };
 
   static String? validate(AppTelemetryPayload payload) {
     final definition = events[payload.eventType];

@@ -645,22 +645,14 @@ def _source_facts(repo: Path, head: str, paths: list[str], policy: dict[str, Any
             generated_classification_report(classification_policy, paths))
 
 
-def _attach_owner_evidence(modules: dict, measurement: dict) -> None:
-    if measurement["status"] != "supplied-unverified":
-        return
-    owners = measurement["evidence"].get("modules", {})
-    if not isinstance(owners, dict):
-        return
-    for scope, row in modules.items():
-        evidence = owners.get(scope)
-        if isinstance(evidence, dict) and evidence.get("ownerIdentityRef") and evidence.get("resolvedOwner"):
-            row["owner"] = {"status": "supplied-unverified", "authority": "none",
-                            "reason": "owner-ref-not-resolved-or-verified", "suppliedEvidence": evidence}
+def _attach_scope_evidence(modules: dict, measurement: dict) -> None:
+    """Path scope evidence is advisory and never a Feature authority."""
+    return
 
 
 def _measurement_states(supplied: dict, head: str, mode: str, complexity: dict) -> dict:
     result = {name: _optional_evidence(supplied.get(name), head)
-              for name in ("coverage", "architecture", "reachability", "owner")}
+              for name in ("coverage", "architecture", "reachability", "scope")}
     for name in ("duplication", "hotspots", "complexity"):
         result[name] = {"status": "unavailable" if mode == "fast" else "available",
                         "reason": "fast-not-measured" if mode == "fast" else "builtin-observation"}
@@ -725,7 +717,7 @@ def analyze_weekly(
     dead_candidates: list[dict[str, str]] = []
     supplied = existing_evidence or {}
     measurements = _measurement_states(supplied, head_sha, mode, complexity)
-    _attach_owner_evidence(aggregates["modules"], measurements["owner"])
+    _attach_scope_evidence(aggregates["modules"], measurements["owner"])
     for fact in file_facts:
         fact["complexity"] = complexity.get(fact["path"], {"status": "unavailable", "reason": "fast-or-nonproduction-not-measured"})
     window = {"start": start.isoformat(timespec="seconds"), "end": end.isoformat(timespec="seconds"), "days": 90}

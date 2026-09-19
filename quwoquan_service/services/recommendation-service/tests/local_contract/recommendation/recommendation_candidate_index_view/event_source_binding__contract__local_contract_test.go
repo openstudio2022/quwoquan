@@ -15,7 +15,7 @@ func TestRecommendationCandidateProjectionDeclaresProductionConsumers(t *testing
 	object, operations := readCandidateBindings(t)
 	wantEvents := []string{
 		"content.post.PostPublished", "content.post.PostUpdated",
-		"content.post.PostSettingsUpdated", "content.post.PostPromotedToWork",
+		"content.post.PostSettingsUpdated",
 		"content.post.PostDeleted", "content.post.PostPrivacyRedacted", "content.post.PostPurged",
 		"ops.premium_pool_entry.PremiumPoolEntryUpserted",
 		"ops.premium_pool_entry.PremiumPoolEntryRolledBack",

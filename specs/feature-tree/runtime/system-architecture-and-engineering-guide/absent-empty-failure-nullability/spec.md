@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：不直接参与用户 Journey；为所有 Scenario 提供「结果状态不被伪装」的端云表达基线
 >
-> 设计归属：[L2 DEC-025](../design.md#dec-025)
+> 设计引用：[L2 DEC-025](../design.md#dec-025)
 
 ## 1. 用户价值
 

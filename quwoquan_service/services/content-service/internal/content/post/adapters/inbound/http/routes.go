@@ -251,8 +251,6 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 				true,
 			)
 		})
-	case "PromotePostToWork":
-		h.handlePromotePostToWork(w, r)
 	case "ReactToComment":
 		h.dispatchContentReaction(w, r, func(handler contentReactionHTTPHandler) {
 			handler.ReactToComment(w, r, strings.TrimSpace(r.PathValue("commentId")))
@@ -507,4 +505,18 @@ func BindGeneratedGetFeedParams(r *http.Request) (GeneratedGetFeedParams, error)
 
 func BindGeneratedRequestBodyFromRequest(r *http.Request, operation string) (map[string]any, error) {
 	return posttransport.BindGeneratedRequestBodyFromRequest(r, operation)
+}
+
+// GetPost 与 ListUserPosts 没有生成聚合 Params 结构，能力声明的 typed JSON query
+// binder 单独在这里转出：每个 operation 各自声明闭集与字节上限，不共用一个 binder。
+func BindGeneratedGetPostClientPresentationContractQuery(
+	r *http.Request,
+) (*posttransport.GeneratedGetPostClientPresentationContractQuery, error) {
+	return posttransport.BindGeneratedGetPostClientPresentationContractQuery(r)
+}
+
+func BindGeneratedListUserPostsClientPresentationContractQuery(
+	r *http.Request,
+) (*posttransport.GeneratedListUserPostsClientPresentationContractQuery, error) {
+	return posttransport.BindGeneratedListUserPostsClientPresentationContractQuery(r)
 }

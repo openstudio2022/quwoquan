@@ -66,29 +66,15 @@ enum SearchObjectTarget {
 enum SearchContentTypeFilter {
   article,
   image,
-  video,
-  micro;
+  video;
 
   String get wireValue => switch (this) {
     SearchContentTypeFilter.article => 'article',
     SearchContentTypeFilter.image => 'image',
     SearchContentTypeFilter.video => 'video',
-    SearchContentTypeFilter.micro => 'micro',
   };
 
-  String get identity => switch (this) {
-    SearchContentTypeFilter.micro => 'moment',
-    SearchContentTypeFilter.article ||
-    SearchContentTypeFilter.image ||
-    SearchContentTypeFilter.video => 'work',
-  };
-
-  String get contentType => switch (this) {
-    SearchContentTypeFilter.article => 'article',
-    SearchContentTypeFilter.image => 'image',
-    SearchContentTypeFilter.video => 'video',
-    SearchContentTypeFilter.micro => 'micro',
-  };
+  String get contentType => wireValue;
 
   static SearchContentTypeFilter? fromWire(String raw) {
     switch (raw.trim()) {
@@ -98,8 +84,6 @@ enum SearchContentTypeFilter {
         return SearchContentTypeFilter.image;
       case 'video':
         return SearchContentTypeFilter.video;
-      case 'micro':
-        return SearchContentTypeFilter.micro;
       default:
         return null;
     }

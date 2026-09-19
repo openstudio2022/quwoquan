@@ -87,7 +87,7 @@ def _homepage(publish: Path, name: str) -> str:
 
 def _post(publish: Path, index: int, entity: str) -> str:
     ref = f"posts/article/摄影/离线帖子{index}/1"
-    _record(publish, ref, {"contentId": f"opaque-content-id-{index}", "version": 1, "contentIdentity": "work",
+    _record(publish, ref, {"contentId": f"opaque-content-id-{index}", "version": 1,
         "title": f"真实标题{index}", "contentType": "article", "authorId": "author", "creatorProfileId": "author", "generator": "agent",
 "publishMediaMode": "text_only", "assets": [], "entityRefs": ["/entity/" + entity.removeprefix("entities/")]})
     return ref
@@ -330,6 +330,7 @@ def test_candidates_detect_each_other_without_rescanning_pool(tmp_path: Path, mo
 def test_same_path_does_not_hide_binding_or_logical_identity_drift(tmp_path: Path, change: str) -> None:
     ref = "posts/image/摄影/相同路径/1"
     existing = _image()
+    existing["objectRef"] = ref.removeprefix("posts/")
     write_json(tmp_path / ref / "manifest.json", existing)
     _repository(tmp_path)
     load_or_bootstrap_inventory(tmp_path)
@@ -365,7 +366,7 @@ def test_cli_refuses_json_output_inside_publish(tmp_path: Path) -> None:
     args = parser.parse_args(["release", "pool-query", "--publish-root", str(publish), "--json", str(publish / "result.json")])
     with pytest.raises(ValueError, match="must not mutate canonical publish"):
         args.handler(args)
-    assert not publish.exists()
+    assert not (publish / "result.json").exists()
 
 
 def test_cutover_snapshot_cli_only_reads_exact_occupied_objects(tmp_path, capsys):

@@ -10,7 +10,13 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.dont_write_bytecode = True
+
 ROOT = Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from quwoquan_ops.ci.impact_planner_core import contract_closure_impacted  # noqa: E402
 APP_TEST_ROOT = ROOT / "quwoquan_app" / "test" / "local_contract"
 
 DEFAULT_FLUTTER_CAP = 40
@@ -162,6 +168,7 @@ def classify(paths: list[str]) -> dict[str, bool]:
         "has_app_uat_widget_keys": False,
         "has_workflows": False,
         "has_workflow_actionlint": False,
+        "has_contract_closure": False,
     }
     for path in paths:
         if path in NON_COMMIT_GATE_DOCUMENTS:
@@ -216,6 +223,7 @@ def classify(paths: list[str]) -> dict[str, bool]:
             path.startswith(prefix) for prefix in UAT_WIDGET_KEY_PREFIXES
         ):
             flags["has_app_uat_widget_keys"] = True
+    flags["has_contract_closure"] = contract_closure_impacted(paths)
     return flags
 
 
@@ -250,6 +258,8 @@ def static_checks(flags: dict[str, bool], paths: list[str] | None = None) -> lis
         checks.extend(SMOKE_STATIC)
     if flags["has_contracts"]:
         checks.extend(["metadata_contract", "commercial_contract"])
+    if flags["has_contract_closure"]:
+        checks.append("contract_closure")
     if flags["has_app_uat_widget_keys"]:
         checks.append("app_uat_widget_key_references")
     if flags["has_pageflip"]:
@@ -484,6 +494,13 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
                 "test_commit_gate_select__local_contract_test.py",
                 "quwoquan_ops/tests/local_contract/gate/"
                 "test_process_group_deadline__local_contract_test.py",
+            ),
+        ),
+        (
+            "quwoquan_data/scripts/verify/verify_contract_closure.py",
+            (
+                "quwoquan_data/tests/local_contract/core/"
+                "test_contract_closure__bidirectional__contract__local_contract_test.py",
             ),
         ),
         (

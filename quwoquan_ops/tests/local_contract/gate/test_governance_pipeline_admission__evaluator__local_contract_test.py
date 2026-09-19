@@ -191,7 +191,7 @@ def test_governance_accepts_only_human_owned_v2_without_shadow_role_schema() -> 
 @pytest.mark.parametrize(("field", "blocker"), [("schema_valid", "EVIDENCE_SCHEMA_INVALID"), ("fresh", "EVIDENCE_STALE"), ("fingerprint_match", "EVIDENCE_FINGERPRINT_MISMATCH")])
 def test_schema_stale_and_fingerprint_mismatch_block_first(field: str, blocker: str) -> None:
     payload = complete_input()
-    payload["evidence"]["owner_manifest"][field] = False
+    payload["evidence"]["local_scope_ready"][field] = False
     payload["evidence"]["review_terminal"]["result"] = "READY"
     result = inspect(payload)
     assert result["status"] == "blocked"
@@ -219,15 +219,6 @@ def test_required_hosted_source_absent_is_structural_blocked() -> None:
     result = inspect(payload)
     assert result["status"] == "blocked"
     assert result["blockers"][0] == "REQUIRED_CODE_EVIDENCE_ABSENT"
-
-
-def test_missing_owner_manifest_is_not_admitted_with_exact_blocker() -> None:
-    payload = complete_input()
-    payload["evidence"]["owner_manifest"] = readback("absent", layer="owner_manifest", status="absent", provider_kind="absent", release=False, receipt_ref=None, receipt_bytes_sha256=None, provider_timestamp=None, candidate_id=None, scope_id=None, verifier_id=None)
-    result = inspect(payload)
-    assert result["status"] == "not_admitted"
-    assert "OWNER_MANIFEST_MISSING" in result["blockers"]
-    assert_safe(result)
 
 
 def test_objective_blocked_readback_is_typed_and_concurrency_zero(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -178,6 +178,8 @@ type requestBindingDocument struct {
 	Name     string `yaml:"name"`
 	Field    string `yaml:"field"`
 	Required *bool  `yaml:"required"`
+	Encoding string `yaml:"encoding"`
+	MaxBytes int    `yaml:"max_bytes"`
 }
 
 type requestConstantsDocument struct {
@@ -566,6 +568,8 @@ func normalizeRequestBindings(values []requestBindingDocument) []ast.RequestBind
 			Name:     strings.TrimSpace(value.Name),
 			Field:    strings.TrimSpace(value.Field),
 			Required: value.Required,
+			Encoding: strings.TrimSpace(value.Encoding),
+			MaxBytes: value.MaxBytes,
 		})
 	}
 	return result

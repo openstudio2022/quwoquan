@@ -115,8 +115,17 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             sandbox_app = sandbox / "quwoquan_app"
             (sandbox / ".git").mkdir(parents=True)
             (sandbox_app / "scripts/device").mkdir(parents=True)
-            for relative in ("run.sh", "scripts/device/dev_launch.sh", "pubspec.yaml", "pubspec.lock", ".flutter-version"):
-                shutil.copy2(APP_DIR / relative, sandbox_app / relative)
+            for relative in (
+                "run.sh",
+                "scripts/device/dev_launch.sh",
+                "scripts/device/app_source_isolation.py",
+                "pubspec.yaml",
+                "pubspec.lock",
+                ".flutter-version",
+            ):
+                destination = sandbox_app / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(APP_DIR / relative, destination)
             (sandbox_app / "scripts/tools").mkdir(parents=True)
             shutil.copytree(APP_DIR / "scripts/tools/flutter_facade",
                             sandbox_app / "scripts/tools/flutter_facade")
@@ -182,7 +191,7 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
             # acquire/bind/release 编排仍执行生产实现。不接触宿主 runtime authority。
             bridge = temp_root / "python_bridge.py"
             bridge.write_text(
-                "import contextlib, json, os, runpy, sys\n"
+                "import contextlib, json, os, runpy, shutil, sys\n"
                 "from pathlib import Path\n"
                 "from unittest.mock import patch\n"
                 f"sys.path[:0] = {[str(ROOT), str(APP_DIR / 'scripts/device'), str(APP_DIR / 'test/support/runtime/launcher')]!r}\n"
@@ -214,7 +223,12 @@ class LocalRuntimeConsumerLeaseTest(unittest.TestCase):
                 "    patches.enter_context(patch.object(leases, 'selected_device_lock', return_value=contextlib.nullcontext()))\n"
                 "    patches.enter_context(patch.object(leases, 'consumer_action', side_effect=consumer))\n"
                 "    patches.enter_context(patch.object(executor, 'main', side_effect=execute))\n"
-                "    if arguments[0].endswith('/build_launcher_handoff.py'):\n"
+                "    if arguments[0].endswith('/app_source_isolation.py'):\n"
+                "        source = Path(arguments[arguments.index('--repository') + 1])\n"
+                "        destination = Path(arguments[arguments.index('--destination') + 1])\n"
+                "        shutil.copytree(source, destination, ignore=shutil.ignore_patterns('.git'))\n"
+                "        print(json.dumps({'status': 'projected'}))\n"
+                "    elif arguments[0].endswith('/build_launcher_handoff.py'):\n"
                 "        args = builder._parser(builder.load_launch_manifest_contract()).parse_args(arguments[1:])\n"
                 "        with temporary_launcher_package(args.env, args.target) as package:\n"
                 "            patches.enter_context(patch.object(builder, '_runtime_config_trust_envelope', return_value=package.runtime_config_trust_envelope))\n"

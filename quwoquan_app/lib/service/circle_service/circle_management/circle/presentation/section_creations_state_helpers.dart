@@ -18,8 +18,7 @@ extension _SectionCreationsStateHelpers on _SectionCreationsState {
         ref,
         CircleFeedQuery(
           circleId: widget.circleId,
-          identity: query.identity,
-          type: query.type,
+          type: query?.wireName,
           sort: circleState.sortMode.name,
         ),
       );
@@ -86,8 +85,7 @@ extension _SectionCreationsStateHelpers on _SectionCreationsState {
         ref,
         CircleFeedQuery(
           circleId: widget.circleId,
-          identity: query.identity,
-          type: query.type,
+          type: query?.wireName,
           sort: circleState.sortMode.name,
           cursor: cursor,
         ),
@@ -179,7 +177,7 @@ extension _SectionCreationsStateHelpers on _SectionCreationsState {
 
     final activeSubTab = circleState.activeSubTab;
     final filtered = _feedEntries
-        .where((entry) => _matchesIdentityFilter(entry, activeSubTab))
+        .where((entry) => _matchesContentTypeFilter(entry, activeSubTab))
         .toList(growable: true);
 
     if (activeSubTab == CircleCreationSubTab.article) {

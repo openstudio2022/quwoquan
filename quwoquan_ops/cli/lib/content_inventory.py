@@ -274,8 +274,7 @@ class _Inventory:
         detail["sampleSize"] = len(chosen)
         for post_id, carrier in chosen:
             payload = self.get("content/posts/" + quote(post_id, safe=""))
-            if (payload.get("postId") != post_id or payload.get("contentType") != carrier
-                    or payload.get("contentIdentity") != "work"):
+            if payload.get("postId") != post_id or payload.get("contentType") != carrier:
                 raise InventoryBlocker("post_detail_mismatch")
             self.media(payload)
             detail["observedCount"] = (detail["observedCount"] or 0) + 1

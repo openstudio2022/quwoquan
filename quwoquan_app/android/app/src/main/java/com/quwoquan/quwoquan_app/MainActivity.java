@@ -67,7 +67,6 @@ public class MainActivity extends FlutterFragmentActivity {
   private CellularNetworkProbePlugin cellularNetworkProbePlugin;
   private AssistantDeviceActionPlugin assistantDeviceActionPlugin;
   private VideoEditingBridgePlugin videoEditingBridgePlugin;
-  private SmsRetrieverOtpPlugin smsRetrieverOtpPlugin;
   private RecoveryFailureEncryptedStore recoveryFailureEncryptedStore;
   private ScheduledFuture<?> flutterFirstFrameWatchdog;
   private FlutterEngine startupFlutterEngine;
@@ -137,8 +136,6 @@ public class MainActivity extends FlutterFragmentActivity {
     // 由应用自有注册器明确装配启动必需插件；GeneratedPluginRegistrant 保持 Flutter
     // 原样生成且不参与此引擎装配，重插件继续由 StartupDeferredPluginRegistry 按需注册。
     StartupEagerPluginRegistry.registerWith(flutterEngine);
-    smsRetrieverOtpPlugin =
-        new SmsRetrieverOtpPlugin(getApplicationContext(), flutterEngine);
     IncomingCallNativeBridgePlugin.register(flutterEngine);
     new MethodChannel(
             flutterEngine.getDartExecutor().getBinaryMessenger(),
@@ -715,10 +712,6 @@ public class MainActivity extends FlutterFragmentActivity {
     flutterUiDisplayListener = null;
     if (cellularNetworkProbePlugin != null) {
       cellularNetworkProbePlugin.dispose();
-    }
-    if (smsRetrieverOtpPlugin != null) {
-      smsRetrieverOtpPlugin.stop();
-      smsRetrieverOtpPlugin = null;
     }
     startupWatchdogExecutor.shutdownNow();
     super.onDestroy();

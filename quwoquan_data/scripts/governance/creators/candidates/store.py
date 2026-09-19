@@ -260,6 +260,7 @@ class CandidateRepository:
             "toStatus": target_status,
             "reviewedAt": timestamp,
         }
+        assert_valid(review_record, "governance", "review", label=self.review_path(candidate_id).as_posix())
         _append_ndjson(self.review_path(candidate_id), review_record)
 
         if target_status != previous_status:
@@ -340,9 +341,7 @@ class CandidateRepository:
             )
         )
         event_id = "backfill_" + hashlib.sha256(identity.encode("utf-8")).hexdigest()[:24]
-        _append_ndjson(
-            self.backfill_path,
-            {
+        event = {
                 "schema": "quwoquan_data.governance_backfill_event",
                 "eventId": event_id,
                 "eventType": "governance.candidate.backfill_requested",
@@ -354,8 +353,9 @@ class CandidateRepository:
                 "mentionIds": candidate.get("mentionIds") or [],
                 "approvedBy": review_record.get("reviewer"),
                 "approvedAt": review_record.get("reviewedAt"),
-            },
-        )
+            }
+        assert_valid(event, "governance", "backfill_event", label=self.backfill_path.as_posix())
+        _append_ndjson(self.backfill_path, event)
 
 
 __all__ = ["CandidateRepository", "candidate_id_for"]

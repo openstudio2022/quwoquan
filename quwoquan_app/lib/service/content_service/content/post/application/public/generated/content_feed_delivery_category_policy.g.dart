@@ -6,10 +6,7 @@ abstract final class ContentFeedDeliveryCategoryPolicy {
 
   static const Map<String, String> requestTypeByCategory = <String, String>{
     'article': 'article',
-    'following': 'micro',
     'images': 'image',
-    'micro': 'micro',
-    'recommended': 'micro',
     'video': 'video',
   };
 }

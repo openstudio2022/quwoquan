@@ -255,11 +255,11 @@ metrics:
     portal_level: L1
     label: 点击到内容 P95
   freshness_seconds: 300
-# release identity 协议失败率：分子来自 app_startup 的 contentIdentityOutcome
+# release identity 协议失败率：分子来自 app_startup 的 contentReleaseIdentityOutcome
 # 维度（protocol_failure 即 wire 上半身份/非 canonical digest）。客户端启动
 # 事件对该维度的发送接线由 runtime-client-foundation 承接（缺席不计入分子，
 # 不得用零值冒充）；未接线前本指标只有分母，不触发告警误报。
-- metric_id: startup_content_identity_protocol_failure_rate
+- metric_id: startup_content_release_identity_protocol_failure_rate
   business: app_startup_experience
   tier: secondary
   owner: runtime-client-foundation
@@ -267,7 +267,7 @@ metrics:
     track: product_telemetry
     numerator_event_type: app_startup
     numerator_filters:
-      contentIdentityOutcome: protocol_failure
+      contentReleaseIdentityOutcome: protocol_failure
     denominator_event_type: app_startup
     aggregation: event_ratio
   dimensions:
@@ -282,7 +282,7 @@ metrics:
     value: 0.001
   display:
     portal_level: L2
-    label: 内容身份协议失败率
+    label: 内容发布身份协议失败率
   freshness_seconds: 300
 - metric_id: journey_completion_rate
   business: core_journey

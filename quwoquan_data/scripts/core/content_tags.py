@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+from core.schema import assert_valid
+
 
 def resolved_content_tag_refs(brief: Mapping[str, Any], carrier: str) -> list[str]:
     refs = [str(item) for item in (brief.get("tagRefs") or []) if str(item).strip()]
@@ -16,4 +18,7 @@ def resolved_content_tag_refs(brief: Mapping[str, Any], carrier: str) -> list[st
         refs.append(defaults[0])
     if not any(ref.startswith("Format/") for ref in refs):
         refs.append(defaults[1])
-    return list(dict.fromkeys(refs))
+    resolved = list(dict.fromkeys(refs))
+    for ref in resolved:
+        assert_valid(ref, "governance", "tag_ref", label=f"tagRef:{ref}")
+    return resolved

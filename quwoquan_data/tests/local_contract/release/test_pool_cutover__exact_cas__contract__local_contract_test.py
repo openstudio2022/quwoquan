@@ -28,8 +28,12 @@ from content.source import acquire
 from core import paths
 from core.schema import assert_valid
 from support.media_fixture import seed_system_creator_avatar_holding
+from support.semantic_review_fixture import approved_semantic_judgement
 
-HOME = "entities/地点/景区/西湖"
+HOME = "entities/地点/中国/浙江省/杭州市/景区/p0001/西湖/1"
+LOGICAL_HOME = "地点/景区/西湖"
+HOME_TARGET = {"name": "西湖", "entityType": "地点/景区", "region": "中国/浙江省/杭州市", "entityRef": "/entity/地点/景区/西湖", "entityId": "entity:xihu"}
+PROCESS_HOME = task_init.execution_target_ref(HOME_TARGET, carrier="homepage")
 POST = "posts/article/导览/西湖速览/1"
 CREATOR = "qwq_creator_geo_editor_001"
 AUTHOR = {"host": "cursor", "modelFamily": "gpt", "sessionId": "cutover-author", "invocation": {"provider": "openai", "model": "test-model", "runId": "author-run"}}
@@ -69,33 +73,34 @@ def _execution(tmp: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     monkeypatch.setenv("QWQ_LIBRARY_ROOT", str(tmp / "library"))
     monkeypatch.setenv("QWQ_CARRIED_MEDIA_ROOT", str(tmp / "golden_media"))
     execution_id = "20260909--travel-homepage-cutover--local--pilot-001"
-    target = {"name": "西湖", "entityType": "地点/景区", "region": "中国/浙江省/杭州市"}
+    target = dict(HOME_TARGET)
     task_init.initialize_execution(
         submitted_demand={"schema": "quwoquan_data.carrier_demand", "executionId": execution_id, "carrier": "homepage", "familyRef": "content/travel/homepage/homepage"},
         submitted_bindings={"schema": "quwoquan_data.immutable_candidate_bindings", "executionId": execution_id, "carrier": "homepage", "targets": [target]},
     )
     root = paths.execution_root(execution_id)
     page = _write(tmp / "source.md", "# 西湖\n\n西湖位于杭州，本地合成来源事实。\n")
-    request = _write(tmp / "ingest.json", {"schema": "quwoquan_data.ingest_manifest", "executionId": execution_id, "targets": [{"targetRef": HOME, "sources": [{"kind": "page", "sourceUrl": "https://zh.wikipedia.org/wiki/西湖", "title": "西湖", "sourceMarkdownPath": str(page), "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/", "creator": "测试编辑", "relevance": "主页事实"}]}]})
+    request = _write(tmp / "ingest.json", {"schema": "quwoquan_data.ingest_manifest", "executionId": execution_id, "targets": [{"targetRef": PROCESS_HOME, "sources": [{"kind": "page", "sourceUrl": "https://zh.wikipedia.org/wiki/西湖", "title": "西湖", "sourceMarkdownPath": str(page), "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/", "creator": "测试编辑", "relevance": "主页事实"}]}]})
     result = acquire.acquire(execution_id=execution_id, request_path=request)
     assert result["failed"] == 0, result
-    _write(root / HOME / "4.draft/page.md", f"---\ntitle: 西湖\ntagRefs: [Entity/地点/景区]\ncreatorProfileId: {CREATOR}\n---\n# 西湖\n\n本地独立审核的主页正文。\n")
+    _write(root / PROCESS_HOME / "4.draft/page.md", f"---\ntitle: 西湖\ntagRefs: [Entity/地点/景区]\ncreatorProfileId: {CREATOR}\n---\n# 西湖\n\n本地独立审核的主页正文。\n")
     for stage in ("1.download", "4.draft", "5.review"):
         payload = {"actor": REVIEWER if stage == "5.review" else AUTHOR, "verdict": "pass"}
         if stage == "5.review":
-            payload["reviews"] = {HOME: {"decision": "approved", "blockingIssues": [], "advisories": []}}
+            payload["reviews"] = {PROCESS_HOME: approved_semantic_judgement(root, PROCESS_HOME)}
         seal.seal_stage(execution_id=execution_id, stage=stage, input_path=_write(tmp / f"{stage}.json", payload))
-    project_publish_final_surface(execution_root=root, object_dir=root / HOME, target_ref=HOME, target=target, carrier="homepage")
+    project_publish_final_surface(execution_root=root, object_dir=root / PROCESS_HOME, target_ref=PROCESS_HOME, target=target, carrier="homepage")
     return root
 
 
-def _publish(tmp: Path, execution: Path) -> tuple[Path, Path]:
-    seed_system_creator_avatar_holding(CREATOR)
-    transaction_id = canonical_transaction_id(execution_id=execution.name, object_kind="entities", object_ref=HOME.removeprefix("entities/"))
+def _publish(tmp: Path, execution: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, Path]:
+    seed_system_creator_avatar_holding(CREATOR, monkeypatch=monkeypatch)
+    transaction_id = canonical_transaction_id(execution_id=execution.name, object_kind="entities", object_ref=PROCESS_HOME.removeprefix("entities/"))
     package = tmp / "package"
-    build_entity_object_transaction_package(execution_root=execution, object_ref="/entity/" + HOME.removeprefix("entities/"), transaction_id=transaction_id, package_root=package)
     active = tmp / "active"
-    active.mkdir()
+    (active / ".git").mkdir(parents=True)
+    _write(active / "repository.json", {"schema": "quwoquan_data.publish_repository.v2", "repositoryId": "cutover-fixture", "layoutVersion": 2})
+    build_entity_object_transaction_package(execution_root=execution, object_ref="/entity/" + PROCESS_HOME.removeprefix("entities/"), transaction_id=transaction_id, package_root=package, publish_root=active)
     package_doc = _read_json(package / "object_transaction_package.json")
     for row in package_doc["closure"]["creatorObjects"]:
         shutil.copytree(package / row["packageRef"], active / "creators" / row["creatorRef"])
@@ -108,7 +113,7 @@ def _publish(tmp: Path, execution: Path) -> tuple[Path, Path]:
 def _dependent_post(case: dict) -> Path:
     tmp, active = case["tmp"], case["active"]
     execution_id = "20260909--travel-article-cutover--local--pilot-002"
-    target = {"name": "西湖", "entityType": "地点/景区", "region": "中国/浙江省/杭州市", "publishAngle": "导览", "publishTitle": "西湖速览", "publishSeq": 1}
+    target = {"name": "西湖", "entityType": "地点/景区", "entityId": "entity:xihu", "entityRef": "/entity/地点/中国/浙江省/杭州市/景区/p0001/西湖/1", "region": "中国/浙江省/杭州市", "entityRef": "/entity/地点/景区/西湖", "entityId": "entity:xihu", "publishAngle": "导览", "publishTitle": "西湖速览", "publishSeq": 1}
     task_init.initialize_execution(submitted_demand={"schema": "quwoquan_data.carrier_demand", "executionId": execution_id, "carrier": "article", "familyRef": "content/travel/article/article"}, submitted_bindings={"schema": "quwoquan_data.immutable_candidate_bindings", "executionId": execution_id, "carrier": "article", "targets": [target]})
     execution = paths.execution_root(execution_id)
     request = _write(tmp / "article-ingest.json", {"schema": "quwoquan_data.ingest_manifest", "executionId": execution_id, "targets": [{"targetRef": POST, "sources": [{"kind": "page", "sourceUrl": "https://zh.wikipedia.org/wiki/西湖", "title": "西湖", "sourceMarkdownPath": str(tmp / "source.md"), "license": "CC BY-SA 4.0", "licenseUrl": "https://creativecommons.org/licenses/by-sa/4.0/", "creator": "测试编辑", "relevance": "正文事实"}]}]})
@@ -117,31 +122,34 @@ def _dependent_post(case: dict) -> Path:
     for stage in ("1.download", "4.draft", "5.review"):
         payload = {"actor": REVIEWER if stage == "5.review" else AUTHOR, "verdict": "pass"}
         if stage == "5.review":
-            payload["reviews"] = {POST: {"decision": "approved", "blockingIssues": [], "advisories": []}}
+            payload["reviews"] = {POST: approved_semantic_judgement(execution, POST)}
         seal.seal_stage(execution_id=execution_id, stage=stage, input_path=_write(tmp / f"article-{stage}.json", payload))
     project_publish_final_surface(execution_root=execution, object_dir=execution / POST, target_ref=POST, target=target, carrier="article")
     package = tmp / "post-package"
     transaction_id = canonical_transaction_id(execution_id=execution_id, object_kind="posts", object_ref=POST.removeprefix("posts/"))
     build_post_object_transaction_package(execution_root=execution, object_ref=POST.removeprefix("posts/"), transaction_id=transaction_id, package_root=package)
+    published_ref = _read_json(package / "object_transaction_package.json")["target"]["objectPath"]
     audit = audit_object_transaction(publish_root=active, output_root=tmp / "post-output", package_root=package, transaction_id=transaction_id, expected_canonical_merkle=load_or_bootstrap_inventory(active)["stats"]["merkleRoot"])
     apply_object_transaction(publish_root=active, output_root=tmp / "post-output", package_root=package, transaction_id=transaction_id, dry_run_attestation_sha256=audit["dryRunAttestationSha256"])
     assert subject.query_pool(active)["counts"]["article"] == 1
-    return package
+    return package, published_ref
 
 
 def _prepared_successor(active: Path, package: Path, tmp: Path) -> tuple[Path, Path]:
     # 存储边界构造显式新版本 staging；cutover 只消费它，不代替 author/reviewer。
     stage = tmp / "staging"
-    shutil.copytree(active, stage)
+    shutil.copytree(active, stage, ignore=shutil.ignore_patterns(".git", "repository.json", ".gitignore", "releases"))
+    (stage / ".git").mkdir()
+    _write(stage / "repository.json", {"schema": "quwoquan_data.publish_repository.v2", "repositoryId": "cutover-staging", "layoutVersion": 2})
     successor = tmp / "successor-package"
     shutil.copytree(package, successor)
     for root in (stage / HOME, successor / "object"):
         document = _read_json(root / "manifest.json")
         document["version"] = 2
         _write(root / "manifest.json", document)
-        record_path = root / "_pool/versions/1.json"
-        record_path.unlink()
-        record = build_canonical_pool_record(object_root=root, object_type="homepage", object_ref=HOME.removeprefix("entities/"))
+        record_path = root / "records/1.json"
+        record_path.unlink(missing_ok=True)
+        record = build_canonical_pool_record(object_root=root, object_type="homepage", object_ref=LOGICAL_HOME)
         assert_valid(record, "release", "pool_object_record")
         _write(record_path, record)
     for root in (stage / "creators" / CREATOR, successor / "creator_objects" / CREATOR):
@@ -152,7 +160,7 @@ def _prepared_successor(active: Path, package: Path, tmp: Path) -> tuple[Path, P
     for row in document["closure"]["creatorObjects"]:
         row["treeDigest"] = _tree_digest(successor / row["packageRef"])
     document["objectClosureDigest"] = _closure_digest(
-        object_root=successor / "object", object_kind="entities", object_ref=HOME.removeprefix("entities/"), target_schema="quwoquan_data.entity_object", source_policy_revision=document["sourcePolicyRevision"], closure=document["closure"], cas_rows=document["closure"]["casRefs"], review=_review_binding(successor / "object", document),
+        object_root=successor / "object", object_kind="entities", object_ref=document["target"]["objectRef"], target_schema="quwoquan_data.entity_object", source_policy_revision=document["sourcePolicyRevision"], closure=document["closure"], cas_rows=document["closure"]["casRefs"], review=_review_binding(successor / "object", document),
     )
     _write(successor / "object_transaction_package.json", document)
     return stage, successor
@@ -170,7 +178,7 @@ def _authorize(case: dict) -> dict:
 def case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     tmp = tmp_path.resolve()
     execution = _execution(tmp, monkeypatch)
-    active, package = _publish(tmp, execution)
+    active, package = _publish(tmp, execution, monkeypatch)
     stage, successor = _prepared_successor(active, package, tmp)
     before = subject.snapshot_pool(active)
     after = {row["objectRef"]: row for row in subject.snapshot_pool(stage)["objects"]}
@@ -180,7 +188,7 @@ def case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
         evidence = [_binding(authority, role="author_authority")] if row["objectRef"].startswith("creators/") else [_binding(execution, role="execution"), _binding(successor, role="package")]
         rows.append({"before": row, "action": "migrate", "after": after[row["objectRef"]], "evidence": evidence})
     protected = _write(tmp / "old-release.json", {"historical": "unaltered bytes"})
-    plan = {"schema": "quwoquan_data.pool_cutover.v1", "cutoverId": "test-cutover", "publishRoot": str(active), "stagingRoot": str(stage), "beforeDigest": before["treeDigest"], "afterDigest": _tree_digest(stage), "objects": rows, "protected": [{**_binding(protected), "kind": "file", "category": "release"}]}
+    plan = {"schema": "quwoquan_data.pool_cutover.v1", "cutoverId": "test-cutover", "publishRoot": str(active), "stagingRoot": str(stage), "beforeDigest": before["treeDigest"], "afterDigest": subject.snapshot_pool(stage)["treeDigest"], "objects": rows, "protected": [{**_binding(protected), "kind": "file", "category": "release"}]}
     return _authorize({"tmp": tmp, "active": active, "stage": stage, "execution": execution, "package": successor, "plan": plan, "plan_path": tmp / "plan.json"})
 
 
@@ -246,9 +254,9 @@ def test_atomic_activation_retires_original_bytes_and_invalidates_inventory(case
     protected = {row["ref"]: row["digest"] for row in case["plan"]["protected"]}
     result = subject.activate_pool_cutover(**case["activate"])
     assert result["report"]["status"] == "activated"
-    assert _tree_digest(case["active"]) == case["plan"]["afterDigest"]
+    assert subject.snapshot_pool(case["active"])["treeDigest"] == case["plan"]["afterDigest"]
     assert not case["stage"].exists()
-    assert _tree_digest(case["audit"] / "retired") == case["plan"]["beforeDigest"]
+    assert subject.snapshot_pool(case["audit"] / "retired")["treeDigest"] == case["plan"]["beforeDigest"]
     assert not canonical_inventory_path(case["active"]).exists()
     assert _inspect(case)["status"] == "activated"
     assert {row["ref"]: _binding(Path(row["ref"]))["digest"] for row in case["plan"]["protected"]} == protected
@@ -308,7 +316,7 @@ def test_process_crash_has_one_complete_tree_and_readonly_recovery(case: dict, m
     before = _tree_digest(case["tmp"])
     assert _inspect(case)["status"] == expected
     assert _tree_digest(case["tmp"]) == before  # 无 lock 创建/receipt/cache 写入。
-    assert _tree_digest(case["active"]) == case["plan"]["beforeDigest" if expected == "not_activated" else "afterDigest"]
+    assert subject.snapshot_pool(case["active"])["treeDigest"] == case["plan"]["beforeDigest" if expected == "not_activated" else "afterDigest"]
 
 
 def test_concurrent_activation_has_exactly_one_winner(case: dict, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -316,7 +324,7 @@ def test_concurrent_activation_has_exactly_one_winner(case: dict, monkeypatch: p
     children = [_start_activation(case) for _ in range(2)]
     assert sorted(_exit_code(child) for child in children) == [0, 75]
     assert _inspect(case)["status"] == "activated"
-    assert _tree_digest(case["active"]) == case["plan"]["afterDigest"]
+    assert subject.snapshot_pool(case["active"])["treeDigest"] == case["plan"]["afterDigest"]
 
 
 def test_precommit_cas_drift_preserves_both_trees(case: dict, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -328,7 +336,7 @@ def test_precommit_cas_drift_preserves_both_trees(case: dict, monkeypatch: pytes
     monkeypatch.setattr(activation, "_checkpoint", drift)
     with pytest.raises(subject.PoolCutoverError, match="BEFORE_CAS_MISMATCH"):
         subject.activate_pool_cutover(**case["activate"])
-    assert _tree_digest(case["stage"]) == case["plan"]["afterDigest"]
+    assert subject.snapshot_pool(case["stage"])["treeDigest"] == case["plan"]["afterDigest"]
     assert not (case["audit"] / "activated.json").exists()
     assert _inspect(case)["status"] == "conflict"
 
@@ -354,14 +362,14 @@ def test_unsupported_exchange_never_falls_back(case: dict, monkeypatch: pytest.M
     with pytest.raises(subject.PoolCutoverError, match="ATOMIC_EXCHANGE_UNSUPPORTED"):
         subject.activate_pool_cutover(**case["activate"])
     assert not list(case["audit"].iterdir())
-    assert _tree_digest(case["active"]) == case["plan"]["beforeDigest"]
+    assert subject.snapshot_pool(case["active"])["treeDigest"] == case["plan"]["beforeDigest"]
 
 
 @pytest.mark.parametrize("fault", ["authorization", "protection", "stage", "archive"])
 def test_activation_faults_fail_before_exchange(case: dict, monkeypatch: pytest.MonkeyPatch, fault: str) -> None:
     from content.release.canonical import pool_cutover_activation as activation
     case = _activation_case(case, monkeypatch)
-    original = _tree_digest(case["active"])
+    original = subject.snapshot_pool(case["active"])["treeDigest"]
     def mutate(name):
         if name != "before_exchange":
             return
@@ -370,7 +378,7 @@ def test_activation_faults_fail_before_exchange(case: dict, monkeypatch: pytest.
     monkeypatch.setattr(activation, "_checkpoint", mutate)
     with pytest.raises(subject.PoolCutoverError):
         subject.activate_pool_cutover(**case["activate"])
-    assert _tree_digest(case["active"]) == original
+    assert subject.snapshot_pool(case["active"])["treeDigest"] == original
     assert not (case["audit"] / "activated.json").exists()
 
 
@@ -384,7 +392,7 @@ def test_postcommit_failure_reports_outcome_without_reverse_swap(case: dict, mon
     with pytest.raises(subject.PoolCutoverError, match="COMMIT_OUTCOME_REQUIRES_INSPECTION"):
         subject.activate_pool_cutover(**case["activate"])
     assert _inspect(case)["status"] == "activated"
-    assert _tree_digest(case["stage"]) == case["plan"]["beforeDigest"]
+    assert subject.snapshot_pool(case["stage"])["treeDigest"] == case["plan"]["beforeDigest"]
     assert not canonical_inventory_path(case["active"]).exists()
 
 
@@ -402,7 +410,7 @@ def test_cleanup_rejects_wrong_authority_or_changed_bytes(case: dict, monkeypatc
     with pytest.raises(subject.PoolCutoverError):
         subject.cleanup_pool_cutover(plan_path=case["plan_path"], expected_plan_digest=case["kwargs"]["expected_plan_digest"], intent=intent, authorization=_binding(authorization))
     assert (case["audit"] / "retired" / HOME / "page.md").exists()
-    assert _tree_digest(case["active"]) == case["plan"]["afterDigest"]
+    assert subject.snapshot_pool(case["active"])["treeDigest"] == case["plan"]["afterDigest"]
 
 
 def _media_package(case: dict, carrier: str) -> tuple[Path, str, Path]:
@@ -411,7 +419,7 @@ def _media_package(case: dict, carrier: str) -> tuple[Path, str, Path]:
     from content.release.canonical.post_transaction_assets import source_assets
     tmp = case["tmp"]
     execution_id = f"20260909--travel-{carrier}-cutover--local--pilot-003"
-    target = {"name": "西湖", "entityType": "地点/景区", "region": "中国/浙江省/杭州市", "publishAngle": "风光", "publishTitle": "西湖作品", "publishSeq": 1}
+    target = {"name": "西湖", "entityType": "地点/景区", "entityId": "entity:xihu", "entityRef": "/entity/地点/中国/浙江省/杭州市/景区/p0001/西湖/1", "region": "中国/浙江省/杭州市", "publishAngle": "风光", "publishTitle": "西湖作品", "publishSeq": 1}
     ref = f"posts/{carrier}/风光/西湖作品/1"
     task_init.initialize_execution(submitted_demand={"schema": "quwoquan_data.carrier_demand", "executionId": execution_id, "carrier": carrier, "familyRef": f"content/travel/{carrier}/{carrier}"}, submitted_bindings={"schema": "quwoquan_data.immutable_candidate_bindings", "executionId": execution_id, "carrier": carrier, "targets": [target]})
     execution = paths.execution_root(execution_id)
@@ -435,7 +443,7 @@ def _media_package(case: dict, carrier: str) -> tuple[Path, str, Path]:
     for stage in ("1.download", "4.draft", "5.review"):
         payload = {"actor": REVIEWER if stage == "5.review" else AUTHOR, "verdict": "pass"}
         if stage == "5.review":
-            payload["reviews"] = {ref: {"decision": "approved", "blockingIssues": [], "advisories": []}}
+            payload["reviews"] = {ref: approved_semantic_judgement(execution, ref)}
         seal.seal_stage(execution_id=execution_id, stage=stage, input_path=_write(tmp / f"media-{stage}.json", payload))
     project_publish_final_surface(execution_root=execution, object_dir=execution / ref, target_ref=ref, target=target, carrier=carrier)
     package = tmp / "media-package"
@@ -469,13 +477,14 @@ def test_complete_media_pool_can_activate_new_versions(case: dict, monkeypatch: 
     transaction_id = _read_json(package / "object_transaction_package.json")["transactionId"]
     audit = audit_object_transaction(publish_root=case["active"], output_root=case["tmp"] / "media-output", package_root=package, transaction_id=transaction_id, expected_canonical_merkle=load_or_bootstrap_inventory(case["active"])["stats"]["merkleRoot"])
     apply_object_transaction(publish_root=case["active"], output_root=case["tmp"] / "media-output", package_root=package, transaction_id=transaction_id, dry_run_attestation_sha256=audit["dryRunAttestationSha256"])
-    shutil.copytree(case["active"] / ref, case["stage"] / ref)
-    for root in (package / "object", case["stage"] / ref):
+    object_path = _read_json(package / "object_transaction_package.json")["target"]["objectPath"]
+    shutil.copytree(case["active"] / object_path, case["stage"] / object_path)
+    for root in (package / "object", case["stage"] / object_path):
         manifest = _read_json(root / "manifest.json")
         manifest["version"] = 2
         _write(root / "manifest.json", manifest)
-        (root / "_pool/versions/1.json").unlink()
-        _write(root / "_pool/versions/1.json", build_canonical_pool_record(object_root=root, object_type="content", object_ref=ref.removeprefix("posts/")))
+        (root / "records/1.json").unlink()
+        _write(root / "records/1.json", build_canonical_pool_record(object_root=root, object_type="content", object_ref=ref.removeprefix("posts/")))
     document = _read_json(package / "object_transaction_package.json")
     for row in document["closure"]["creatorObjects"]:
         profile_path = package / row["packageRef"] / "profile.json"
@@ -488,11 +497,11 @@ def test_complete_media_pool_can_activate_new_versions(case: dict, monkeypatch: 
     before = subject.snapshot_pool(case["active"])
     after = subject.snapshot_pool(case["stage"])
     case["plan"]["beforeDigest"], case["plan"]["afterDigest"] = before["treeDigest"], after["treeDigest"]
-    case["plan"]["objects"].append({"before": next(row for row in before["objects"] if row["objectRef"] == ref), "after": next(row for row in after["objects"] if row["objectRef"] == ref), "action": "migrate", "evidence": [_binding(execution, role="execution"), _binding(package, role="package")]})
+    case["plan"]["objects"].append({"before": next(row for row in before["objects"] if row["objectRef"] == object_path), "after": next(row for row in after["objects"] if row["objectRef"] == object_path), "action": "migrate", "evidence": [_binding(execution, role="execution"), _binding(package, role="package")]})
     _activation_case(case, monkeypatch)
     subject.activate_pool_cutover(**case["activate"])
     assert subject.query_pool(case["active"])["counts"][carrier] == 1
-    assert _read_json(case["active"] / ref / "manifest.json")["version"] == 2
+    assert _read_json(case["active"] / object_path / "manifest.json")["version"] == 2
     assert _inspect(case)["status"] == "activated"
 
 
@@ -561,7 +570,7 @@ def test_symlink_in_staging_is_rejected(case: dict) -> None:
 
 def _refresh_stage(case: dict) -> None:
     current = {row["objectRef"]: row for row in subject.snapshot_pool(case["stage"])["objects"]}
-    case["plan"]["afterDigest"] = _tree_digest(case["stage"])
+    case["plan"]["afterDigest"] = subject.snapshot_pool(case["stage"])["treeDigest"]
     for action in case["plan"]["objects"]:
         if action["action"] == "migrate":
             action["after"] = current[action["after"]["objectRef"]]
@@ -570,13 +579,14 @@ def _refresh_stage(case: dict) -> None:
 
 @pytest.mark.parametrize("field,value,code", [("usageScope", "research", "RETIRED_CLASSIFICATION_FIELD"), ("rightsResult", "failed", "RECORD_RIGHTS_INVALID"), ("payloadDigest", "sha256:" + "f" * 64, "CANONICAL_DIGEST_DRIFT")])
 def test_new_staging_schema_and_rights_reject_old_or_forged_records(case: dict, field: str, value: str, code: str) -> None:
-    record_path = case["stage"] / HOME / "_pool/versions/1.json"
+    record_path = case["stage"] / HOME / "records/1.json"
     record = _read_json(record_path)
     record[field] = value
     _write(record_path, record)
     _refresh_stage(case)
     before = _tree_digest(case["active"])
-    with pytest.raises(subject.PoolCutoverError, match=code):
+    expected_code = "DATA.POOL.RECORD_SCHEMA_INVALID" if field == "usageScope" else code
+    with pytest.raises(subject.PoolCutoverError, match=expected_code):
         subject.dry_run_pool_cutover(**case["kwargs"])
     assert _tree_digest(case["active"]) == before
 
@@ -584,8 +594,8 @@ def test_new_staging_schema_and_rights_reject_old_or_forged_records(case: dict, 
 def test_refreshed_payload_cannot_replace_independent_review_evidence(case: dict) -> None:
     root = case["stage"] / HOME
     _write(root / "page.md", "偷偷替换未被 reviewer 看过的正文")
-    (root / "_pool/versions/1.json").unlink()
-    _write(root / "_pool/versions/1.json", build_canonical_pool_record(object_root=root, object_type="homepage", object_ref=HOME.removeprefix("entities/")))
+    (root / "records/1.json").unlink()
+    _write(root / "records/1.json", build_canonical_pool_record(object_root=root, object_type="homepage", object_ref=LOGICAL_HOME))
     _refresh_stage(case)
     with pytest.raises(subject.PoolCutoverError, match="PACKAGE_PAYLOAD_DRIFT"):
         subject.dry_run_pool_cutover(**case["kwargs"])
@@ -638,12 +648,12 @@ def test_exact_deletion_of_missing_manifest_placeholder_is_validated_only(case: 
 
 
 def test_deleting_homepage_cannot_leave_real_transaction_post_dangling(case: dict) -> None:
-    _dependent_post(case)
+    _, published_post_ref = _dependent_post(case)
     before = subject.snapshot_pool(case["active"])
-    post_before = next(row for row in before["objects"] if row["objectRef"] == POST)
+    post_before = next(row for row in before["objects"] if row["objectRef"] == published_post_ref)
     assert HOME in post_before["dependencyRefs"]
-    destination = case["stage"] / POST
-    shutil.copytree(case["active"] / POST, destination)
+    destination = case["stage"] / published_post_ref
+    shutil.copytree(case["active"] / published_post_ref, destination)
     document = _read_json(destination / "manifest.json")
     document["version"] = 2
     _write(destination / "manifest.json", document)
@@ -653,7 +663,7 @@ def test_deleting_homepage_cannot_leave_real_transaction_post_dangling(case: dic
     for action in case["plan"]["objects"]:
         if action["before"]["objectRef"] == HOME:
             action.update(action="delete", after=None, evidence=[_binding(decision, role="decision")])
-    after = next(row for row in subject.snapshot_pool(case["stage"])["objects"] if row["objectRef"] == POST)
+    after = next(row for row in subject.snapshot_pool(case["stage"])["objects"] if row["objectRef"] == published_post_ref)
     case["plan"]["objects"].append({"before": post_before, "action": "migrate", "after": after, "evidence": [_binding(decision, role="decision")]})
     case["plan"]["beforeDigest"] = before["treeDigest"]
     _refresh_stage(case)
@@ -668,7 +678,7 @@ def test_all_delete_plan_cannot_empty_pool(case: dict) -> None:
         action.update(action="delete", after=None)
     empty = case["tmp"] / "empty-stage"
     empty.mkdir()
-    case["plan"].update(stagingRoot=str(empty), afterDigest=_tree_digest(empty))
+    case["plan"].update(stagingRoot=str(empty), afterDigest=subject.snapshot_pool(empty)["treeDigest"])
     _authorize(case)
     with pytest.raises(subject.PoolCutoverError, match="EMPTY_POOL_FORBIDDEN"):
         subject.dry_run_pool_cutover(**case["kwargs"])

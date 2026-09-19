@@ -73,7 +73,7 @@ class _Store:
                     evidence_id="event-001",
                     impact_id=impact_id,
                     content_id="post-001",
-                    content_type="post",
+                    content_type="article",
                     help_type="decision",
                     action="content_depth",
                     intersection_dimension="content",

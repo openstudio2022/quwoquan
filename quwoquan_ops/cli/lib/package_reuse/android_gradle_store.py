@@ -307,7 +307,7 @@ def canonical_android_dependency_bundle_invocations(
     return (
         GradleInvocation(
             gradle_root=repository / "quwoquan_app/android",
-            tasks=(":app:assembleNonprodDebug",),
+            tasks=(":app:assembleNonprodDebug", ":app:assembleNonprodRelease"),
         ),
     )
 

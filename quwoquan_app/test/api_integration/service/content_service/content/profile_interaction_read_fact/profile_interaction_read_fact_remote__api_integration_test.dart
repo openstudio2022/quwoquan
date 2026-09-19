@@ -35,8 +35,7 @@ void main() {
       SubmitContentPostPublicationCommand(
         publishIntentId: 'profile-read-post-$sequence',
         localDraftId: 'profile-read-draft-$sequence',
-        contentType: ContentType.micro,
-        contentIdentity: ContentIdentity.moment,
+        contentType: ContentType.article,
         body: 'Profile read API contract post $sequence',
         visibility: Visibility.public,
       ),

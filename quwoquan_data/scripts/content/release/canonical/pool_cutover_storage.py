@@ -147,9 +147,9 @@ def verify_archive(path: Path, expected_digest: str) -> None:
 
 def remove_exact_tree(root: Path, expected_digest: str, expected_identity: list[int]) -> None:
     """只删已验证旧树；不接受任意 rmtree。调用者已持有精确清理授权和 archive。"""
-    from content.release.canonical.pool_cutover import _regular_tree
+    from content.release.canonical.pool_cutover import _regular_tree, snapshot_pool
     _regular_tree(root)
-    if identity(root) != expected_identity or _tree_digest(root) != expected_digest:
+    if identity(root) != expected_identity or snapshot_pool(root)["treeDigest"] != expected_digest:
         _fail("RETIRED_TREE_DRIFT", root)
     # 打开根 fd 后所有删除都 descriptor-relative；不跟随新插入的 symlink。
     with directory(root) as fd:

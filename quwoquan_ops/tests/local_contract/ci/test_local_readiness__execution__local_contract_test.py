@@ -126,7 +126,7 @@ def test_real_health_capsule_exact_delta(tmp_path: Path, monkeypatch: pytest.Mon
         from quwoquan_ops.ci.scoped_candidate.core import build_head_candidate, create_source_fact, store_ref, ScopedCandidateError
         policy = ROOT / "quwoquan_ops/policies/scoped_candidate_policy.yaml"
         candidate = build_head_candidate(repository=repo, policy_path=policy, commit=head, expected_parent=base,
-            owner_identity_ref="fixture-owner", impact_plan_digest="sha256:" + "a" * 64,
+            impact_plan_digest="sha256:" + "a" * 64,
             writer_id="health-fixture", expires_at="2099-01-01T00:00:00+00:00")
         receipt_path = repo / ".qwq_output/receipt.json"
         receipt_path.write_text(json.dumps(receipt))

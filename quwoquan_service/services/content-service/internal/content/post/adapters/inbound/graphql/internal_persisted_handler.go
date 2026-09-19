@@ -48,14 +48,14 @@ var persistedOperations = map[string]persistedOperation{
 	"ContentPostDetailBase": {
 		name:        "ContentPostDetailBase",
 		operationID: "content.post.GetPost",
-		hash:        "7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7",
+		hash:        "6d1f340a4caedf270c46377b1b3a8ae48e3d669f3f7709ec81b3efcf2f6d9820",
 		rootField:   "contentPostDetailBase",
 		project:     projectContentPostDetailBase,
 	},
 	"ContentPostDetailSemantic": {
 		name:        "ContentPostDetailSemantic",
 		operationID: "content.post.GetPostSemantic",
-		hash:        "b425b396c13494d91b0e970d0e9c2328d07d549c492bd76537dace26ea74aa04",
+		hash:        "8f01162d0d879ffbdc5e96c93145b5c005b7b03582e52dfaa8c390424c62debd",
 		rootField:   "contentPostDetailSemantic",
 		project:     projectContentPostDetailSemantic,
 	},

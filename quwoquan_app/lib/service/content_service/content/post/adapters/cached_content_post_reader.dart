@@ -86,7 +86,6 @@ final class CachedContentPostReader
   @override
   Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
-    String? identity,
     String? type,
     String? visibility,
     String? cursor,
@@ -94,7 +93,6 @@ final class CachedContentPostReader
   }) async {
     final baseKey = contentUserPostsQueryKey(
       userId: userId,
-      identity: identity,
       type: type,
       visibility: visibility,
       cursor: cursor,
@@ -119,7 +117,6 @@ final class CachedContentPostReader
     try {
       final page = await authorPostsDelegate.listUserPosts(
         userId: userId,
-        identity: identity,
         type: type,
         visibility: visibility,
         cursor: cursor,

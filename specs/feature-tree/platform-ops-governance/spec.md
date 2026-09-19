@@ -97,7 +97,7 @@
 ### REQ-005 App 依赖 bundle 的显式同步是单一原子事务
 
 - `stackctl app-dependency-sync` 是 App 依赖 bundle 的唯一显式同步入口：一次 attempt 在单一 sync lock 内完成，并发同步以 typed blocker 拒绝，不得排队互相覆盖。
-- 一次 attempt 必须同时构建全部五个依赖组件闭包（production Pub、Patrol Pub、production iOS Pods、Patrol iOS Pods、Android Gradle），不得部分更新或跨 attempt 混合组件。
+- 一次 attempt 必须显式选择唯一 platform plan：`android` 构建 production Pub、Patrol Pub 与 Android Gradle，`ios` 构建 production Pub、Patrol Pub 与两套 iOS Pods，`all` 构建全部五组件；默认 `all` 仅保留人工兼容，受管 package/UAT 必须显式传平台。receipt/active 必须记录 `platforms`、每个平台的 input identity、组件 outputs/digests 与 `nonPromotable`；不得跨 attempt 混合单个平台的组件。
 - 事务顺序固定为：在线解析 → fresh 私有 home 完整离线回放 → 封存不可变组件快照 → readback 验证；在线成功不得代替离线可复现性。
 - 激活必须 receipt-first / active-last：先原子落盘本次 attempt 的 sync receipt，最后一步以原子替换推进单槽 active pointer；active readback 与本次 attempt 一致后事务才算 committed。
 - active pointer 写入已开始但 readback 无法证明与本次 attempt 一致时为 activation ambiguous，必须以 typed blocker 报告，不得声明成功或静默重试。
@@ -144,23 +144,12 @@
 ### DOM-004 App 依赖同步事务的原子性与可判定终态
 
 - 条件：调用方显式发起 `stackctl app-dependency-sync`，当前无其他活跃同步。
-- 可观察结果：成功 attempt 产出五组件同 attempt 的不可变快照、先落盘的 sync receipt 与最后原子推进的 active pointer，active readback 与本次 attempt 一致。
+- 可观察结果：成功 attempt 产出所选平台组件同 attempt 的不可变快照、显式 platform coverage、先落盘的 sync receipt 与最后原子推进的 active pointer，active readback 与本次 attempt 一致；Android-only coverage 不调用 CocoaPods/iOS replay，且可供 Android-only Alpha package 使用。
 - 可观察结果：在线解析失败、离线回放失败、封存失败或 readback 不一致时保留首个 typed blocker，active pointer 保持上一份已验证代际。
 - 可观察结果：active 写入已开始但无法证明 commit 结果时，以 activation ambiguous 的 typed blocker 报告，不声明成功。
-- 禁止结果：不得部分更新组件、跨 attempt 混合快照、更新任何锁定声明，或让调用方消费未 committed 的中间产物。
+- 禁止结果：不得在同一平台内部分更新组件、跨 attempt 混合快照、更新任何锁定声明，或让调用方消费未 committed 的中间产物；iOS package 不得消费 Android-only coverage，Prod/promotion 不得降级全平台要求。
 
-## 7. 工程归属
-
-- App：`quwoquan_ops`
-- CI：`.github/workflows`
-- Contracts：`quwoquan_service/control-plane/platform-ops/contracts`
-- Service：`quwoquan_service/control-plane/platform-ops`
-- 测试：
-  - `local_contract`：`quwoquan_ops/tests`
-  - `api_integration`：`quwoquan_service/control-plane/platform-ops`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
-
-## 8. 开放事项
+## 7. 开放事项
 
 <a id="open-001"></a>
 ### OPEN-001 platform ops governance 领域边界验收

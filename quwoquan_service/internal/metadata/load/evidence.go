@@ -111,7 +111,7 @@ var nonProductionSegments = map[string]struct{}{
 // packet 数与对象数一一对应，因此 `readiness.evidence.duplicate` 在派生模式下
 // 结构上不可能发生；对象没有云侧实现根时不产生 packet，让
 // `graph.deriveObjectReadiness` 如实记 `readiness.evidence`。
-func deriveReadinessEvidence(catalog *ast.Catalog, repoRoot string, errs *[]error) {
+func (collector evidenceCollector) deriveReadinessEvidence(catalog *ast.Catalog, repoRoot string, errs *[]error) {
 	serviceRoots, err := resolveServiceRootsByDomain(repoRoot)
 	if err != nil {
 		*errs = append(*errs, err)
@@ -209,7 +209,7 @@ func deriveReadinessEvidence(catalog *ast.Catalog, repoRoot string, errs *[]erro
 			*errs = append(*errs, indexErr)
 			continue
 		}
-		evidence, evidenceErr := deriveObjectEvidence(
+		evidence, evidenceErr := collector.deriveObjectEvidence(
 			repoRoot,
 			object,
 			serviceRoot,
@@ -231,7 +231,7 @@ func deriveReadinessEvidence(catalog *ast.Catalog, repoRoot string, errs *[]erro
 	}
 }
 
-func deriveObjectEvidence(
+func (collector evidenceCollector) deriveObjectEvidence(
 	repoRoot string,
 	object ast.Object,
 	serviceRoot string,
@@ -245,7 +245,7 @@ func deriveObjectEvidence(
 	declaredAnywhere map[string]struct{},
 	opsRunners map[ast.ReadinessLayer][]string,
 ) (ast.ObjectReadinessEvidence, error) {
-	production, err := collectCloudProduction(repoRoot, objectRoot)
+	production, err := collector.collectCloudProduction(repoRoot, objectRoot)
 	if err != nil {
 		return ast.ObjectReadinessEvidence{}, err
 	}
@@ -253,7 +253,7 @@ func deriveObjectEvidence(
 	if err != nil {
 		return ast.ObjectReadinessEvidence{}, err
 	}
-	appProduction, err := collectAppProduction(
+	appProduction, err := collector.collectAppProduction(
 		repoRoot, appServiceSegment(serviceRoot), context, objectSegment,
 	)
 	if err != nil {
@@ -292,7 +292,7 @@ func deriveObjectEvidence(
 		PythonImplementation: writeIndexHasPythonImplementation(writeIndex, objectRoot),
 		SourcePath:           relativePath(repoRoot, objectRoot),
 	}
-	evidence.Service.LocalContract, err = collectArtifacts(
+	evidence.Service.LocalContract, err = collector.collectArtifacts(
 		repoRoot,
 		filepath.Join(serviceRoot, "tests", testLayerLocalContract, context, objectSegment),
 		testSourceSuffixes,
@@ -301,7 +301,7 @@ func deriveObjectEvidence(
 	if err != nil {
 		return ast.ObjectReadinessEvidence{}, err
 	}
-	evidence.Service.APIIntegration, err = collectArtifacts(
+	evidence.Service.APIIntegration, err = collector.collectArtifacts(
 		repoRoot,
 		filepath.Join(serviceRoot, "tests", testLayerAPIIntegration, context, objectSegment),
 		testSourceSuffixes,
@@ -310,7 +310,7 @@ func deriveObjectEvidence(
 	if err != nil {
 		return ast.ObjectReadinessEvidence{}, err
 	}
-	evidence.App.LocalContract, err = collectArtifacts(
+	evidence.App.LocalContract, err = collector.collectArtifacts(
 		repoRoot,
 		filepath.Join(
 			repoRoot, appTreeRoot, "test", testLayerLocalContract,
@@ -322,7 +322,7 @@ func deriveObjectEvidence(
 	if err != nil {
 		return ast.ObjectReadinessEvidence{}, err
 	}
-	evidence.App.APIIntegration, err = collectArtifacts(
+	evidence.App.APIIntegration, err = collector.collectArtifacts(
 		repoRoot,
 		filepath.Join(
 			repoRoot, appTreeRoot, "test", testLayerAPIIntegration,
@@ -334,7 +334,7 @@ func deriveObjectEvidence(
 	if err != nil {
 		return ast.ObjectReadinessEvidence{}, err
 	}
-	evidence.App.UserAcceptance, err = collectArtifacts(
+	evidence.App.UserAcceptance, err = collector.collectArtifacts(
 		repoRoot,
 		filepath.Join(
 			repoRoot, appTreeRoot, "test", testLayerUserAcceptance,
@@ -354,7 +354,7 @@ func deriveObjectEvidence(
 		{layer: opsLayerRollback, set: &evidence.Ops.RollbackRunner},
 		{layer: opsLayerReplay, set: &evidence.Ops.ReplayRunner},
 	} {
-		*target.set, err = collectArtifacts(
+		*target.set, err = collector.collectArtifacts(
 			repoRoot,
 			filepath.Join(
 				repoRoot, opsTreeRoot, "tests", "acceptance", target.layer,
@@ -406,7 +406,7 @@ type cloudProduction struct {
 	layers map[string][]ast.EvidenceArtifact
 }
 
-func collectCloudProduction(repoRoot, objectRoot string) (cloudProduction, error) {
+func (collector evidenceCollector) collectCloudProduction(repoRoot, objectRoot string) (cloudProduction, error) {
 	result := cloudProduction{layers: map[string][]ast.EvidenceArtifact{}}
 	entries, err := os.ReadDir(objectRoot)
 	if err != nil {
@@ -427,7 +427,7 @@ func collectCloudProduction(repoRoot, objectRoot string) (cloudProduction, error
 		default:
 			continue
 		}
-		artifacts, collectErr := collectArtifacts(
+		artifacts, collectErr := collector.collectArtifacts(
 			repoRoot,
 			filepath.Join(objectRoot, entry.Name()),
 			cloudSourceSuffixes,
@@ -445,7 +445,7 @@ func collectCloudProduction(repoRoot, objectRoot string) (cloudProduction, error
 // paths are intentionally not inferred here: migration aliases would turn the
 // evidence loader into a second ownership registry. Presentation is populated
 // from page_object_contract physical ownership instead of this directory scan.
-func collectAppProduction(
+func (collector evidenceCollector) collectAppProduction(
 	repoRoot string,
 	service string,
 	context string,
@@ -463,7 +463,7 @@ func collectAppProduction(
 			result[layer] = []ast.EvidenceArtifact{}
 			continue
 		}
-		artifacts, err := collectArtifacts(
+		artifacts, err := collector.collectArtifacts(
 			repoRoot,
 			filepath.Join(objectRoot, layer),
 			appSourceSuffixes,
@@ -475,71 +475,6 @@ func collectAppProduction(
 		result[layer] = artifacts
 	}
 	return result, nil
-}
-
-// collectArtifacts 扫描 dir 下所有匹配后缀的文件并绑定内容摘要。目录缺失不是错误：
-// 端侧对象化搬迁进行中，缺失必须表达为「无证据」，由 readiness missing 如实暴露，
-// 不能中断 Load。
-func collectArtifacts(
-	repoRoot string,
-	dir string,
-	suffixes map[string]struct{},
-	productionOnly bool,
-) ([]ast.EvidenceArtifact, error) {
-	info, err := os.Stat(dir)
-	if err != nil {
-		if errors.Is(err, fs.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, err
-	}
-	if !info.IsDir() {
-		return nil, nil
-	}
-	var artifacts []ast.EvidenceArtifact
-	walkErr := filepath.WalkDir(dir, func(
-		current string,
-		entry fs.DirEntry,
-		walkErr error,
-	) error {
-		if walkErr != nil {
-			if errors.Is(walkErr, fs.ErrNotExist) {
-				return nil
-			}
-			return walkErr
-		}
-		if entry.IsDir() {
-			if productionOnly {
-				if _, excluded := nonProductionSegments[entry.Name()]; excluded {
-					return filepath.SkipDir
-				}
-			}
-			return nil
-		}
-		if _, ok := suffixes[strings.ToLower(filepath.Ext(entry.Name()))]; !ok {
-			return nil
-		}
-		if productionOnly && isTestSourceName(entry.Name()) {
-			return nil
-		}
-		digest, digestErr := fileDigest(current)
-		if digestErr != nil {
-			if errors.Is(digestErr, fs.ErrNotExist) {
-				return nil
-			}
-			return digestErr
-		}
-		artifacts = append(artifacts, ast.EvidenceArtifact{
-			Path:   relativePath(repoRoot, current),
-			SHA256: digest,
-		})
-		return nil
-	})
-	if walkErr != nil {
-		return nil, walkErr
-	}
-	sortEvidenceArtifacts(artifacts)
-	return artifacts, nil
 }
 
 // collectTransactionHandles 收集签名里声明为事务类型的形参名。类型是语法事实，不需要类型

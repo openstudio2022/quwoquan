@@ -17,6 +17,11 @@ type Query {
 scalar SearchObjectRef
 scalar SearchCursor
 
+# 与 metadata semantic_document 类型使用同一 DocumentEnvelope wire/codec。
+# 整棵递归树是原子值，不按 GraphQL 深度截断，也不由 Markdown 重建。
+# owner 验证 canonical envelope，App 使用 documentEnvelopeFromWire；响应仍受签名字节预算约束。
+scalar semantic_document
+
 enum SearchPageObjectType {
   CIRCLE
   CIRCLE_GROUP
@@ -32,7 +37,43 @@ enum SearchPageContentType {
   VIDEO
 }
 
+# 手写 SDL 的传输投影；字段与闭集由 canonical shared 类型的契约测试锁定。
+# 不声明默认能力，缺席语义仅由 Search owner 的 effective 处理拥有。
+input ClientContentPresentationContract {
+  contentTypes: [ContentType!]!
+  listObjectKinds: [ListObjectKind!]!
+  openSurfaces: [ContentUiSurface!]!
+  presentationRecipes: [FeedPresentationRecipe!]!
+  contractDigest: String!
+}
+
+enum ContentType {
+  image
+  video
+  article
+}
+
+enum ListObjectKind {
+  post
+  entity_homepage
+}
+
+enum ContentUiSurface {
+  home_feed
+  profile_works
+  media_immersive
+  article_reader
+  homepage_detail
+}
+
+enum FeedPresentationRecipe {
+  cover_media_card
+  article_excerpt_card
+  homepage_summary_card
+}
+
 input SearchPageInput {
+  clientPresentationContract: ClientContentPresentationContract
   query: String!
   first: Int = 20
   after: SearchCursor
@@ -77,7 +118,6 @@ type SearchPageFacet {
 type ContentPostDetailBase {
   postId: ID!
   contentType: String!
-  contentIdentity: String
   assistantUsePolicy: String
   authorId: ID
   authorDisplayName: String
@@ -113,6 +153,7 @@ type ContentPostDetailBase {
 type ContentPostDetailSemantic {
   postId: ID!
   contentType: String!
+  semanticDocument: semantic_document
   tagRefs(first: Int!): [String!] @listCost(argument: "first", defaultValue: 30, maximumValue: 30)
   entityRefs(first: Int!): [String!] @listCost(argument: "first", defaultValue: 30, maximumValue: 30)
   semanticMentions(first: Int!): [PostSemanticMention!] @listCost(argument: "first", defaultValue: 30, maximumValue: 30)
@@ -299,7 +340,6 @@ type PostHomepageSnapshot {
 type ContentPostDetailSlice {
   postId: ID!
   contentType: String!
-  contentIdentity: String
   assistantUsePolicy: String
   authorId: ID
   authorDisplayName: String
@@ -312,6 +352,7 @@ type ContentPostDetailSlice {
   tagRefs: [String!]
   entityRefs: [String!]
   semanticMentions: [PostSemanticMention!]
+  semanticDocument: semantic_document
   mediaAssetIds: [ID!]
   mediaUrls: [String!]
   mediaItems: [PostMediaItem!]

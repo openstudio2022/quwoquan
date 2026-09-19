@@ -24,14 +24,6 @@ final class StartupEagerPluginRegistry {
         "com.it_nomads.fluttersecurestorage.FlutterSecureStoragePlugin");
     registerPlugin(
         flutterEngine,
-        "firebase_core",
-        "io.flutter.plugins.firebase.core.FlutterFirebaseCorePlugin");
-    registerPlugin(
-        flutterEngine,
-        "firebase_messaging",
-        "io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingPlugin");
-    registerPlugin(
-        flutterEngine,
         "shared_preferences_android",
         "io.flutter.plugins.sharedpreferences.SharedPreferencesPlugin");
     registerPlugin(flutterEngine, "sqflite_android", "com.tekartik.sqflite.SqflitePlugin");

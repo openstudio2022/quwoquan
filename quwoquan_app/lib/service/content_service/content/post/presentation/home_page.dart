@@ -546,8 +546,7 @@ class _HomePageState extends ConsumerState<HomePage>
     );
   }
 
-  /// 按频道 template 路由到 Feed 模板组件（去硬编码 switch）；
-  /// channelId = channel.id（取数/气质文案/桶 key 真相源），template 驱动单列/多列/发现交集流。
+  /// 频道只提供取数、文案与模块事实；页面列数由 homeFeed 面策略决定。
   Widget _buildBody(
     bool isDark,
     List<HomeChannelConfig> channels,
@@ -567,7 +566,6 @@ class _HomePageState extends ConsumerState<HomePage>
       key: ValueKey<String>('home-feed-${channel.id}'),
       isDark: isDark,
       channelId: channel.id,
-      template: channel.template,
       onInitialContentPainted:
           activeChannelId == _defaultChannelId && widget.isStartupHomeActive
           ? _markStartupHomeFeedContentPainted

@@ -192,10 +192,12 @@ func writeGeneratedOperationContracts(
 	b.WriteString("    required this.name,\n")
 	b.WriteString("    required this.field,\n")
 	b.WriteString("    required this.required,\n")
+	b.WriteString("    this.encoding,\n    this.maxBytes,\n")
 	b.WriteString("  });\n\n")
 	b.WriteString("  final String name;\n")
 	b.WriteString("  final String field;\n")
 	b.WriteString("  final bool required;\n")
+	b.WriteString("  final String? encoding;\n  final int? maxBytes;\n")
 	b.WriteString("}\n\n")
 	b.WriteString("final class CloudOperationActorContext {\n")
 	b.WriteString("  const CloudOperationActorContext({\n")
@@ -744,6 +746,9 @@ func writeOperationRequestBindings(
 		fmt.Fprintf(output, "        name: %q,\n", binding.Name)
 		fmt.Fprintf(output, "        field: %q,\n", binding.Field)
 		fmt.Fprintf(output, "        required: %t,\n", required)
+		if binding.Encoding != "" {
+			fmt.Fprintf(output, "        encoding: %q,\n        maxBytes: %d,\n", binding.Encoding, binding.MaxBytes)
+		}
 		output.WriteString("      ),\n")
 	}
 	output.WriteString("    ],\n")

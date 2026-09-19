@@ -174,16 +174,6 @@ class _AddContactPageState extends ConsumerState<AddContactPage> {
             _SectionCard(
               child: Column(
                 children: <Widget>[
-                  AddContactEntryCard(
-                    icon: CupertinoIcons.qrcode_viewfinder,
-                    title: ProfileText.editProfileQrScanAction,
-                    subtitle: ContactText.addContactScanEntrySubtitle,
-                    showDivider: caps.contacts,
-                    onTap: () => _openEntry(
-                      'open_contact_scan',
-                      AppRoutePaths.addContactScan,
-                    ),
-                  ),
                   if (caps.contacts)
                     AddContactEntryCard(
                       icon: CupertinoIcons.person_2_fill,

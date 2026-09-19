@@ -2,36 +2,102 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "properties": {
-    "policyId": { "const": "media_processing" },
-    "sourceAssetMaxBytes": { "type": "integer", "minimum": 1048576 },
-    "pageImageRenditionWidth": { "type": "integer", "minimum": 800 },
-    "maxPublishableImagePixels": { "type": "integer", "minimum": 1000000 },
-    "maxSourcePixels": { "type": "integer", "minimum": 1000000 },
+    "policyId": {
+      "const": "media_processing"
+    },
+    "sourceAssetMaxBytes": {
+      "type": "integer",
+      "minimum": 1048576
+    },
+    "pageImageRenditionWidth": {
+      "type": "integer",
+      "minimum": 800
+    },
+    "maxPublishableImagePixels": {
+      "type": "integer",
+      "minimum": 1000000
+    },
+    "maxSourcePixels": {
+      "type": "integer",
+      "minimum": 1000000
+    },
     "objectStorageBudgetBytesByCarrier": {
       "type": "object",
       "properties": {
-        "default": { "type": "integer", "minimum": 1048576 },
-        "video": { "type": "integer", "minimum": 1048576 }
+        "default": {
+          "type": "integer",
+          "minimum": 1048576
+        },
+        "video": {
+          "type": "integer",
+          "minimum": 1048576
+        }
       },
-      "required": ["default", "video"],
-      "additionalProperties": { "type": "integer", "minimum": 1048576 }
+      "required": [
+        "default",
+        "video"
+      ],
+      "additionalProperties": {
+        "type": "integer",
+        "minimum": 1048576
+      }
     },
-    "videoDerivativeTargetBytes": { "type": "integer", "minimum": 1048576 },
-    "maxAssessmentImagePixels": { "type": "integer", "minimum": 1000000 },
-    "assessmentJpegQuality": { "type": "integer", "minimum": 1, "maximum": 95 },
-    "ocrImagePixels": { "type": "integer", "minimum": 300000 },
-    "baseDraftImageCandidates": { "type": "integer", "minimum": 1 },
-    "imageFetchTargetSurplus": { "type": "integer", "minimum": 0 },
-    "imageCandidateSurplus": { "type": "integer", "minimum": 0 },
-    "webpMethod": { "type": "integer", "minimum": 0, "maximum": 6 },
-    "homepageBaseDraftMaxChars": { "type": "integer", "minimum": 4000 }
+    "videoDerivativeTargetBytes": {
+      "type": "integer",
+      "minimum": 1048576
+    },
+    "maxAssessmentImagePixels": {
+      "type": "integer",
+      "minimum": 1000000
+    },
+    "assessmentJpegQuality": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 95
+    },
+    "ocrImagePixels": {
+      "type": "integer",
+      "minimum": 300000
+    },
+    "baseDraftImageCandidates": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "imageFetchTargetSurplus": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "imageCandidateSurplus": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "webpMethod": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 6
+    },
+    "homepageBaseDraftMaxChars": {
+      "type": "integer",
+      "minimum": 4000
+    }
   },
   "required": [
-    "policyId", "sourceAssetMaxBytes", "pageImageRenditionWidth", "maxPublishableImagePixels",
-    "maxSourcePixels", "objectStorageBudgetBytesByCarrier", "videoDerivativeTargetBytes",
-    "maxAssessmentImagePixels", "assessmentJpegQuality", "ocrImagePixels", "baseDraftImageCandidates",
-    "imageFetchTargetSurplus", "imageCandidateSurplus", "webpMethod",
+    "policyId",
+    "sourceAssetMaxBytes",
+    "pageImageRenditionWidth",
+    "maxPublishableImagePixels",
+    "maxSourcePixels",
+    "objectStorageBudgetBytesByCarrier",
+    "videoDerivativeTargetBytes",
+    "maxAssessmentImagePixels",
+    "assessmentJpegQuality",
+    "ocrImagePixels",
+    "baseDraftImageCandidates",
+    "imageFetchTargetSurplus",
+    "imageCandidateSurplus",
+    "webpMethod",
     "homepageBaseDraftMaxChars"
   ],
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$id": "https://quwoquan.local/schema/content/media_processing_policy.schema.json"
 }

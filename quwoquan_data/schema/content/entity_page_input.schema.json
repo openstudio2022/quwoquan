@@ -159,7 +159,7 @@
       }
     },
     "schema": {
-      "const": "quwoquan_data.stage_envelope"
+      "const": "quwoquan_data.entity_page_input"
     },
     "selectedSourceRefs": {
       "type": "array",

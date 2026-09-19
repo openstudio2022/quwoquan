@@ -85,36 +85,23 @@ void main() {
     );
   });
 
-  test('编辑快照、二维码名片和扫码解析同轨映射', () async {
+  test('编辑快照与二维码名片同轨映射', () async {
     final query = RemoteProfileEditQuery(
       editSnapshotQuery: facet,
       publicProfileQuery: facet,
     );
-
     final snapshot = await query.getProfileEditSnapshot();
     final card = await query.getProfileQrCard();
-    final resolved = await query.resolveProfileQrToken(
-      token: 'qr-token-1',
-      handle: 'xiaoq',
-    );
-
     expect(snapshot.nickname, '主分身');
     expect(snapshot.phoneCredential?.isBound, isTrue);
     expect(card.qrPayload, 'https://quwoquan.example/u/owner?qr=qr-token-1');
-    expect(resolved.personaId, 'persona-2');
     expect(
       executor.operationIds,
       containsAll(<String>[
         AppCloudOperationIds.userUserAccountGetProfileEditSnapshot,
         AppCloudOperationIds.userUserAccountGetProfileQrCard,
-        AppCloudOperationIds.userUserAccountResolveProfileQrToken,
       ]),
     );
-    final resolvePayload = executor.payloads.last;
-    expect(resolvePayload.queryParameters, <String, String>{
-      'qr': 'qr-token-1',
-      'handle': 'xiaoq',
-    });
   });
 }
 

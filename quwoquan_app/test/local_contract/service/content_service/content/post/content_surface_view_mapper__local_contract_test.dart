@@ -37,6 +37,11 @@ final _unavailableMediaResolver = MediaDeliveryResolver(
 ContentPostViewData _viewData(ContentPostProjection projection) =>
     ContentPostViewData.fromWire(projection);
 
+Map<String, Object?> _projectionWire(Map<String, Object?> row) {
+  return Map<String, Object?>.of(row['projection']! as Map<String, Object?>)
+    ..remove('contentIdentity');
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   installCanonicalOfflineAssetsForTests();
@@ -48,17 +53,16 @@ void main() {
         .rows('posts')
         .map(
           (row) => ContentPostViewData.fromWire(
-            ContentPostProjection.fromWire(
-              row['projection']! as Map<String, Object?>,
-            ),
+            ContentPostProjection.fromWire(_projectionWire(row)),
           ),
         )
         .toList();
     addTearDown(() => hydrateRuntimePackageForTests(environment: 'beta'));
     for (final environment in ['alpha', 'beta', 'gamma']) {
       await hydrateRuntimePackageForTests(environment: environment);
-      if (environment == 'alpha')
+      if (environment == 'alpha') {
         installPublicMediaDelivery(BundledPublicMediaDelivery());
+      }
       final views = posts.map(ContentSurfaceViewMapper.fromDto).toList();
       expect(views.map((view) => view.postId), posts.map((post) => post.id));
       for (final view in views) {
@@ -76,13 +80,13 @@ void main() {
           if (environment != 'alpha') expect(uri.scheme, 'https');
           expect(reference.version, greaterThan(0));
         }
-        if (post.isVideoLike) {
+        if (post.type == ContentType.video) {
           expect(view.video, isNotNull);
           expect(view.video!.delivery.assetId, post.mediaAssetId);
           expect(view.video!.delivery.version, post.mediaAssetVersion);
           expect(view.video!.thumbnailUrl, view.cover!.url);
         }
-        if (post.hasImages && !post.isVideoLike) {
+        if (post.hasImages && post.type != ContentType.video) {
           expect(view.images.length, post.mediaImageUrls.length);
         }
       }
@@ -98,12 +102,10 @@ void main() {
         .rows('posts')
         .map(
           (row) => ContentPostViewData.fromWire(
-            ContentPostProjection.fromWire(
-              row['projection']! as Map<String, Object?>,
-            ),
+            ContentPostProjection.fromWire(_projectionWire(row)),
           ),
         )
-        .singleWhere((post) => post.isVideoLike);
+        .singleWhere((post) => post.type == ContentType.video);
     final delivery = BundledPublicMediaDelivery();
     final seen = <({String assetId, int version})>[];
     final view = domain.ContentSurfaceViewMapper.fromDto(
@@ -149,7 +151,6 @@ void main() {
         contentPostProjectionFixture(
           postId: 'photo1',
           contentType: 'image',
-          contentIdentity: 'work',
           authorId: 'a1',
           authorDisplayName: '作者甲',
           authorAvatarUrl: 'media/avatar/s/fixture/a1/v1/avatar.png',
@@ -170,7 +171,7 @@ void main() {
       );
 
       expect(view.postId, 'photo1');
-      expect(view.kind, ContentSurfaceKind.image);
+      expect(view.contentType, ContentType.image);
       expect(view.contentType, dto.type);
       expect(view.author.id, 'a1');
       expect(view.author.displayName, '作者甲');
@@ -187,7 +188,6 @@ void main() {
         contentPostProjectionFixture(
           postId: 'video1',
           contentType: 'video',
-          contentIdentity: 'work',
           videoUrl: 'media/video/s/fixture/video1/v1/clip.mp4',
           thumbnailUrl: 'media/image/s/fixture/video1/v1/manual-thumb.jpg',
           coverUrl: 'media/image/s/fixture/video1/v1/stale-cover.jpg',
@@ -200,7 +200,7 @@ void main() {
         mediaResolver: _mediaResolver,
       );
 
-      expect(view.kind, ContentSurfaceKind.video);
+      expect(view.contentType, ContentType.video);
       expect(view.hasVideo, isTrue);
       expect(view.video!.url, contains('/video1/v1/clip.mp4'));
       expect(view.video!.durationMs, 12000);
@@ -214,7 +214,6 @@ void main() {
         contentPostProjectionFixture(
           postId: 'article1',
           contentType: 'article',
-          contentIdentity: 'work',
           title: '统一展示标题',
           body: '正文摘要',
           coverUrl: 'media/image/s/fixture/article1/v1/cover.jpg',
@@ -233,7 +232,7 @@ void main() {
         },
       );
 
-      expect(view.kind, ContentSurfaceKind.article);
+      expect(view.contentType, ContentType.article);
       expect(view.title, '统一展示标题');
       expect(view.body, '正文摘要');
       expect(view.cover!.url, contains('/article1/v1/cover.jpg'));
@@ -242,19 +241,18 @@ void main() {
       expect(view.tags, <String>['校园', '摄影']);
     });
 
-    test('micro 仅正文且无媒体', () {
+    test('纯文字 article 仅正文且无媒体', () {
       final dto = _viewData(
         contentPostProjectionFixture(
-          postId: 'micro1',
-          contentType: 'micro',
-          contentIdentity: 'moment',
+          postId: 'text-article-1',
+          contentType: 'article',
           body: '随手一条',
         ),
       );
 
       final view = ContentSurfaceViewMapper.fromDto(dto);
 
-      expect(view.kind, ContentSurfaceKind.micro);
+      expect(view.contentType, ContentType.article);
       expect(view.body, '随手一条');
       expect(view.hasImages, isFalse);
       expect(view.hasVideo, isFalse);
@@ -280,7 +278,7 @@ void main() {
       );
 
       expect(view.postId, 'photo-without-endpoint');
-      expect(view.kind, ContentSurfaceKind.image);
+      expect(view.contentType, ContentType.image);
       expect(view.images, isEmpty);
       expect(view.cover, isNull);
       expect(view.author.avatar, isNull);
@@ -298,8 +296,7 @@ void main() {
       final dto = _viewData(
         contentPostProjectionFixture(
           postId: 'micro2',
-          contentType: 'micro',
-          contentIdentity: 'moment',
+          contentType: 'article',
           body: '带交集理由',
           intersectionReasons: <IntersectionReason>[reason],
         ),
@@ -317,7 +314,6 @@ void main() {
         contentPostProjectionFixture(
           postId: 'time1',
           contentType: 'article',
-          contentIdentity: 'work',
           title: '时间语义文章',
           body: '正文',
           createdAt: DateTime.utc(2026, 1),
@@ -338,8 +334,7 @@ void main() {
       final dto = ContentPostViewData.fromWire(
         const ContentPostProjection(
           postId: 'time2',
-          contentType: 'article',
-          contentIdentity: 'work',
+          contentType: ContentType.article,
           title: '仅有发布时间',
           body: '正文',
           likeCount: 0,
@@ -352,7 +347,6 @@ void main() {
       final wire = ContentPostProjection(
         postId: dto.id,
         contentType: dto.type,
-        contentIdentity: dto.identity,
         title: dto.title,
         body: dto.body,
         likeCount: 0,
@@ -430,8 +424,7 @@ void main() {
       final dto = _viewData(
         contentPostProjectionFixture(
           postId: 'micro3',
-          contentType: 'micro',
-          contentIdentity: 'moment',
+          contentType: 'article',
           body: 'x',
         ),
       );

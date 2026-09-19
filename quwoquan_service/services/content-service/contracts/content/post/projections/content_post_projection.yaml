@@ -6,8 +6,7 @@ source_entities: [Post, MediaAsset]
 consumers: [app]
 fields:
   - {name: postId, type: string, nullable: false}
-  - {name: contentType, type: string, nullable: false}
-  - {name: contentIdentity, type: string, nullable: true}
+  - {name: contentType, type: enum, enum_ref: ContentType, nullable: false}
   - {name: assistantUsePolicy, type: enum, enum_ref: AssistantUsePolicy, nullable: true}
   - {name: authorId, type: string, nullable: true}
   - {name: authorDisplayName, type: string, nullable: true}

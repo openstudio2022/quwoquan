@@ -76,17 +76,14 @@ class ManagedDependencySnapshots:
     bundle: AppDependencyBundle
     production_pub: PubCacheSnapshot
     patrol_pub: PubCacheSnapshot
-    production_ios_pods: IosPodSnapshot
-    patrol_ios_pods: IosPodSnapshot
-    android_gradle: AndroidGradleSnapshot
+    production_ios_pods: IosPodSnapshot | None
+    patrol_ios_pods: IosPodSnapshot | None
+    android_gradle: AndroidGradleSnapshot | None
 
 
 VerifiedDependencySnapshots = tuple[
-    PubCacheSnapshot,
-    PubCacheSnapshot,
-    IosPodSnapshot,
-    IosPodSnapshot,
-    AndroidGradleSnapshot,
+    PubCacheSnapshot, PubCacheSnapshot, IosPodSnapshot | None,
+    IosPodSnapshot | None, AndroidGradleSnapshot | None,
 ]
 
 
@@ -98,12 +95,12 @@ def _pub_manifest_digest(snapshot: PubCacheSnapshot) -> str:
 
 
 def load_managed_dependency_snapshots(
-    *, repo_root: Path, pod_executable: str | Path | None = None
+    *, repo_root: Path, pod_executable: str | Path | None = None, platforms: tuple[str, ...] = ("android", "ios")
 ) -> ManagedDependencySnapshots:
     """Read one active pointer, then verify every selected domain snapshot."""
 
     repository = repo_root.expanduser().absolute()
-    bundle = load_active_dependency_bundle(repo_root=repository)
+    bundle = load_active_dependency_bundle(repo_root=repository, required_platforms=platforms)
     flutter = current_flutter_identity()
     production_pub = load_pub_cache_snapshot_at(
         repo_root=repository,
@@ -121,74 +118,63 @@ def load_managed_dependency_snapshots(
         or patrol_pub.sync_manifest != bundle.component_manifest("patrolPub")
     ):
         raise ValueError("App dependency bundle Pub component drifted")
-    try:
-        if pod_executable is not None:
-            pod_identity = resolve_cocoapods_identity(
-                pod_executable,
-                search_path=str(Path(pod_executable).expanduser().parent),
-            )
-        else:
-            present_identity_keys = {
-                key
-                for key in COCOAPODS_ENVIRONMENT_KEYS
-                if str(os.environ.get(key) or "").strip()
-            }
-            if present_identity_keys:
-                pod_identity = cocoapods_identity_from_environment(os.environ)
-            else:
+    production_ios = None
+    patrol_ios = None
+    if "ios" in platforms:
+        try:
+            if pod_executable is not None:
                 pod_identity = resolve_cocoapods_identity(
-                    search_path=str(os.environ.get("PATH") or ""),
+                    pod_executable, search_path=str(Path(pod_executable).expanduser().parent)
                 )
-        pod = pod_identity.executable
-    except AppDependencyToolchainError as error:
-        raise ValueError(str(error)) from error
-    production_manifest = bundle.component_manifest("productionIosPods")
-    patrol_manifest = bundle.component_manifest("patrolIosPods")
-    production_ios = load_verified_ios_pod_capsule(
-        snapshot_root=bundle.component_root("productionIosPods"),
-        expected_podfile_lock=(
-            repository / IOS_PODFILE_LOCK_RELATIVES[IOS_POD_PRODUCTION_HOST]
-        ),
-        pod_executable=pod,
-        resolution_inputs=ios_pod_resolution_inputs(
-            repo_root=repository,
+            else:
+                present_identity_keys = {
+                    key for key in COCOAPODS_ENVIRONMENT_KEYS
+                    if str(os.environ.get(key) or "").strip()
+                }
+                pod_identity = (
+                    cocoapods_identity_from_environment(os.environ)
+                    if present_identity_keys
+                    else resolve_cocoapods_identity(search_path=str(os.environ.get("PATH") or ""))
+                )
+            pod = pod_identity.executable
+        except AppDependencyToolchainError as error:
+            raise ValueError(str(error)) from error
+        production_manifest = bundle.component_manifest("productionIosPods")
+        patrol_manifest = bundle.component_manifest("patrolIosPods")
+        production_ios = load_verified_ios_pod_capsule(
+            snapshot_root=bundle.component_root("productionIosPods"),
+            expected_podfile_lock=repository / IOS_PODFILE_LOCK_RELATIVES[IOS_POD_PRODUCTION_HOST],
+            pod_executable=pod,
+            resolution_inputs=ios_pod_resolution_inputs(repo_root=repository, dependency_host=IOS_POD_PRODUCTION_HOST),
+            upstream_dependency_digest=_pub_manifest_digest(production_pub),
             dependency_host=IOS_POD_PRODUCTION_HOST,
-        ),
-        upstream_dependency_digest=_pub_manifest_digest(production_pub),
-        dependency_host=IOS_POD_PRODUCTION_HOST,
-    )
-    patrol_ios = load_verified_ios_pod_capsule(
-        snapshot_root=bundle.component_root("patrolIosPods"),
-        expected_podfile_lock=(
-            repository / IOS_PODFILE_LOCK_RELATIVES[IOS_POD_PATROL_HOST]
-        ),
-        pod_executable=pod,
-        resolution_inputs=ios_pod_resolution_inputs(
-            repo_root=repository,
+        )
+        patrol_ios = load_verified_ios_pod_capsule(
+            snapshot_root=bundle.component_root("patrolIosPods"),
+            expected_podfile_lock=repository / IOS_PODFILE_LOCK_RELATIVES[IOS_POD_PATROL_HOST],
+            pod_executable=pod,
+            resolution_inputs=ios_pod_resolution_inputs(repo_root=repository, dependency_host=IOS_POD_PATROL_HOST),
+            upstream_dependency_digest=_pub_manifest_digest(patrol_pub),
             dependency_host=IOS_POD_PATROL_HOST,
-        ),
-        upstream_dependency_digest=_pub_manifest_digest(patrol_pub),
-        dependency_host=IOS_POD_PATROL_HOST,
-    )
-    if (
-        production_ios.manifest != production_manifest
-        or patrol_ios.manifest != patrol_manifest
-    ):
-        raise ValueError("App dependency bundle iOS component drifted")
-    invocations = canonical_android_dependency_bundle_invocations(repository)
-    android = load_android_gradle_component(
-        project_root=repository,
-        component_root=bundle.component_root("androidGradle"),
-        invocations=invocations,
-        upstream_dependency_digests={
-            "productionPub": _pub_manifest_digest(production_pub),
-            "patrolPub": _pub_manifest_digest(patrol_pub),
-        },
-    )
-    android_manifest = bundle.component_manifest("androidGradle")
-    dependency = android_manifest.get("dependency")
-    if not isinstance(dependency, Mapping) or dict(dependency) != android.manifest:
-        raise ValueError("App dependency bundle Android component drifted")
+        )
+        if production_ios.manifest != production_manifest or patrol_ios.manifest != patrol_manifest:
+            raise ValueError("App dependency bundle iOS component drifted")
+    android = None
+    if "android" in platforms:
+        invocations = canonical_android_dependency_bundle_invocations(repository)
+        android = load_android_gradle_component(
+            project_root=repository,
+            component_root=bundle.component_root("androidGradle"),
+            invocations=invocations,
+            upstream_dependency_digests={
+                "productionPub": _pub_manifest_digest(production_pub),
+                "patrolPub": _pub_manifest_digest(patrol_pub),
+            },
+        )
+        android_manifest = bundle.component_manifest("androidGradle")
+        dependency = android_manifest.get("dependency")
+        if not isinstance(dependency, Mapping) or dict(dependency) != android.manifest:
+            raise ValueError("App dependency bundle Android component drifted")
     return ManagedDependencySnapshots(
         bundle=bundle,
         production_pub=production_pub,
@@ -263,19 +249,15 @@ def copy_dependency_bundle_to_capsule(
             snapshot=snapshots.patrol_pub,
             capsule_root=root,
         ),
-        _copy_ios(
-            logical=IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PRODUCTION_HOST],
-            relative=IOS_POD_DEPENDENCY_DIRECTORIES[IOS_POD_PRODUCTION_HOST],
-            snapshot=snapshots.production_ios_pods,
-            capsule_root=root,
-        ),
-        _copy_ios(
-            logical=IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PATROL_HOST],
-            relative=IOS_POD_DEPENDENCY_DIRECTORIES[IOS_POD_PATROL_HOST],
-            snapshot=snapshots.patrol_ios_pods,
-            capsule_root=root,
-        ),
+
     ]
+    if snapshots.production_ios_pods is not None and snapshots.patrol_ios_pods is not None:
+        records.extend([
+            _copy_ios(logical=IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PRODUCTION_HOST], relative=IOS_POD_DEPENDENCY_DIRECTORIES[IOS_POD_PRODUCTION_HOST], snapshot=snapshots.production_ios_pods, capsule_root=root),
+            _copy_ios(logical=IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PATROL_HOST], relative=IOS_POD_DEPENDENCY_DIRECTORIES[IOS_POD_PATROL_HOST], snapshot=snapshots.patrol_ios_pods, capsule_root=root),
+        ])
+    if snapshots.android_gradle is None:
+        return records
     invocations = canonical_android_dependency_bundle_invocations(
         root / "repo"
     )
@@ -301,25 +283,17 @@ def dependency_bundle_digest_entries(
 ) -> list[tuple[str, str, bytes]]:
     """Return the marker records used by workspace and package CAS identity."""
 
-    values = (
-        (
-            PUB_CACHE_DEPENDENCY_LOGICAL_PATH,
-            snapshots.production_pub.encoded_sync_manifest,
-        ),
-        (
-            "dependency:patrol-host-dart-pub-cache-v1",
-            snapshots.patrol_pub.encoded_sync_manifest,
-        ),
-        (
-            IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PRODUCTION_HOST],
-            snapshots.production_ios_pods.encoded_manifest,
-        ),
-        (
-            IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PATROL_HOST],
-            snapshots.patrol_ios_pods.encoded_manifest,
-        ),
-        (ANDROID_GRADLE_LOGICAL_PATH, snapshots.android_gradle.encoded_manifest),
-    )
+    values: list[tuple[str, bytes | None]] = [
+        (PUB_CACHE_DEPENDENCY_LOGICAL_PATH, snapshots.production_pub.encoded_sync_manifest),
+        ("dependency:patrol-host-dart-pub-cache-v1", snapshots.patrol_pub.encoded_sync_manifest),
+    ]
+    if snapshots.production_ios_pods is not None and snapshots.patrol_ios_pods is not None:
+        values.extend([
+            (IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PRODUCTION_HOST], snapshots.production_ios_pods.encoded_manifest),
+            (IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PATROL_HOST], snapshots.patrol_ios_pods.encoded_manifest),
+        ])
+    if snapshots.android_gradle is not None:
+        values.append((ANDROID_GRADLE_LOGICAL_PATH, snapshots.android_gradle.encoded_manifest))
     result: list[tuple[str, str, bytes]] = []
     for logical, content in values:
         if content is None:
@@ -400,22 +374,28 @@ def verify_dependency_bundle_capsule(
     )
     if production_pub is None or patrol_pub is None:
         raise ValueError("App dependency bundle Pub component is missing")
-    production_ios = _ios_capsule_snapshot(
-        capsule_root=root,
-        manifest_entries=manifest_entries,
-        dependency_host=IOS_POD_PRODUCTION_HOST,
-        upstream_dependency_digest=_pub_manifest_digest(production_pub),
-    )
-    patrol_ios = _ios_capsule_snapshot(
-        capsule_root=root,
-        manifest_entries=manifest_entries,
-        dependency_host=IOS_POD_PATROL_HOST,
-        upstream_dependency_digest=_pub_manifest_digest(patrol_pub),
-    )
+    logicals = {str(item.get("logicalPath") or "") for item in manifest_entries}
+    ios_logicals = {
+        IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PRODUCTION_HOST],
+        IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PATROL_HOST],
+    }
+    if logicals & ios_logicals and not ios_logicals.issubset(logicals):
+        raise ValueError("App dependency bundle iOS component set is incomplete")
+    production_ios = patrol_ios = None
+    if ios_logicals.issubset(logicals):
+        production_ios = _ios_capsule_snapshot(
+            capsule_root=root, manifest_entries=manifest_entries,
+            dependency_host=IOS_POD_PRODUCTION_HOST,
+            upstream_dependency_digest=_pub_manifest_digest(production_pub),
+        )
+        patrol_ios = _ios_capsule_snapshot(
+            capsule_root=root, manifest_entries=manifest_entries,
+            dependency_host=IOS_POD_PATROL_HOST,
+            upstream_dependency_digest=_pub_manifest_digest(patrol_pub),
+        )
     android = capsule_android_gradle_snapshot(
-        capsule_root=root,
-        manifest_entries=manifest_entries,
+        capsule_root=root, manifest_entries=manifest_entries,
     )
-    if android is None:
-        raise ValueError("App dependency bundle Android component is missing")
+    if android is None and production_ios is None:
+        raise ValueError("App dependency bundle platform component is missing")
     return production_pub, patrol_pub, production_ios, patrol_ios, android

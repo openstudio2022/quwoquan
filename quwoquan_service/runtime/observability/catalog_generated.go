@@ -120,7 +120,6 @@ func init() {
 		{ObjectID: "content.post", Field: "captureFeatureRefs", Classification: "INTERNAL", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "commentCount", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "contentDigest", Classification: "INTERNAL", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
-		{ObjectID: "content.post", Field: "contentIdentity", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "contentType", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "contentVertical", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},
 		{ObjectID: "content.post", Field: "coverFrameTimeMs", Classification: "PUBLIC", Action: "drop", MaskStrategy: "", TruncateChars: 0, Explicit: false, Visibility: nil},

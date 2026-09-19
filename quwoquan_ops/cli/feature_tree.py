@@ -4,7 +4,7 @@
 本工具刻意不支持 tree/index/registry/acceptance/changelog 兼容读取。
 
 实现单轨落在 ``quwoquan_ops/cli/lib/feature_tree/`` 包内（context / patterns /
-nodes / parsing / gitio / delta / ownership / evidence / commands / verify /
+nodes / parsing / gitio / delta / evidence / commands / verify /
 cli_entry）；本文件是稳定 CLI 入口并 re-export 包 API。fixture 树测试通过
 monkeypatch ``quwoquan_ops.cli.lib.feature_tree.context`` 的 ``REPO_ROOT`` /
 ``TREE_ROOT`` 驱动。
@@ -33,9 +33,7 @@ from quwoquan_ops.cli.lib.feature_tree import (  # noqa: E402,F401
     discover_nodes,
     main,
     node_for_spec,
-    owners_for_path,
     parent_chain,
-    resolve_target,
 )
 
 if __name__ == "__main__":

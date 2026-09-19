@@ -42,7 +42,6 @@ def verify_explicit_receipt_read_only(
     exact_bytes: bytes,
     paths: list[str],
     mode: str,
-    owner_manifest_path: Path,
     candidate_evidence_path: Path | None = None,
     repo_root: Path = REPO_ROOT,
 ) -> dict[str, Any]:
@@ -86,7 +85,6 @@ def verify_explicit_receipt_read_only(
         canonical,
         repo_root=repo_root,
         mode=mode,
-        owner_manifest=owner_manifest_path,
         candidate_evidence=candidate_evidence_path,
         review_consolidation=review_path,
         required_evidence=evidence_paths,

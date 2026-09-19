@@ -1,18 +1,8 @@
 package recommendation
 
-// ContentType identifies the type of content for engagement depth calculation.
-type ContentType string
-
-const (
-	ContentTypeArticle ContentType = "article"
-	ContentTypePhoto   ContentType = "photo"
-	ContentTypeVideo   ContentType = "video"
-	ContentTypeMoment  ContentType = "moment"
-)
-
 // EngagementDepthInput holds the raw signals needed to compute engagement depth.
 type EngagementDepthInput struct {
-	ContentType ContentType
+	ContentType string
 	// For articles: pages viewed out of total
 	PagesViewed int
 	TotalPages  int
@@ -28,24 +18,26 @@ type EngagementDepthInput struct {
 
 // ComputeEngagementDepth returns a normalized depth level (0-4) based on content
 // type and consumption signals. Short content uses dwell-time-based fallback
-// to avoid ratio distortion.
+// to avoid ratio distortion. Unsupported content types return -1.
 func ComputeEngagementDepth(input EngagementDepthInput) int {
 	ratio := computeConsumedRatio(input)
+	if ratio == -2 {
+		return -1 // 不支持的类型不进入有效深度桶。
+	}
 	if ratio < 0 {
 		return depthFromDwell(input.DwellMs, input.ContentType)
 	}
 	return ratioToDepthLevel(ratio)
 }
 
-// ComputeConsumedRatio returns the raw consumed ratio (0.0-1.0+) or -1 if
-// the input should use dwell-based fallback (short content).
+// ComputeConsumedRatio 返回消费比例；-1 表示短内容使用停留时间，-2 表示类型不支持。
 func ComputeConsumedRatio(input EngagementDepthInput) float64 {
 	return computeConsumedRatio(input)
 }
 
 func computeConsumedRatio(input EngagementDepthInput) float64 {
 	switch input.ContentType {
-	case ContentTypeArticle:
+	case "article":
 		if input.TotalPages <= 2 {
 			return -1 // use dwell fallback
 		}
@@ -54,7 +46,7 @@ func computeConsumedRatio(input EngagementDepthInput) float64 {
 		}
 		return float64(input.PagesViewed) / float64(input.TotalPages)
 
-	case ContentTypePhoto:
+	case "image":
 		if input.TotalImages <= 2 {
 			return -1 // use dwell fallback
 		}
@@ -63,7 +55,7 @@ func computeConsumedRatio(input EngagementDepthInput) float64 {
 		}
 		return float64(input.ImagesViewed) / float64(input.TotalImages)
 
-	case ContentTypeVideo:
+	case "video":
 		if input.TotalDurationMs > 0 && input.TotalDurationMs < 10000 {
 			// Short video: lower thresholds via adjusted ratio
 			if input.PlayPositionMs <= 0 {
@@ -78,71 +70,29 @@ func computeConsumedRatio(input EngagementDepthInput) float64 {
 		}
 		return float64(input.PlayPositionMs) / float64(input.TotalDurationMs)
 
-	case ContentTypeMoment:
-		return -1 // always use dwell fallback for moments
-
 	default:
-		return -1
+		return -2 // 不支持的类型与短内容回退必须区分。
 	}
 }
 
 // depthFromDwell maps raw dwell time to depth level using content-type-specific
 // thresholds. Used when content is too short for ratio-based measurement.
-func depthFromDwell(dwellMs int, ct ContentType) int {
+func depthFromDwell(dwellMs int, ct string) int {
+	var thresholds [3]int
 	switch ct {
-	case ContentTypeArticle:
-		// Short article (<=2 pages): <5s→L0, 5-15s→L1, 15-30s→L2, 30s+→L3
-		switch {
-		case dwellMs < 5000:
-			return 0
-		case dwellMs < 15000:
-			return 1
-		case dwellMs < 30000:
-			return 2
-		default:
-			return 3
-		}
-	case ContentTypePhoto:
-		// Short photo post (<=2 images): <3s→L0, 3-8s→L1, 8-15s→L2, 15s+→L3
-		switch {
-		case dwellMs < 3000:
-			return 0
-		case dwellMs < 8000:
-			return 1
-		case dwellMs < 15000:
-			return 2
-		default:
-			return 3
-		}
-	case ContentTypeMoment:
-		// Moments: <2s→L0, 2-5s→L1, 5-10s→L2, 10-20s→L3, 20s+→L4
-		switch {
-		case dwellMs < 2000:
-			return 0
-		case dwellMs < 5000:
-			return 1
-		case dwellMs < 10000:
-			return 2
-		case dwellMs < 20000:
-			return 3
-		default:
-			return 4
-		}
+	case "article":
+		thresholds = [3]int{5000, 15000, 30000}
+	case "image":
+		thresholds = [3]int{3000, 8000, 15000}
 	default:
-		// Generic fallback
-		switch {
-		case dwellMs < 3000:
-			return 0
-		case dwellMs < 10000:
-			return 1
-		case dwellMs < 30000:
-			return 2
-		case dwellMs < 60000:
-			return 3
-		default:
-			return 4
+		return -1
+	}
+	for depth, threshold := range thresholds {
+		if dwellMs < threshold {
+			return depth
 		}
 	}
+	return len(thresholds)
 }
 
 // ratioToDepthLevel maps a consumed ratio [0, 1+] to depth level [0, 4].

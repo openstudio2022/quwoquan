@@ -306,17 +306,14 @@ def _versions(commands: list[list[str]]) -> dict[str, str | None]:
     return result
 
 
-def _owner_manifest_assets(
-    owner_manifest: Path | None,
+def _candidate_assets(
     *,
     repo_root: Path,
     candidate_evidence: Path | None = None,
 ) -> tuple[list[str], dict[str, Any] | None]:
-    from .admission import owner_manifest_assets
+    from .admission import candidate_assets
 
-    return owner_manifest_assets(
-        owner_manifest, repo_root=repo_root, candidate_evidence=candidate_evidence
-    )
+    return candidate_assets(candidate_evidence, repo_root=repo_root)
 
 
 def _load_review_inputs(
@@ -388,7 +385,6 @@ def capture_fingerprint(
     *,
     repo_root: Path = ROOT,
     mode: str,
-    owner_manifest: Path | None = None,
     candidate_evidence: Path | None = None,
     push_updates: list[dict[str, str]] | None = None,
     review_consolidation: Path | None = None,
@@ -400,9 +396,9 @@ def capture_fingerprint(
     paths = list(execution["paths"])
     if not paths:
         raise LocalReadinessError("readiness fingerprint 不接受空输入范围")
-    assets, manifest = _owner_manifest_assets(owner_manifest, repo_root=repo_root, candidate_evidence=candidate_evidence)
-    if execution["level"] in {"scope", "release"} and (manifest is None or candidate_evidence is None) and not allow_missing_admission:
-        raise LocalReadinessError("scope/release readiness 要求 owner identity + candidate evidence")
+    assets, candidate_manifest = _candidate_assets(candidate_evidence=candidate_evidence, repo_root=repo_root)
+    if execution["level"] in {"scope", "release"} and (candidate_manifest is None or candidate_evidence is None) and not allow_missing_admission:
+        raise LocalReadinessError("scope/release readiness 要求 canonical candidate evidence")
     _review_paths, review_identity = _load_review_inputs(
         review_consolidation,
         required_evidence,
@@ -437,7 +433,7 @@ def capture_fingerprint(
             "assets": {
                 "canonical_assets_digest": canonical_digest({
                     "source_tree": workspace if mode != "workspace" else (workspace_digests(assets, repo_root=repo_root) if assets else {}),
-                    "owner_identity": manifest,
+                    "candidate_evidence": candidate_manifest,
                     "candidate_evidence_ref": normalize_repo_relative_path(candidate_evidence.as_posix(), repo_root) if candidate_evidence else None,
                 }),
                 "review_assets_digest": canonical_digest(review_identity),
@@ -555,7 +551,6 @@ def plan_readiness(
     paths: list[str],
     repo_root: Path = ROOT,
     mode: str = "workspace",
-    owner_manifest: Path | None = None,
     candidate_evidence: Path | None = None,
     push_updates: list[dict[str, str]] | None = None,
     review_consolidation: Path | None = None,
@@ -568,7 +563,6 @@ def plan_readiness(
         plan,
         repo_root=repo_root,
         mode=mode,
-        owner_manifest=owner_manifest,
         candidate_evidence=candidate_evidence,
         push_updates=push_updates,
         review_consolidation=review_consolidation,
@@ -734,7 +728,6 @@ def run_readiness(
     plan: dict[str, Any],
     *,
     repo_root: Path = ROOT,
-    owner_manifest: Path | None = None,
     candidate_evidence: Path | None = None,
     push_updates: list[dict[str, str]] | None = None,
     review_consolidation: Path | None = None,
@@ -764,7 +757,6 @@ def run_readiness(
         canonical,
         repo_root=repo_root,
         mode=mode,
-        owner_manifest=owner_manifest,
         candidate_evidence=candidate_evidence,
         push_updates=push_updates,
         review_consolidation=review_consolidation,
@@ -784,7 +776,6 @@ def run_readiness(
             canonical,
             repo_root=repo_root,
             mode=mode,
-            owner_manifest=owner_manifest,
             candidate_evidence=candidate_evidence,
             push_updates=push_updates,
             review_consolidation=review_consolidation,
@@ -845,7 +836,6 @@ def run_readiness(
             canonical,
             repo_root=repo_root,
             mode=mode,
-            owner_manifest=owner_manifest,
             candidate_evidence=candidate_evidence,
             push_updates=push_updates,
             review_consolidation=review_consolidation,
@@ -883,7 +873,6 @@ def run_readiness(
             "checks": results,
             "cache_hit": False,
             "plan": canonical,
-            "owner_identity": str(owner_manifest.resolve().relative_to(repo_root.resolve())) if owner_manifest else None,
             "candidate_evidence": str(candidate_evidence.resolve().relative_to(repo_root.resolve())) if candidate_evidence else None,
             "review_admission": {"paths": admission_paths, "identity": admission_identity},
             "queue_closure": queue_observation,
@@ -912,7 +901,6 @@ def verify_receipt(
     paths: list[str],
     repo_root: Path = ROOT,
     mode: str,
-    owner_manifest: Path | None = None,
     candidate_evidence: Path | None = None,
     push_updates: list[dict[str, str]] | None = None,
     receipt_path: Path | None = None,
@@ -953,17 +941,12 @@ def verify_receipt(
         raise LocalReadinessError("readiness receipt 仍含 deferred")
     _assert_scope_queue_closed(canonical, state_root=state_root)
     review_path, evidence_paths = _receipt_admission_paths(receipt, repo_root)
-    if receipt.get("owner_manifest") is not None:
-        raise LocalReadinessError("IDENTITY.MIGRATION_REQUIRED: local readiness receipt 使用旧 owner_manifest 字段")
-    if owner_manifest is None and receipt.get("owner_identity"):
-        owner_manifest = repo_root / normalize_repo_relative_path(receipt["owner_identity"], repo_root)
     if candidate_evidence is None and receipt.get("candidate_evidence"):
         candidate_evidence = repo_root / normalize_repo_relative_path(receipt["candidate_evidence"], repo_root)
     current = capture_fingerprint(
         canonical,
         repo_root=repo_root,
         mode=mode,
-        owner_manifest=owner_manifest,
         candidate_evidence=candidate_evidence,
         push_updates=push_updates,
         review_consolidation=review_path,

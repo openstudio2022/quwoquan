@@ -8,14 +8,43 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from enum import Enum
+from pydantic_core import core_schema
+
+
+class _ContractEnum(str, Enum):
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        return core_schema.no_info_before_validator_function(
+            cls._validate_wire,
+            handler(source_type),
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize_wire),
+        )
+
+    @classmethod
+    def _serialize_wire(cls, value):
+        return cls._validate_wire(value).value
+
+    @classmethod
+    def _validate_wire(cls, value):
+        if isinstance(value, cls):
+            return value
+        if type(value) is not str:
+            raise ValueError("enum wire value must be a string")
+        return cls(value)
+
+
+class ContentType(_ContractEnum):
+    VALUE_IMAGE = "image"
+    VALUE_VIDEO = "video"
+    VALUE_ARTICLE = "article"
 
 
 class PostDeletedPayload(BaseModel):
     """仅真实owner删除，DeletePost原授权不变，status为删除前状态；release退出不得产生此事实。source字段全部显式存在，ordinary全null，Data携带environment/sourceOwner/releaseId/manifestDigest完整源tuple，releaseDigest仅审计；安全删除针对同来源canonical postId的所有保留候选，不限定在该源tuple。同sourceVersion等于envelope aggregateVersion，未知/部分来源拒绝。"""
     postId: str
     authorId: str
-    contentType: str
-    contentIdentity: str
+    contentType: ContentType
     status: str
     deletedAt: datetime
     environment: str | None = None

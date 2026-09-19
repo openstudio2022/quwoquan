@@ -7,9 +7,7 @@ import os
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from jsonschema import Draft202012Validator
-
-AUDIT_SCHEMA_PATH = Path(__file__).resolve().parents[2] / "schema/governance/content_fidelity_audit.schema.json"
+from core.schema import assert_valid
 
 
 class ContentRemediationError(ValueError):
@@ -37,18 +35,11 @@ def _read_manifest(path: Path) -> dict:
         raise ContentRemediationError("DATA.REMEDIATION.AUDIT_MANIFEST_INVALID")
     try:
         document = json.loads(path.read_bytes())
-        schema = json.loads(AUDIT_SCHEMA_PATH.read_bytes())
-    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        assert_valid(document, "governance", "content_fidelity_audit", label=str(path))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
         raise ContentRemediationError("DATA.REMEDIATION.AUDIT_MANIFEST_INVALID") from exc
-    expected_schema = schema.get("properties", {}).get("schema", {}).get("const")
-    if not isinstance(document, dict) or document.get("schema") != expected_schema:
-        raise ContentRemediationError(
-            f"DATA.REMEDIATION.AUDIT_SCHEMA_UNSUPPORTED: expected={expected_schema} actual={document.get('schema') if isinstance(document, dict) else None}"
-        )
-    errors = sorted(Draft202012Validator(schema).iter_errors(document), key=lambda error: tuple(error.absolute_path))
-    if errors:
-        location = "/".join(str(value) for value in errors[0].absolute_path) or "$"
-        raise ContentRemediationError(f"DATA.REMEDIATION.AUDIT_SCHEMA_INVALID: {location}: {errors[0].message}")
+    if not isinstance(document, dict):
+        raise ContentRemediationError("DATA.REMEDIATION.AUDIT_MANIFEST_INVALID")
     declared = document.get("baselineDigest")
     core = {key: value for key, value in document.items() if key != "baselineDigest"}
     actual = _digest(_canonical(core))
@@ -63,9 +54,9 @@ def _normalized_filters(values: Iterable[str] | None) -> tuple[str, ...]:
 
 def _severity_vocabulary() -> tuple[str, ...]:
     try:
-        schema = json.loads(AUDIT_SCHEMA_PATH.read_bytes())
-        values = schema["$defs"]["issue"]["properties"]["severity"]["enum"]
-    except (OSError, KeyError, TypeError, json.JSONDecodeError) as exc:
+        from core.schema import load_schema
+        values = load_schema("governance", "content_fidelity_audit")["$defs"]["issue"]["properties"]["severity"]["enum"]
+    except (OSError, KeyError, TypeError, ValueError) as exc:
         raise ContentRemediationError("DATA.REMEDIATION.AUDIT_SEVERITY_CONTRACT_INVALID") from exc
     if not isinstance(values, list) or not values or any(not isinstance(value, str) for value in values):
         raise ContentRemediationError("DATA.REMEDIATION.AUDIT_SEVERITY_CONTRACT_INVALID")
@@ -181,6 +172,7 @@ def generate_remediation_requests(*, audit_manifest: Path, output_root: Path, is
     requests.sort(key=lambda value: (value["original"]["objectRef"], value["requestId"]))
     refs, request_bodies = [], []
     for request in requests:
+        assert_valid(request, "governance", "content_remediation_request", label=request["requestId"])
         body = _serialized(request); ref = f"requests/{request['requestId']}.json"
         request_bodies.append((output_root / ref, body))
         refs.append({"requestId": request["requestId"], "objectRef": request["original"]["objectRef"], "requestRef": ref, "requestDigest": _digest(body)})
@@ -192,6 +184,7 @@ def generate_remediation_requests(*, audit_manifest: Path, output_root: Path, is
                    "semanticReviewPendingObjects": len(_semantic_queue_refs(document))},
         "requests": refs, "effects": {"originalObjectsModified": False, "canonicalPublishInvoked": False, "retirementExecuted": False, "authorOrReviewerAsserted": False},
     }
+    assert_valid(base_result, "governance", "content_remediation_result", label="content remediation result")
     result_path = output_root / "content_remediation_result.json"
     expected = request_bodies + [(result_path, _serialized(base_result))]
     if all(path.is_file() and not path.is_symlink() and path.read_bytes() == body for path, body in expected):

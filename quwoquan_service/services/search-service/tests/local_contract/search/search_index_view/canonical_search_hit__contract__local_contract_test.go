@@ -14,7 +14,7 @@ func TestCanonicalSearchHitUsesTypedContentSliceWithoutPayload(t *testing.T) {
 		Target: rtsearch.TargetPhoto, ObjectType: "content.post", ObjectID: "post_1",
 		Title: "川西日落", Snippet: "雪山下的日落",
 		Payload: map[string]any{
-			"contentIdentity": "work", "coverUrl": "https://cdn.example/cover.jpg",
+			"coverUrl": "https://cdn.example/cover.jpg",
 			"likeCount": float64(12), "unknownPrivateKey": "must-not-leak",
 		},
 	})

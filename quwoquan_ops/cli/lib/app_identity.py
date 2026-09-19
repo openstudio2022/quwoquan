@@ -51,6 +51,7 @@ class AppBuildProduct:
     build_mode: str
     artifact_format: str
     distribution_class: str
+    android_runtime: str | None
 
 
 @lru_cache(maxsize=1)
@@ -161,6 +162,17 @@ def _artifact_contract() -> dict[str, Any]:
             raise AppIdentityError(
                 f"build_products.{product_id}.distribution_class is not canonical"
             )
+        runtime_profile = raw_product.get("android_runtime")
+        if product["platform"] == "android":
+            if runtime_profile != "aosp_no_gms":
+                raise AppIdentityError(
+                    f"build_products.{product_id}.android_runtime must be aosp_no_gms"
+                )
+            product["android_runtime"] = str(runtime_profile)
+        elif runtime_profile is not None:
+            raise AppIdentityError(
+                f"build_products.{product_id}.android_runtime is Android-only"
+            )
         normalized_products[product_id.strip()] = product
 
     return {
@@ -197,6 +209,7 @@ def supported_build_products() -> tuple[AppBuildProduct, ...]:
             build_mode=product["build_mode"],
             artifact_format=product["artifact_format"],
             distribution_class=product["distribution_class"],
+            android_runtime=product.get("android_runtime"),
         )
         for product_id, product in products.items()
     )

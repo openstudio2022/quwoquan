@@ -31,7 +31,6 @@ from lib.evidence_fingerprint import canonical_json_bytes
 from lib.candidate_evidence import build_candidate_evidence
 from lib.feature_tree.content_addressed_writer import _write_content_addressed_bytes  # noqa: E402
 from lib.feature_tree.commands import _context_manifest, discover_nodes  # noqa: E402
-from lib.feature_tree.ownership import resolve_target_details  # noqa: E402
 
 REGISTRY_PATH = ROOT / ".agents/skills/review/references/registry.yaml"
 TEST_ROOT = ROOT / "quwoquan_ops/cli/lib/.named-evidence-tests"
@@ -51,9 +50,7 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
 
     def _manifest(self, target: str) -> dict:
         nodes = self._discovered_nodes
-        manifest = _context_manifest(
-            target, resolve_target_details(target, nodes), nodes
-        )
+        manifest = _context_manifest(target, nodes)
         manifest["evidence_fingerprint"] = review.embedded_fingerprint_binding(
             review.build_feature_context_fingerprint(manifest, repo_root=ROOT)
         )
@@ -94,13 +91,13 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
                 "specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md"
             ]
             manifest = self._manifest(paths[0])
-            candidate = build_candidate_evidence(self.manifest_ref, paths, repo_root=ROOT)
+            candidate = build_candidate_evidence(paths, repo_root=ROOT)
             candidate_path = _write_content_addressed_bytes(
                 canonical_json_bytes(candidate), subdirectory="candidates/by-fingerprint"
             )
             plan = review.build_plan(
                 registry, "dev", "POST", None, paths,
-                context_manifest=manifest, context_manifest_ref=self.manifest_ref,
+                context_manifest=manifest,
                 candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
             )
         return plan, registry
@@ -273,7 +270,7 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
             changed_paths=[relative],
         )
         with self.assertRaisesRegex(
-            runner.EvidenceRunnerError, "FINGERPRINT_CHANGED"
+            runner.EvidenceRunnerError, "CANDIDATE.STALE"
         ):
             self._run(plan, registry)
         self.assertFalse(marker.exists())
@@ -314,13 +311,13 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
             "specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md"
         ]
         manifest = self._manifest(paths[0])
-        candidate = build_candidate_evidence(self.manifest_ref, paths, repo_root=ROOT)
+        candidate = build_candidate_evidence(paths, repo_root=ROOT)
         candidate_path = _write_content_addressed_bytes(
             canonical_json_bytes(candidate), subdirectory="candidates/by-fingerprint"
         )
         plan = review.build_plan(
             registry, "dev", "POST", None, paths,
-            context_manifest=manifest, context_manifest_ref=self.manifest_ref,
+            context_manifest=manifest,
             candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
         )
         captured: dict[str, object] = {}
@@ -472,11 +469,10 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
         self.assertEqual(artifact["canonical_bytes_sha256"], projected["canonical_bytes_sha256"])
         self.assertEqual(artifact["summary"], projected["summary"])
         self.assertEqual(
-            [{key: finding[key] for key in ("code", "path", "terminal")} for finding in artifact["findings"]],
+            [{key: finding[key] for key in ("code", "message", "path", "terminal")} for finding in artifact["findings"]],
             projected["findings"],
         )
-        self.assertEqual("terminal_finding_identity", projected["findings_projection"]["operation"])
-        self.assertEqual(len(artifact["findings"]), projected["findings_projection"]["original_count"])
+        self.assertNotIn("findings_projection", projected)
 
     def test_declared_artifact_command_failure_without_descriptor_is_a_failed_result(self) -> None:
         """证据命令自身失败（如脏工作树下的 Code Health 拒绝执行）不是合同违规。
@@ -592,13 +588,13 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
             "specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md"
         ]
         manifest = self._manifest(paths[0])
-        candidate = build_candidate_evidence(self.manifest_ref, paths, repo_root=ROOT)
+        candidate = build_candidate_evidence(paths, repo_root=ROOT)
         candidate_path = _write_content_addressed_bytes(
             canonical_json_bytes(candidate), subdirectory="candidates/by-fingerprint"
         )
         plan = review.build_plan(
             registry, "dev", "POST", None, paths,
-            context_manifest=manifest, context_manifest_ref=self.manifest_ref,
+            context_manifest=manifest,
             candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
         )
         wrong_bytes = canonical_json_bytes({**plan, "scope": "forged"})
@@ -606,7 +602,7 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
             self._run(plan, registry, plan_bytes=wrong_bytes)
 
         cases = [
-            ("candidate", lambda value: value["candidate_evidence_identity"].__setitem__("ref", value["owner_identity"]["ref"])),
+            ("candidate", lambda value: value["candidate_evidence_identity"].__setitem__("ref", self.manifest_ref)),
             ("changed_paths", lambda value: value.__setitem__("changed_paths", ["README.md"])),
             ("evidence_registry", lambda value: value["evidence"][0].__setitem__("command", "printf forged")),
         ]

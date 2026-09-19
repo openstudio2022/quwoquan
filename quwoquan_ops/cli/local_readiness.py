@@ -80,12 +80,6 @@ def _optional_path(value: str) -> Path | None:
     return Path(value) if value else None
 
 
-def _owner(args: argparse.Namespace) -> Path | None:
-    if getattr(args, "owner_manifest", ""):
-        raise LocalReadinessError("IDENTITY.MIGRATION_REQUIRED: --owner-manifest 已退役")
-    return _optional_path(getattr(args, "owner_identity", ""))
-
-
 def _candidate(args: argparse.Namespace) -> Path | None:
     return _optional_path(getattr(args, "candidate_evidence", ""))
 
@@ -106,7 +100,6 @@ def _build(level: str, args: argparse.Namespace) -> tuple[dict[str, Any], list[d
             level=level,
             paths=paths,
             mode=mode,
-            owner_manifest=_owner(args),
             candidate_evidence=_candidate(args),
             push_updates=updates,
             review_consolidation=consolidation,
@@ -133,7 +126,6 @@ def command_run(args: argparse.Namespace) -> int:
         plan, updates, consolidation, evidence = _build(args.level, args)
     receipt = run_readiness(
         plan,
-        owner_manifest=_owner(args),
         candidate_evidence=_candidate(args),
         push_updates=updates,
         review_consolidation=consolidation,
@@ -155,7 +147,6 @@ def command_produce(args: argparse.Namespace) -> int:
     plan, updates, consolidation, evidence = _build(args.command, args)
     receipt = run_readiness(
         plan,
-        owner_manifest=_owner(args),
         candidate_evidence=_candidate(args),
         push_updates=updates,
         review_consolidation=consolidation,
@@ -171,7 +162,6 @@ def command_verify(args: argparse.Namespace) -> int:
         level=args.level,
         paths=paths,
         mode=mode,
-        owner_manifest=_owner(args),
         candidate_evidence=_candidate(args),
         push_updates=updates,
         receipt_path=Path(args.receipt) if args.receipt else None,
@@ -551,9 +541,7 @@ def _common(parser: argparse.ArgumentParser, *, allow_plan: bool = False) -> Non
     modes.add_argument("--commit", action="store_true")
     modes.add_argument("--push-updates", default="")
     parser.add_argument("--path", action="append", default=[])
-    parser.add_argument("--owner-identity", default="")
     parser.add_argument("--candidate-evidence", default="")
-    parser.add_argument("--owner-manifest", default="", help=argparse.SUPPRESS)
     parser.add_argument("--review-consolidation", default="")
     parser.add_argument("--required-evidence", action="append", default=[])
     if allow_plan:

@@ -4,19 +4,14 @@ import 'package:quwoquan_app/service/content_service/content/post/application/di
 
 void main() {
   group('DiscoveryFeedQuery contract', () {
-    test('moment rail maps to identity=moment without type', () {
-      final query = toDiscoveryFeedQuery('moment');
-      expect(query.identity, 'moment');
-      expect(query.type, isNull);
-      expect(query.channel, isNull, reason: '发现页浏览流走时间线具名查询，不携带频道路由');
-    });
-
-    test('work format tabs map to identity=work with typed filters', () {
+    test('三类浏览 tab 只映射 canonical 内容类型，不携带频道路由', () {
       expect(toDiscoveryFeedQuery('photo').type, 'image');
       expect(toDiscoveryFeedQuery('video').type, 'video');
       expect(toDiscoveryFeedQuery('article').type, 'article');
-      expect(toDiscoveryFeedQuery('photo').identity, 'work');
-      expect(toDiscoveryFeedQuery('photo').channel, isNull);
+      for (final tab in ['photo', 'video', 'article']) {
+        expect(toDiscoveryFeedQuery(tab).category, tab);
+        expect(toDiscoveryFeedQuery(tab).channel, isNull);
+      }
     });
 
     test('premium immersive source maps to channel routing (B3)', () {
@@ -24,7 +19,6 @@ void main() {
       // fail-closed 池；禁止携带 identity/type 落入浏览流。
       final query = toDiscoveryFeedQuery('premium');
       expect(query.channel, 'premium');
-      expect(query.identity, isNull);
       expect(query.type, isNull);
     });
 
@@ -43,7 +37,7 @@ void main() {
       ]) {
         final query = toDiscoveryFeedQuery(channelId);
         expect(query.channel, channelId, reason: '$channelId 必须走频道路由');
-        expect(query.identity, isNull, reason: '$channelId 不得携带 identity');
+        expect(query.category, channelId);
         expect(query.type, isNull, reason: '$channelId 不得携带 type');
       }
     });

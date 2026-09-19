@@ -229,7 +229,7 @@ def inspect_claims(*, repository: Path, policy_path: Path) -> list[dict[str, Any
 
 
 def acquire_claim(
-    *, repository: Path, policy_path: Path, writer_id: str, owner_identity_ref: str,
+    *, repository: Path, policy_path: Path, writer_id: str,
     expected_parent: str, paths: Sequence[str], expires_at: str,
 ) -> Path:
     repository = _repo_root(repository)
@@ -237,7 +237,6 @@ def acquire_claim(
     expected_parent = _sha(expected_parent, "expectedParent")
     _git(repository, "cat-file", "-e", f"{expected_parent}^{{commit}}")
     writer_id = _text(writer_id, "writerId")
-    owner_identity_ref = _text(owner_identity_ref, "ownerIdentityRef")
     expires_at = _text(expires_at, "expiresAt")
     datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
     root = _claim_root(repository, policy_path)
@@ -254,7 +253,7 @@ def acquire_claim(
         generation = 1 + max((int(claim.get("generation", 0)) for claim in active), default=0)
         body: dict[str, Any] = {
             "schema": "quwoquan_ops.scoped_path_claim.v1", "writerId": writer_id,
-            "ownerIdentityRef": owner_identity_ref, "worktree": str(repository),
+"worktree": str(repository),
             "expectedParent": expected_parent, "paths": list(normalized),
             "pathsDigest": exact_digest({"paths": list(normalized)}),
             "generation": generation, "acquiredAt": _utc_now(), "expiresAt": expires_at,
@@ -290,7 +289,7 @@ def _changed_paths(repository: Path, parent: str, tree: str) -> tuple[str, ...]:
 
 
 def build_candidate(
-    *, repository: Path, policy_path: Path, claim_ref: Path, owner_identity_ref: str,
+    *, repository: Path, policy_path: Path, claim_ref: Path,
     impact_plan_digest: str, message: str, author_name: str, author_email: str,
 ) -> Path:
     repository = _repo_root(repository)
@@ -299,8 +298,6 @@ def build_candidate(
     claim_id = _digest(claim.get("claimId"), "claimId")
     if (root / "releases" / f"{claim_id}.json").exists():
         raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "claim was released")
-    if claim.get("ownerIdentityRef") != owner_identity_ref:
-        raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "owner identity drifted")
     parent = _sha(claim.get("expectedParent"), "expectedParent")
     paths = _normalize_paths(repository, claim.get("paths", []))
     impact_plan_digest = _digest(impact_plan_digest, "impactPlanDigest")
@@ -340,7 +337,7 @@ def build_candidate(
         raise ScopedCandidateError("SCOPED_CANDIDATE.SCOPE_DRIFT", "default HEAD or index changed during candidate construction")
     body: dict[str, Any] = {
         "schema": _SCHEMA, "claimRef": claim_ref.relative_to(root).as_posix(),
-        "claimDigest": exact_digest(claim_ref), "ownerIdentityRef": owner_identity_ref,
+        "claimDigest": exact_digest(claim_ref),
         "expectedParent": parent, "commit": commit, "tree": tree,
         "paths": list(paths), "pathsDigest": exact_digest({"paths": list(paths)}),
         "impactPlanDigest": impact_plan_digest, "createdAt": _utc_now(),
@@ -351,7 +348,7 @@ def build_candidate(
 
 def build_head_candidate(
     *, repository: Path, policy_path: Path, commit: str, expected_parent: str,
-    owner_identity_ref: str, impact_plan_digest: str, writer_id: str, expires_at: str,
+    impact_plan_digest: str, writer_id: str, expires_at: str,
 ) -> Path:
     """把一个已存在的 exact commit（integration HEAD 或 lane head）构造为 exact candidate。
 
@@ -377,11 +374,11 @@ def build_head_candidate(
     impact_plan_digest = _digest(impact_plan_digest, "impactPlanDigest")
     claim_path = acquire_claim(
         repository=repository, policy_path=policy_path, writer_id=writer_id,
-        owner_identity_ref=owner_identity_ref, expected_parent=parent, paths=list(changed), expires_at=expires_at,
+expected_parent=parent, paths=list(changed), expires_at=expires_at,
     )
     body: dict[str, Any] = {
         "schema": _SCHEMA, "claimRef": claim_path.relative_to(root).as_posix(),
-        "claimDigest": exact_digest(claim_path), "ownerIdentityRef": _text(owner_identity_ref, "ownerIdentityRef"),
+        "claimDigest": exact_digest(claim_path),
         "expectedParent": parent, "commit": commit, "tree": tree,
         "paths": list(changed), "pathsDigest": exact_digest({"paths": list(changed)}),
         "impactPlanDigest": impact_plan_digest, "createdAt": _utc_now(),
@@ -607,7 +604,7 @@ def _validate_candidate_binding(repository: Path, root: Path, admission: dict[st
     claim, _ = qualification._exact_ref(root, {"ref": candidate.get("claimRef"), "digest": candidate.get("claimDigest")}, "claim")
     _identity_digest(claim, "claimId")
     if claim.get("schema") != "quwoquan_ops.scoped_path_claim.v1" or any(
-        claim.get(key) != candidate.get(key) for key in ("expectedParent", "ownerIdentityRef", "paths", "pathsDigest")
+        claim.get(key) != candidate.get(key) for key in ("expectedParent", "paths", "pathsDigest")
     ):
         raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "claim candidate binding drifted")
     # claim 是构造期互斥证据；accept 终态可释放，不把 release 错当 EAF 失效。

@@ -595,11 +595,25 @@ func collectionMetadata(document string) metadataEntry {
 
 func generateForTest(t *testing.T, options Options) ([]byte, error) {
 	t.Helper()
+	source, err := sourceForTest(t, options)
+	if err != nil {
+		return nil, err
+	}
+	outputs, err := generateWithSource(options, source)
+	if err != nil {
+		return nil, err
+	}
+	return outputs.registry, nil
+}
+
+func sourceForTest(t *testing.T, options Options) (*contractcodegen.Source, error) {
+	t.Helper()
 	metadata, err := loadMetadata(options.MetadataPath)
 	if err != nil {
 		return nil, err
 	}
 	contractGraph := &graph.ContractGraph{}
+	metadataRoot := filepath.Join(filepath.Dir(options.MetadataPath), "owner-metadata")
 	for _, entry := range metadata.Entries {
 		parts := strings.Split(entry.CanonicalOperationID, ".")
 		if len(parts) != 3 {
@@ -652,14 +666,12 @@ func generateForTest(t *testing.T, options Options) ([]byte, error) {
 		contractGraph.Documents = append(contractGraph.Documents, metadataast.SourceDocument{
 			Path: ownerBindingPath, MediaType: "application/yaml", Content: ownerBinding,
 		})
+		writeFixture(t, metadataRoot, ownerDocumentPath, string(document))
 		contractGraph.Sources = append(contractGraph.Sources, metadataast.SourceDigest{
 			Path: ownerDocumentPath, SHA256: documentHash,
 		})
 	}
-	return generateWithSource(
-		options,
-		contractcodegen.NewSourceFromGraph("metadata", contractGraph),
-	)
+	return contractcodegen.NewSourceFromGraph(metadataRoot, contractGraph), nil
 }
 
 func writeMetadata(t *testing.T, root string, entries ...metadataEntry) string {

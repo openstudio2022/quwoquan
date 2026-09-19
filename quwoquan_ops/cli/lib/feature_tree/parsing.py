@@ -8,18 +8,14 @@ from .nodes import Node
 from .patterns import (
     ACCEPTANCE_ID_RE,
     ACCEPTANCE_SECTION_RE,
-    APP_JOURNEY_ENGINEERING_ROOT_RE,
     CODE_SPAN_RE,
-    ENGINEERING_CLAIM_RE,
     HEADING_RE,
     ID_RE,
     INHERITING_BULLET_RE,
     NESTED_BULLET_RE,
     OPEN_BLOCK_RE,
     OUTCOME_CLAUSE_SPLIT_RE,
-    PATH_RE,
     PRECONDITION_BULLET_RE,
-    REPOSITORY_SINGLETON_ROOTS,
     TOP_BULLET_RE,
 )
 
@@ -306,73 +302,6 @@ def section(text: str, heading: str) -> str:
     next_heading = re.search(r"^##\s+", text[match.end() :], re.MULTILINE)
     end = match.end() + next_heading.start() if next_heading else len(text)
     return text[match.start() : end].strip()
-
-
-def engineering_claims(node: Node) -> list[tuple[str, str]]:
-    if node.level != 1 or not node.spec.is_file():
-        return []
-    body = section(node.spec.read_text(encoding="utf-8"), "工程归属")
-    claims: list[tuple[str, str]] = []
-    for line in body.splitlines():
-        match = ENGINEERING_CLAIM_RE.match(line.strip())
-        if "协作引用" in line or match is None:
-            continue
-        claims.extend(
-            (match.group(1), root.rstrip("/"))
-            for root in PATH_RE.findall(line)
-        )
-    return sorted(set(claims))
-
-
-def app_journey_engineering_roots(node: Node) -> list[str]:
-    """Return exact App Journey roots explicitly claimed by an L1 spec.
-
-    Journey claims live under the nested ``测试`` section rather than an App
-    production-root bullet, so ``engineering_claims`` intentionally does not
-    consume them.  Only the canonical, dependency-level-specific Journey root
-    is accepted here; project roots and the shared ``journeys`` parent remain
-    ineligible as owner fallbacks.
-    """
-
-    if node.level != 1 or not node.spec.is_file():
-        return []
-    body = section(node.spec.read_text(encoding="utf-8"), "工程归属")
-    roots: set[str] = set()
-    for line in body.splitlines():
-        if "协作引用" in line:
-            continue
-        for raw_root in PATH_RE.findall(line):
-            root = raw_root.rstrip("/")
-            if APP_JOURNEY_ENGINEERING_ROOT_RE.fullmatch(root):
-                roots.add(root)
-    return sorted(roots)
-
-
-def singleton_repository_roots(node: Node) -> list[str]:
-    """解析只用于工程归属的仓库根单例，不扩张通用路径语法。"""
-
-    if node.level != 1 or not node.spec.is_file():
-        return []
-    body = section(node.spec.read_text(encoding="utf-8"), "工程归属")
-    roots: set[str] = set()
-    for line in body.splitlines():
-        if "协作引用" in line:
-            continue
-        match = ENGINEERING_CLAIM_RE.match(line.strip())
-        if match is None:
-            continue
-        for singleton in REPOSITORY_SINGLETON_ROOTS:
-            if f"`{singleton}`" in line:
-                roots.add(singleton)
-    return sorted(roots)
-
-
-def engineering_roots(node: Node) -> list[str]:
-    return sorted(
-        {root for _, root in engineering_claims(node)}
-        | set(app_journey_engineering_roots(node))
-        | set(singleton_repository_roots(node))
-    )
 
 
 def block_open_items(path: Path) -> list[str]:

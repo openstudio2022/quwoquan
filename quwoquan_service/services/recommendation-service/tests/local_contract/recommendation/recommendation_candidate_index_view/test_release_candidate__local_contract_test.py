@@ -16,7 +16,7 @@ def _prepared_pair():
     binding = dict(release=release, slice="recommendation", providerBindingGeneration=_DIGEST, schemaGeneration=_DIGEST)
     posts = []
     for identity in ("a", "b"):
-        post = dict(identity=dict(release=release, objectType="content.post", objectId=identity, sourceVersion=1, sourceDigest=_DIGEST), postRef=identity, authorId="author-" + identity, authorDisplayName="Author", authorAvatarUrl=None, contentType="video", contentIdentity="work", status="published", visibility="public", moderationStatus="approved", title=identity, body="", summary="", tagRefs=[], entityRefs=[], primaryHomepage=None, mediaAssetIds=["asset-" + identity], mediaUrls=["https://example.invalid/video"], coverUrl=None, thumbnailUrl=None, videoUrl="https://example.invalid/video", durationMs=1000, width=10, height=10, contentVertical=None, publishedAt=_NOW, updatedAt=_NOW, deepLink="/post/" + identity, documentDigest="")
+        post = dict(identity=dict(release=release, objectType="content.post", objectId=identity, sourceVersion=1, sourceDigest=_DIGEST), postRef=identity, authorId="author-" + identity, authorDisplayName="Author", authorAvatarUrl=None, contentType="video", status="published", visibility="public", moderationStatus="approved", title=identity, body="", summary="", tagRefs=[], entityRefs=[], primaryHomepage=None, mediaAssetIds=["asset-" + identity], mediaUrls=["https://example.invalid/video"], coverUrl=None, thumbnailUrl=None, videoUrl="https://example.invalid/video", durationMs=1000, width=10, height=10, contentVertical=None, publishedAt=_NOW, updatedAt=_NOW, deepLink="/post/" + identity, documentDigest="")
         post["documentDigest"] = digest(post, "documentDigest")
         posts.append(post)
     snapshot = dict(release=release, sourceClosureDigest=_DIGEST, mediaClosureDigest=_DIGEST, objectSetDigest=digest([dict(objectType="content.post", objectId=i) for i in ("a", "b")]), snapshotDigest="", posts=posts)
@@ -81,6 +81,20 @@ def test_home_is_full_source_with_nonempty_premium_subset_and_query_is_read_only
     with pytest.raises(ReleaseNotReady, match="safety authority or proof-time policy unavailable"):
         _proof(store, event)
     assert before == [c.rows for c in collections]
+
+
+@pytest.mark.parametrize("field,value", [
+    ("status", "rolled_back"), ("scope", "circle"),
+    ("qualityAdmission", "rejected"), ("qualityScore", .74),
+    ("expiresAt", canonical(_NOW)),
+])
+def test_identity_removal_preserves_premium_admission_filters(field, value):
+    store, event = _reader()
+    admission = store._release_premium.rows[0]["admission"]
+    admission[field] = value
+    admission["admissionDigest"] = digest(admission, "admissionDigest")
+    with pytest.raises(ReleaseNotReady, match="eligible supply missing"):
+        store.read_release_supply_projection(event.binding, event.snapshot.snapshotDigest, now=_NOW)
 
 
 def test_one_premium_revoked_recomputes_subset_without_invalidating_source():

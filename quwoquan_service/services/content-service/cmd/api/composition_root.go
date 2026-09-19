@@ -836,7 +836,6 @@ func assembleContentDomain(
 		router:                       router,
 		bufferedWriter:               bufferedWriter,
 		sessionCache:                 sessionCache,
-		policyStore:                  policyStore,
 		postStore:                    store,
 		postQueryReader:              postQueryReader,
 		activeSupplyReader:           activeSupplyReader,

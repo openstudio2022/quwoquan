@@ -30,15 +30,20 @@ func TestPageValidationEnforcesFixedLifetimeAndFieldBudgets(t *testing.T) {
 			page.OutboundCursor = strings.Repeat("c", deliverymodel.MaximumCursorBytes+1)
 		}},
 		{name: "depth without previous", mutate: func(page *deliverymodel.Page) { page.Depth = 1 }},
-		{name: "too many tags", mutate: func(page *deliverymodel.Page) {
-			page.ObjectCards[0].TagRefs = make([]string, deliverymodel.MaximumObjectTagRefs+1)
+		{name: "too many items", mutate: func(page *deliverymodel.Page) {
+			page.Items = make([]deliverymodel.PostReference, deliverymodel.MaximumItems+1)
+			for index := range page.Items {
+				page.Items[index].PostID = strings.Repeat("p", index+1)
+			}
+		}},
+		{name: "duplicate post", mutate: func(page *deliverymodel.Page) {
+			page.Items = append(page.Items, page.Items[0])
 		}},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			candidate := page
 			candidate.Items = append([]deliverymodel.PostReference(nil), page.Items...)
-			candidate.ObjectCards = append([]deliverymodel.ObjectCard(nil), page.ObjectCards...)
 			test.mutate(&candidate)
 			if err := candidate.Validate(now); err == nil {
 				t.Fatal("invalid page passed validation")
@@ -77,12 +82,6 @@ func validPageForTest(t *testing.T, now time.Time) deliverymodel.Page {
 			PostID:       "post-1",
 			QualityScore: 0.9,
 			RecallPath:   "premium_pool",
-		}},
-		ObjectCards: []deliverymodel.ObjectCard{{
-			ObjectKind:  "homepage",
-			ObjectID:    "homepage-1",
-			Title:       "Homepage",
-			AnchorIndex: 1,
 		}},
 		OutboundCursor: "fc.local-contract",
 		CreatedAt:      now,

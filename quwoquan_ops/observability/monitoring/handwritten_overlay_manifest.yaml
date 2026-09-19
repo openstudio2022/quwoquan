@@ -1055,3 +1055,33 @@ rules:
     rule: RolloutDecisionInfrastructureFailures
     reason: first_party_series_not_contract_operation
     justification: "消费 ['api_edge_rollout_decisions_total']：边缘灰度决策有界标签计数（契约 telemetry 同源），不是 HTTP operation 观测面。"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: ElasticsearchHeapPressureHigh
+    reason: infrastructure_exporter_series
+    justification: "消费 elasticsearch_* 系列：Elasticsearch exporter导出的基础设施指标，不是ContractGraph中声明的HTTP operation观测面"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: ElasticsearchPrimaryShardUnavailable
+    reason: infrastructure_exporter_series
+    justification: "消费 elasticsearch_* 系列：Elasticsearch exporter导出的基础设施指标，不是ContractGraph中声明的HTTP operation观测面"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: ElasticsearchUnassignedShardsPresent
+    reason: infrastructure_exporter_series
+    justification: "消费 elasticsearch_* 系列：Elasticsearch exporter导出的基础设施指标，不是ContractGraph中声明的HTTP operation观测面"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: ElasticsearchMergeTimeHigh
+    reason: infrastructure_exporter_series
+    justification: "消费 elasticsearch_* 系列：Elasticsearch exporter导出的基础设施指标，不是ContractGraph中声明的HTTP operation观测面"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: ElasticsearchSnapshotStale
+    reason: infrastructure_exporter_series
+    justification: "消费 elasticsearch_* 系列：Elasticsearch exporter导出的基础设施指标，不是ContractGraph中声明的HTTP operation观测面"
+  - file: quwoquan_ops/observability/monitoring/alerts/quwoquan_alerts.yaml
+    group: quwoquan_l4_infrastructure
+    rule: ElasticsearchSnapshotShardFailure
+    reason: infrastructure_exporter_series
+    justification: "消费 elasticsearch_* 系列：Elasticsearch exporter导出的基础设施指标，不是ContractGraph中声明的HTTP operation观测面"

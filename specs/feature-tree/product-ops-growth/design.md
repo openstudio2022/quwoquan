@@ -28,7 +28,7 @@
 - [`feedback-optimization-loop`](./feedback-optimization-loop/spec.md)：反馈优化大循环：行为反馈 → 兴趣/人群画像派生 → 元数据驱动的推荐策略解析与自调建议 → 人审发布。算法侧闭环（content 派生 + user 投影 + recpolicy 热加载引擎 + 顾问 suggest-only）。
 - [`outbound-share-distribution`](./outbound-share-distribution/spec.md)：5 类对象统一对外分享分发（微信卡片/海报/口令/系统分享），携带归因并可靠回流。
 - [`product-control-plane-foundation`](./product-control-plane-foundation/spec.md)：统一产品事件、实验、反馈优化与发布治理
-- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
+- Feature 层表达业务与设计边界；工程影响由 current actual diff 与 dependency closure 推导。
 
 ## 5. 关键决策
 

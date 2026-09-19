@@ -11,7 +11,6 @@ abstract final class WorksViewerContentActionsComposition {
   static Future<void> showShareSheet(
     BuildContext context, {
     required ContentSurfaceView surfaceView,
-    required bool enableIdentityTemplate,
     required String visibility,
     required CirclePostPlacementCommands circlePostPlacementWriter,
     required CircleMembershipQueries circleMembershipQuery,
@@ -21,7 +20,6 @@ abstract final class WorksViewerContentActionsComposition {
     return PostWorksViewerContentActions.showShareSheet(
       context,
       surfaceView: surfaceView,
-      enableIdentityTemplate: enableIdentityTemplate,
       visibility: visibility,
       circlePostPlacementWriter: circlePostPlacementWriter,
       circleMembershipQuery: circleMembershipQuery,
@@ -33,13 +31,11 @@ abstract final class WorksViewerContentActionsComposition {
   static Future<WorksViewerShareResult> copyLink(
     BuildContext context, {
     required ContentSurfaceView surfaceView,
-    required bool enableIdentityTemplate,
     required String visibility,
   }) {
     return PostWorksViewerContentActions.copyLink(
       context,
       surfaceView: surfaceView,
-      enableIdentityTemplate: enableIdentityTemplate,
       visibility: visibility,
     );
   }

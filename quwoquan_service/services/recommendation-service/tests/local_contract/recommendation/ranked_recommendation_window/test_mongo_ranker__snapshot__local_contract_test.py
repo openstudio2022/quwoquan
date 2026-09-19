@@ -3,6 +3,7 @@ import hashlib
 import json
 
 import pytest
+from tests.support.presentation import presentation_contract
 from generated.recommendation.ranked_recommendation_window.models.request_response import ReleasePinnedQueryFence
 
 from generated.recommendation.recommendation_model_release.models.request_response import (
@@ -31,7 +32,7 @@ class _Candidates:
         self.expected_scenario = expected_scenario
         self.object_card_candidates = object_card_candidates or []
 
-    def list_for_ranking(self, *, subject_id: str, scenario: str, limit: int):
+    def list_for_ranking(self, *, subject_id: str, scenario: str, limit: int, eligible_content_types):
         assert subject_id == "persona-viewer"
         assert scenario == self.expected_scenario
         assert limit == 300
@@ -71,11 +72,11 @@ class _Candidates:
         ]
 
     def list_for_ranking_by_content_ids(
-        self, *, scenario: str, content_ids: tuple, limit: int
+        self, *, scenario: str, content_ids: tuple, limit: int, eligible_content_types
     ):
         return []
 
-    def list_object_card_candidates(self, *, limit: int):
+    def list_homepage_candidates(self, *, limit: int):
         assert limit == 400
         return list(self.object_card_candidates)
 
@@ -175,6 +176,7 @@ def test_ranker_freezes_feature_snapshot_and_stable_score_order() -> None:
     scoring = _Scoring()
     result = _ranker(scoring).rank(
         content_fence=ReleasePinnedQueryFence(release=None, revision=0),
+        client_presentation_contract=presentation_contract(),
         subject_id="persona-viewer",
         scenario="content_feed",
         session_id="window-001",
@@ -183,7 +185,7 @@ def test_ranker_freezes_feature_snapshot_and_stable_score_order() -> None:
     assert result.model_release_id == "release-001"
     assert result.model_bucket == "model"
     assert len(result.ranking_snapshot_digest) == 64
-    assert [(item.content_id, item.score) for item in result.candidates] == [
+    assert [(item.envelope.post.postId, item.score) for item in result.candidates] == [
         ("post-a", 0.8),
         ("post-b", 0.5),
     ]
@@ -196,6 +198,21 @@ def test_ranker_freezes_feature_snapshot_and_stable_score_order() -> None:
     assert request.candidates[0].recallPath == "premium_pool"
 
 
+def test_ranker_filters_capabilities_before_scoring():
+    scoring = _Scoring()
+    class AdmissionCandidates(_Candidates):
+        def list_for_ranking(self, **kwargs):
+            assert kwargs["eligible_content_types"] == ("article",)
+            return super().list_for_ranking(**kwargs)
+    result = _ranker(scoring, candidates=AdmissionCandidates()).rank(
+        content_fence=ReleasePinnedQueryFence(release=None, revision=0),
+        client_presentation_contract=presentation_contract(openSurfaces=["article_reader"]),
+        subject_id="persona-viewer", scenario="content_feed", session_id="filtered", limit=300,
+    )
+    assert [candidate.contentId for candidate in scoring.requests[0].candidates] == ["post-b"]
+    assert [candidate.envelope.post.postId for candidate in result.candidates] == ["post-b"]
+
+
 def test_ranker_keeps_audience_selection_separate_from_model_scenario() -> None:
     scoring = _Scoring()
     result = _ranker(
@@ -203,6 +220,7 @@ def test_ranker_keeps_audience_selection_separate_from_model_scenario() -> None:
         candidates=_Candidates(expected_scenario="premium_stream"),
     ).rank(
         content_fence=ReleasePinnedQueryFence(release=None, revision=0),
+        client_presentation_contract=presentation_contract(),
         subject_id="persona-viewer",
         scenario="premium_stream",
         session_id="window-premium",
@@ -216,6 +234,7 @@ def test_ranker_fails_closed_when_scoring_omits_candidate() -> None:
     with pytest.raises(RuntimeError, match="does not match"):
         _ranker(_Scoring(incomplete=True)).rank(
         content_fence=ReleasePinnedQueryFence(release=None, revision=0),
+        client_presentation_contract=presentation_contract(),
             subject_id="persona-viewer",
             scenario="content_feed",
             session_id="window-001",
@@ -227,6 +246,7 @@ def test_ranker_applies_profile_hard_exclusions_before_scoring() -> None:
     scoring = _Scoring()
     result = _ranker(scoring, features=_HardExclusionFeatures()).rank(
         content_fence=ReleasePinnedQueryFence(release=None, revision=0),
+        client_presentation_contract=presentation_contract(),
         subject_id="persona-viewer",
         scenario="content_feed",
         session_id="window-excluded",
@@ -251,7 +271,10 @@ def test_ranker_freezes_object_cards_from_candidate_snapshot_and_entity_affinity
 
     candidates = _Candidates(
         object_card_candidates=[
+            {"objectKind": "gathering", "sourceKey": "unsupported-gathering"},
+            {"objectKind": "future_kind", "sourceKey": "unsupported-future"},
             {
+                "objectKind": "entity_homepage",
                 "primaryHomepageId": "homepage-a",
                 "primaryHomepageSnapshot": {
                     "homepageId": "homepage-a",
@@ -263,6 +286,7 @@ def test_ranker_freezes_object_cards_from_candidate_snapshot_and_entity_affinity
                 },
             },
             {
+                "objectKind": "entity_homepage",
                 "primaryHomepageId": "homepage-b",
                 "primaryHomepageSnapshot": {
                     "homepageId": "homepage-b",
@@ -272,6 +296,7 @@ def test_ranker_freezes_object_cards_from_candidate_snapshot_and_entity_affinity
                 },
             },
             {
+                "objectKind": "entity_homepage",
                 "primaryHomepageId": "homepage-negative",
                 "primaryHomepageSnapshot": {
                     "homepageId": "homepage-negative",
@@ -289,23 +314,21 @@ def test_ranker_freezes_object_cards_from_candidate_snapshot_and_entity_affinity
         features=_ObjectCardFeatures(),
     ).rank(
         content_fence=ReleasePinnedQueryFence(release=None, revision=0),
+        client_presentation_contract=presentation_contract(),
         subject_id="persona-viewer",
         scenario="content_feed",
         session_id="window-object-cards",
         limit=300,
     )
 
-    assert [card.object_id for card in result.object_cards] == [
-        "homepage-b",
-        "homepage-a",
-    ]
-    assert result.object_cards[1].tag_refs == ("旅行", "摄影")
-    assert {card.recall_path for card in result.object_cards} == {
-        "entity_card_affinity"
-    }
+    homepages = [item for item in result.candidates if item.envelope.homepage]
+    assert [item.envelope.homepage.homepageId for item in homepages] == ["homepage-b", "homepage-a"]
+    assert result.candidates[0] == homepages[0]
+    assert homepages[1].item_feature_snapshot["homepageSnapshot"]["title"] == "对象 A"
+    assert {item.item_feature_snapshot["recallPath"] for item in homepages} == {"entity_card_affinity"}
 
 
-def test_ranker_uses_shared_object_card_source_for_gathering_candidates() -> None:
+def test_ranker_isolates_unsupported_gathering_without_losing_legal_posts() -> None:
     candidates = _Candidates(
         object_card_candidates=[
             {
@@ -320,20 +343,10 @@ def test_ranker_uses_shared_object_card_source_for_gathering_candidates() -> Non
         ]
     )
 
-    result = _ranker(
-        _Scoring(),
-        candidates=candidates,
-    ).rank(
+    result = _ranker(_Scoring(), candidates=candidates).rank(
         content_fence=ReleasePinnedQueryFence(release=None, revision=0),
-        subject_id="persona-viewer",
-        scenario="content_feed",
-        session_id="window-gathering-card",
-        limit=300,
+        client_presentation_contract=presentation_contract(),
+        subject_id="persona-viewer", scenario="content_feed",
+        session_id="window-gathering-card", limit=300,
     )
-
-    assert len(result.object_cards) == 1
-    card = result.object_cards[0]
-    assert card.object_kind == "gathering"
-    assert card.object_id == "gathering-001"
-    assert card.tag_refs == ("Topic/徒步",)
-    assert card.recall_path == "gathering_candidate_index"
+    assert [item.envelope.post.postId for item in result.candidates] == ["post-a", "post-b"]

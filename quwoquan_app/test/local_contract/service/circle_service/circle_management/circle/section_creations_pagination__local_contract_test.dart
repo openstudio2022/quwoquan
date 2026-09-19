@@ -29,7 +29,6 @@ CircleFeedItemView _photoItem(String postId) => buildCircleFeedItemContract(
   placementId: 'placement-$postId',
   postId: postId,
   contentType: 'image',
-  contentIdentity: 'work',
   authorId: 'fixture_user_photo',
   authorDisplayName: '契约摄影师',
   body: '分页契约 $postId',

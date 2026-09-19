@@ -17,8 +17,11 @@ from content.release.canonical.object_transaction_lock import canonical_publish_
 def _locks(active: Path, stage: Path):
     # 统一路径排序避免相反 cutover 的双锁死锁；普通事务继续使用同一个 canonical 锁。
     first, second = sorted((active, stage))
-    with canonical_publish_lock(first), canonical_publish_lock(second):
-        yield
+    with canonical_publish_lock(first):
+        if not second.is_dir():
+            contract._fail("CONCURRENT_ACTIVATION_LOST", second)
+        with canonical_publish_lock(second):
+            yield
 
 
 def _checkpoint(_name: str) -> None:
@@ -78,10 +81,10 @@ def _protection_coverage(plan: dict) -> None:
 
 def _sidecar_paths(plan: dict, active: Path, stage: Path, audit: Path) -> None:
     from core.paths import publish_lock_path
-    guarded = (active, stage, audit, *_protected_roots(), *(Path(row["ref"]) for row in plan["protected"]))
-    for pool in (active, stage):
+    common_guarded = (audit, *_protected_roots(), *(Path(row["ref"]) for row in plan["protected"]))
+    for pool, peer in ((active, stage), (stage, active)):
         for path in (canonical_inventory_path(pool), publish_lock_path(pool)):
-            for root in guarded:
+            for root in (peer, *common_guarded):
                 contract._separate(path, root)
             for ancestor in (*reversed(path.parents), path):
                 if ancestor.is_symlink():
@@ -162,7 +165,7 @@ def activate(*, plan_path: Path, expected_plan_digest: str, authorization: Mappi
             storage.sync_directory(active.parent)
             storage.sync_directory(stage.parent)
             _recheck_evidence(plan, plan_path, expected_plan_digest, authorization)
-            if _tree_digest(active) != plan["afterDigest"] or _tree_digest(stage) != plan["beforeDigest"]:
+            if contract.snapshot_pool(active)["treeDigest"] != plan["afterDigest"] or contract.snapshot_pool(stage)["treeDigest"] != plan["beforeDigest"]:
                 contract._fail("POST_EXCHANGE_DRIFT", active)
             storage.rename_exact(stage, audit / "retired", exchange=False, expected=intent["beforeIdentity"])
             storage.sync_directory(stage.parent)
@@ -201,7 +204,7 @@ def _tree_matches(path: Path, expected_identity: list[int], digest: str) -> bool
         return False
     contract._absolute(path, kind="tree")
     contract._regular_tree(path)
-    return storage.identity(path) == expected_identity and _tree_digest(path) == digest
+    return storage.identity(path) == expected_identity and contract.snapshot_pool(path)["treeDigest"] == digest
 
 
 def _retired_paths(staged: Path, audit: Path, plan: dict, document: dict, state: str) -> tuple[list[str], list[str]]:
@@ -218,7 +221,7 @@ def inspect(*, plan_path: Path, expected_plan_digest: str, intent: Mapping[str, 
     """严格只读：无锁文件创建、无缓存重建、无自动 swap/repair；不签发成功 receipt。"""
     plan, document, active, audit = _inspection_inputs(plan_path, expected_plan_digest, intent)
     contract._regular_tree(active)
-    digest, inode = _tree_digest(active), storage.identity(active)
+    digest, inode = contract.snapshot_pool(active)["treeDigest"], storage.identity(active)
     state = "conflict"
     if (digest, inode) == (plan["beforeDigest"], document["beforeIdentity"]):
         state = "not_activated"
@@ -234,7 +237,7 @@ def inspect(*, plan_path: Path, expected_plan_digest: str, intent: Mapping[str, 
             contract._binding(row)
         except (OSError, contract.PoolCutoverError) as exc:
             protection_issues.append(str(exc))
-    if digest != _tree_digest(active) or inode != storage.identity(active):
+    if digest != contract.snapshot_pool(active)["treeDigest"] or inode != storage.identity(active):
         state = "conflict"
     return {"status": state, "retiredPaths": retired, "unverifiedRetiredPaths": retired_unverified, "archive": document["archive"], "protectionIssues": protection_issues, "durability": "not_inferred_from_readonly_inspection"}
 
@@ -246,9 +249,11 @@ def cleanup(*, plan_path: Path, expected_plan_digest: str, intent: Mapping[str, 
     required = {"planDigest": expected_plan_digest, "intentDigest": intent["digest"], "archiveDigest": document["archive"]["digest"], "beforeDigest": plan["beforeDigest"]}
     if any(granted[key] != value for key, value in required.items()):
         contract._fail("CLEANUP_AUTHORIZATION_MISMATCH", audit)
-    _context(plan, active, Path(plan["stagingRoot"]), fresh=False)
-    _sidecar_paths(plan, active, Path(plan["stagingRoot"]), audit)
-    with _locks(active, Path(plan["stagingRoot"])):
+    staged = Path(plan["stagingRoot"])
+    _context(plan, active, staged, fresh=False)
+    lock_peer = staged if staged.is_dir() else audit / "retired"
+    _sidecar_paths(plan, active, staged, audit) if staged.is_dir() else None
+    with _locks(active, lock_peer):
         state = inspect(plan_path=plan_path, expected_plan_digest=expected_plan_digest, intent=intent)
         if state["status"] != "activated" or state["protectionIssues"] or state["unverifiedRetiredPaths"] or len(state["retiredPaths"]) != 1:
             contract._fail("CLEANUP_STATE_CONFLICT", state)

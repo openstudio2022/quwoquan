@@ -37,8 +37,7 @@ ContentPostViewData _photoPost({String id = 'photo-prov-1'}) {
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: id,
-      contentType: 'image',
-      contentIdentity: 'work',
+      contentType: ContentType.image,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author-1',
       authorDisplayName: '摄影师',

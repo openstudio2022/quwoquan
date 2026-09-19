@@ -88,14 +88,14 @@ class AgentContextBudgetGateTest(unittest.TestCase):
                         "required_fields": [
                             "schema_version",
                             "target",
-                            "resolved_owner",
-                            "owner_chain",
+                            "context_status",
+                            "feature_chain",
                             "canonical_contexts",
                             "applicable_agents",
                             "open_items",
                             "evidence_fingerprint",
                         ],
-                        "owner_chain_fields": ["level", "node_id", "path"],
+                        "feature_chain_fields": ["level", "node_id", "path"],
                         "context_fields": ["path", "anchor", "kind"],
                         "open_item_fields": [
                             "path",
@@ -365,26 +365,13 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         self.assertTrue(any(f"SKILL:{self.workflow_names[0]} 必须恰好一行" in issue for issue in issues), issues)
         self.assertTrue(any("SKILL:phantom-skill 不对应任何已发现的 Workflow Skill" in issue for issue in issues), issues)
 
-    def test_delivery_skills_bind_exact_owner_manifest_and_read_only_terminal(self) -> None:
-        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
-        expected = {
-            "content-production": "content-release",
-            "environment-ops": "release-evidence",
-            "incident-inspection": "inspection-report",
-        }
+    def test_delivery_skills_bind_context_query_and_read_only_terminal(self) -> None:
+        expected = {"content-production": "content-release", "environment-ops": "release-evidence", "incident-inspection": "inspection-report"}
         for workflow, deliverable in expected.items():
-            with self.subTest(workflow=workflow):
-                text = (
-                    _REPO_ROOT / f".agents/skills/{workflow}/SKILL.md"
-                ).read_text(encoding="utf-8")
-                self.assertIn(f"`{deliverable}`", text)
-                self.assertIn("make feature-context TARGET=<exact-path>", text)
-                self.assertIn("content-addressed immutable owner manifest exact ref", text)
-                self.assertIn("PRE owner identity ref", text)
-                self.assertIn("`--owner-identity`", text)
-                self.assertIn("`--candidate-evidence`", text)
-                self.assertIn("no-review-deliverable", text)
-                self.assertNotIn("纯环境操作不要求 Feature owner manifest", text)
+            text = (_REPO_ROOT / f".agents/skills/{workflow}/SKILL.md").read_text(encoding="utf-8")
+            self.assertIn(f"`{deliverable}`", text)
+            self.assertIn("make feature-context TARGET=<exact-path>", text)
+            self.assertNotIn("owner manifest", text.lower())
 
     def test_content_production_bounds_independent_actor_dispatch(self) -> None:
         # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-001.t3
@@ -393,9 +380,8 @@ class AgentContextBudgetGateTest(unittest.TestCase):
         )
         for required in (
             "主会话",
-            "同时最多两个不重叠 author",
-            "review 串行",
-            "不嵌套派发",
+            "多作者和多 QA 只并行不同小批",
+            "同 shard 内只允许不重叠 execution 写者",
             "不包装 seal/publish",
             "`starting up` 不是进度也不是失败",
             "不得据此补发相同或替代调用",
@@ -405,58 +391,19 @@ class AgentContextBudgetGateTest(unittest.TestCase):
             with self.subTest(required=required):
                 self.assertIn(required, text)
 
-    def test_mutation_skills_require_unique_owner_before_writing(self) -> None:
-        # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t3
-        expectations = {
-            "prd": ("target、owner", "`GATE_BLOCK`"),
-            "design": ("target/owner", "`GATE_BLOCK`"),
-            "dev": ("owner 未冻结", "typed blocker"),
-        }
-        for workflow, required in expectations.items():
-            with self.subTest(workflow=workflow):
-                text = (
-                    _REPO_ROOT / f".agents/skills/{workflow}/SKILL.md"
-                ).read_text(encoding="utf-8")
-                self.assertIn("make feature-context TARGET=<exact-path>", text)
-                self.assertIn("immutable exact ref", text)
-                for phrase in required:
-                    self.assertIn(phrase, text)
+    def test_mutation_skills_use_claim_and_actual_diff(self) -> None:
+        for workflow in ("prd", "design", "dev"):
+            text = (_REPO_ROOT / f".agents/skills/{workflow}/SKILL.md").read_text(encoding="utf-8")
+            self.assertIn("make feature-context TARGET=<exact-path>", text)
+            self.assertTrue("claim" in text and ("actual diff" in text or "ImpactPlan" in text))
 
-    def test_hosted_smoke_reuses_current_exact_owner_manifest_consumer(self) -> None:
+    def test_hosted_smoke_reuses_current_exact_candidate_consumer(self) -> None:
         # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t1
-        source = (
-            _REPO_ROOT / "quwoquan_ops/cli/hosted_authority_smoke.py"
-        ).read_text(encoding="utf-8")
-        start = source.index("def _verify_owner_manifest(")
-        end = source.index("\ndef _verify_readiness_descriptor", start)
-        owner_source = source[start:end]
-        symbols = (
-            "exact_digest = _sha256(owner_manifest_bytes)",
-            "expected_ref = (OWNER_MANIFEST_ROOT / expected_name).as_posix()",
-            "if owner_manifest_ref != expected_ref:",
-            "validated_ref = validate_content_addressed_ref(",
-            "if validated_ref != owner_manifest_ref:",
-            "_verify_owner_manifest_descriptor(",
-            'manifest = _json_bytes(owner_manifest_bytes, label="owner manifest")',
-            "validate_feature_context_manifest(manifest)",
-            "fingerprint = validate_current_feature_context_fingerprint(",
-            "return manifest, fingerprint, exact_digest",
-        )
-        positions = [owner_source.index(symbol) for symbol in symbols]
-        self.assertEqual(positions, sorted(positions))
-        run_start = source.index("def run_observe_only_smoke(")
-        run_source = source[run_start:]
-        verify_call = run_source.index(
-            "manifest, manifest_fingerprint, manifest_digest = _verify_owner_manifest("
-        )
-        authority_binding = run_source.index(
-            'expected_fingerprint=str(manifest_fingerprint["digest"])'
-        )
-        identity_use = run_source.index(
-            '"evidence_fingerprint": manifest_fingerprint["digest"]'
-        )
-        self.assertLess(verify_call, authority_binding)
-        self.assertLess(authority_binding, identity_use)
+        source = (_REPO_ROOT / "quwoquan_ops/cli/hosted_authority_smoke.py").read_text(encoding="utf-8")
+        for token in ("def _verify_candidate_evidence(", "validate_candidate_ref(", "candidate_evidence_ref", "candidate_evidence_bytes"):
+            self.assertIn(token, source)
+        self.assertNotIn("owner_manifest", source)
+
 
     def test_git_index_failure_is_not_silently_accepted(self) -> None:
         self._use_fixture_root(git=False)

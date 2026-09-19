@@ -16,6 +16,8 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
+from support.semantic_review_fixture import approved_semantic_judgement
+
 ROOT = Path(__file__).resolve().parents[4]
 SKILL = ROOT / ".agents/skills/content-production"
 sys.path.insert(0, str(SKILL / "scripts"))
@@ -222,7 +224,7 @@ def test_tuchong_work_through_real_acquire_seal_and_manifest(tmp_path, monkeypat
     for stage in ("1.download", "4.draft", "5.review"):
         document = {"actor": reviewer if stage == "5.review" else author, "verdict": "pass"}
         if stage == "5.review":
-            document["reviews"] = {ref: {"decision": "approved", "blockingIssues": [], "advisories": []}}
+            document["reviews"] = {ref: approved_semantic_judgement(root, ref)}
         input_path = tmp_path / (stage + ".json")
         subject.io.write(input_path, subject.io.encode(document))
         seal.seal_stage(execution_id=execution_id, stage=stage, input_path=input_path)
@@ -423,7 +425,7 @@ def test_all_source_parsers_offline(carrier, source, body, query):
 
 
 def test_cli_source_replay_records_response_binding(tmp_path):
-    fixture = {"query": {"pages": {"1": {"pageid": 1, "title": "山", "extract": "山的原文"}}}}
+    fixture = {"query": {"pages": {"1": {"pageid": 1, "title": "山", "extract": "山的原文", "revisions": [{"revid": 1, "slots": {"main": {"*": "山的原文"}}}]}}}}
     (tmp_path / "homepage").mkdir()
     (tmp_path / "homepage/request.json").write_text(json.dumps({"title": "山"}))
     (tmp_path / "homepage/response.json").write_text(json.dumps(fixture))

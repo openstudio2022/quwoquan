@@ -1,7 +1,111 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: 706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31
 
 library;
+
+import "../canonical_sha256_digest.dart";
+import "../generated/shared_operation_enums.g.dart";
+
+export "../generated/shared_operation_enums.g.dart";
+
+final class ClientContentPresentationContract {
+  const ClientContentPresentationContract({
+    required this.contentTypes,
+    required this.listObjectKinds,
+    required this.presentationRecipes,
+    required this.openSurfaces,
+    required this.contractDigest,
+  });
+
+  final List<ContentType> contentTypes;
+  final List<ListObjectKind> listObjectKinds;
+  final List<FeedPresentationRecipe> presentationRecipes;
+  final List<ContentUiSurface> openSurfaces;
+  final String contractDigest;
+
+  factory ClientContentPresentationContract.fromWire(
+    Map<String, Object?> map, [
+    String path = "ClientContentPresentationContract",
+  ]) {
+    _rejectUnknownFields(map, const <String>{
+      "contentTypes",
+      "listObjectKinds",
+      "presentationRecipes",
+      "openSurfaces",
+      "contractDigest",
+    }, path);
+    return ClientContentPresentationContract(
+      contentTypes: List<ContentType>.unmodifiable(
+        _requiredBoundedList(
+          map["contentTypes"],
+          '$path.contentTypes',
+          max: 32,
+        ).asMap().entries.map(
+          (entry) => ContentType.fromWire(
+            entry.value,
+            '$path.contentTypes' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      listObjectKinds: List<ListObjectKind>.unmodifiable(
+        _requiredBoundedList(
+          map["listObjectKinds"],
+          '$path.listObjectKinds',
+          max: 32,
+        ).asMap().entries.map(
+          (entry) => ListObjectKind.fromWire(
+            entry.value,
+            '$path.listObjectKinds' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      presentationRecipes: List<FeedPresentationRecipe>.unmodifiable(
+        _requiredBoundedList(
+          map["presentationRecipes"],
+          '$path.presentationRecipes',
+          max: 32,
+        ).asMap().entries.map(
+          (entry) => FeedPresentationRecipe.fromWire(
+            entry.value,
+            '$path.presentationRecipes' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      openSurfaces: List<ContentUiSurface>.unmodifiable(
+        _requiredBoundedList(
+          map["openSurfaces"],
+          '$path.openSurfaces',
+          max: 32,
+        ).asMap().entries.map(
+          (entry) => ContentUiSurface.fromWire(
+            entry.value,
+            '$path.openSurfaces' + '[${entry.key}]',
+          ),
+        ),
+      ),
+      contractDigest: _requiredCanonicalSha256Digest(
+        map["contractDigest"],
+        '$path.contractDigest',
+      ),
+    );
+  }
+
+  Map<String, Object?> toWire() => <String, Object?>{
+    "contentTypes": contentTypes
+        .map((value) => value.wireName)
+        .toList(growable: false),
+    "listObjectKinds": listObjectKinds
+        .map((value) => value.wireName)
+        .toList(growable: false),
+    "presentationRecipes": presentationRecipes
+        .map((value) => value.wireName)
+        .toList(growable: false),
+    "openSurfaces": openSurfaces
+        .map((value) => value.wireName)
+        .toList(growable: false),
+    "contractDigest": contractDigest,
+  };
+}
 
 final class GreetingIntersectionSnapshot {
   const GreetingIntersectionSnapshot({
@@ -110,4 +214,31 @@ DateTime _requiredTimestamp(Object? value, String path) {
     throw FormatException('$path must be an ISO-8601 timestamp');
   }
   return parsed;
+}
+
+List<Object?> _requiredList(Object? value, String path) {
+  if (value is! List<Object?>) {
+    throw FormatException('$path must be a list');
+  }
+  return value;
+}
+
+List<Object?> _requiredBoundedList(
+  Object? value,
+  String path, {
+  required int max,
+}) {
+  final result = _requiredList(value, path);
+  if (result.length > max) {
+    throw FormatException('$path must not contain more than $max items');
+  }
+  return result;
+}
+
+String _requiredCanonicalSha256Digest(Object? value, String path) {
+  final result = _requiredNonBlankString(value, path);
+  if (!isCanonicalSha256Digest(result)) {
+    throw FormatException('$path must be a canonical sha256 digest');
+  }
+  return result;
 }

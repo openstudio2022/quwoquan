@@ -20,7 +20,7 @@ specs/feature-tree/
 ```
 
 - AppRoot：全应用目标、Journey、Scenario 和 UAT；`design.md` 保存全局架构与跨域约束。
-- L1 Domain Service：稳定业务领域、事实所有权和领域边界；不等同于部署进程或代码模块。
+- L1 Domain Service：稳定业务领域、业务事实边界与领域关系；不等同于部署进程、代码模块或 mutation owner。
 - L2 Business Capability：多个 Story 组合成的独立业务结果。
 - L3 Story：用户或平台调用方可观察、可独立验收的最小价值。
 - Journey/Scenario 不是目录层；完整叙事只在 AppRoot `spec.md`，节点只写自身职责。
@@ -39,9 +39,9 @@ specs/feature-tree/
 
 ### L1
 
-- `spec.md`：领域价值、拥有/不拥有的事实、上下游、Journey 职责、直接 L2、REQ、DOM、稳定工程归属和 OPEN。
-- `design.md`：领域模型与所有权、上下文协作、架构数据流、DEC、特有质量约束、失败恢复与当前迁移。
-- 工程归属只登记稳定目录根；业务域契约使用所属服务 `contracts/**`，`Metadata` 只允许 `_shared/_schemas/_vectors/_control_plane` 等跨服务定义；同一路径不得由多个 L1 无主次认领。
+- `spec.md`：领域价值、业务事实边界、上下游、Journey 职责、直接 L2、REQ、DOM 和 OPEN。
+- `design.md`：领域模型与业务事实权威边界、上下文协作、架构数据流、DEC、特有质量约束、失败恢复与当前迁移。
+- 业务事实的 authoritative write owner 可以在领域契约中表达，但它不是 Feature mutation owner，不授予仓库路径写权限。工程路径影响只由 current actual diff 与 dependency closure 推导。
 
 ### L2
 
@@ -88,19 +88,19 @@ OPEN 的存在就是未关闭；关闭时删除 OPEN，并把已支持行为写�
 
 ```text
 根 + 最近的 AGENTS.md
-  -> make feature-context TARGET=<spec-or-code-path>
-  -> manifest.owner_chain（只用于归属/范围）
+  -> make feature-context TARGET=<exact-path>
+  -> manifest.feature_chain（非授权上下文）
   -> manifest.canonical_contexts 列出的精确 path + anchor
-  -> 直接 contract / spec_ref 证据
+  -> 直接 contract / spec_ref / dependency 证据
 ```
 
-默认不拼接父链全文。owner chain 确定边界与优先级，canonical contexts 直接定位本任务所需 DEC/REQ/GWT/contract；角色 reference、Cursor rule 与 harness adapter 不得作为中转链。AppRoot → L1 → L2 → L3 只能逐层细化，冲突时先修正 canonical spec/design/contracts。
+`feature-context` 是查询，不是授权：直接 Feature 路径沿目录父链返回；代码路径按 canonical dependency 引用关联，允许 `context_unresolved`，多个关联稳定排序。mutation 只依赖用户授权、整文件 exact-path claim 冲突检查与 current actual diff/ImpactPlan；无 context 或多 context 均不得阻断写入。
 
 ## 7. 动态工具
 
 ```bash
 make feature-context TARGET=<spec-or-code-path>
-make feature-candidate-evidence OWNER_IDENTITY=<ref> CHANGED_PATHS="<path> ..."
+make feature-candidate-evidence CHANGED_PATHS="<path> ..."
 make feature-context TARGET=<spec-or-code-path> FORMAT=expanded
 make feature-tree-overview
 make feature-tree-change-report
@@ -108,7 +108,7 @@ make feature-tree-content-review
 make verify-feature-tree
 ```
 
-- `feature-context`：默认输出不超过 8KiB 的稳定 PRE owner identity manifest，含唯一 owner chain、精确 canonical path/anchor、适用 AGENTS、profiles、OPEN 和直接 contract/test 证据。代码路径先按 L1 最长工程根定位，再按 L2 DEC 的适用工程根与唯一影响 Story 下钻；歧义/无 owner fail-closed。`FORMAT=expanded` 仅供人工诊断。
+- `feature-context`：输出非授权 context manifest：`target/context_status/feature_chain/canonical_contexts/applicable_agents/open_items/dependency_evidence/evidence_fingerprint`。代码无关联时为 `context_unresolved`；多个 context 稳定排序，不判歧义。`FORMAT=expanded` 仅供人工诊断。
 - `feature-tree-overview`：实时输出领域、能力、Story，并按 OPEN 类型、优先级、准出影响、完成判定与 L1/L2 子树聚合开放事项。
 - `feature-tree-change-report`：从 Git diff 推导受影响父链、锚点变化和未归属变更。
 - `feature-tree-content-review`：逐文件检查实际节点与模板的章节、参与者与价值、非占位要求、GWT/DOM/SIT/UAT、DEC、服务本地契约、工程引用、真实 `spec_ref` 与 OPEN 一致性，并阻断历史编号、迁移病句、通用治理占位和中心业务域 metadata 回潮。
@@ -122,7 +122,7 @@ make verify-feature-tree
 
 - 五分钟内能否说清领域价值、拥有/不拥有的事实和上下游边界？
 - 每个 L2 是否是可组合业务能力，而非页面组、服务名或技术任务？
-- 工程归属是否唯一定位 App、metadata、Service/Data/Ops 和三层测试？
+- 业务事实边界与上下游是否清楚，且未被误写成仓库 mutation owner？
 - DOM 是否验证所有权和不变量，而非复述测试命令？
 
 ### L2
@@ -140,7 +140,7 @@ make verify-feature-tree
 
 ## 9. 自动门禁
 
-门禁至少检查：目录层级与父子链接一致；Markdown 链接/锚点有效；AppRoot Journey 与参与 L1 双向引用；工程归属存在且无未裁决重叠；L2 设计归属有效；禁止文件不回潮；REQ/UAT/DOM/SIT/GWT/DEC/OPEN 在文件内唯一；测试或可执行门的 `spec_ref` 指向现存验收锚点；OPEN `block` 对对应范围准出可见；Git diff 不出现未归属的业务变更。
+门禁至少检查：目录层级与父子链接一致；Markdown 链接/锚点有效；AppRoot Journey 与参与 L1 双向引用；禁止文件不回潮；REQ/UAT/DOM/SIT/GWT/DEC/OPEN 在文件内唯一；测试或可执行门的 `spec_ref` 指向现存验收锚点；OPEN `block` 对对应范围准出可见。Git diff 的影响事实来自 actual paths 与 dependency closure，不存在“未归属工程变更”。
 
 验收追踪采用双向门禁，不维护 tracked coverage map：已支持的 UAT/DOM/SIT/GWT 必须被真实测试直接 `spec_ref`；尚未支持的验收必须出现在同一节点 OPEN 的“完成判定”中。代码治理类验收可以由可执行 gate 作为证据，产品行为验收必须由测试证明。
 

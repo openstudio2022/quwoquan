@@ -110,12 +110,6 @@ abstract class AppLocalizations {
   /// **'发现'**
   String get discovery;
 
-  /// No description provided for @discoveryTabMoment.
-  ///
-  /// In zh, this message translates to:
-  /// **'微趣'**
-  String get discoveryTabMoment;
-
   /// No description provided for @discoveryTabPhoto.
   ///
   /// In zh, this message translates to:
@@ -212,23 +206,11 @@ abstract class AppLocalizations {
   /// **'本周'**
   String get discoveryHelperTimelineThisWeek;
 
-  /// No description provided for @discoveryHelperExpandMoments.
-  ///
-  /// In zh, this message translates to:
-  /// **'展开微趣'**
-  String get discoveryHelperExpandMoments;
-
   /// No description provided for @discoveryHelperExpandArticles.
   ///
   /// In zh, this message translates to:
   /// **'查看文章列表'**
   String get discoveryHelperExpandArticles;
-
-  /// No description provided for @discoveryHelperSectionMoments.
-  ///
-  /// In zh, this message translates to:
-  /// **'微趣'**
-  String get discoveryHelperSectionMoments;
 
   /// No description provided for @discoveryHelperSectionArticles.
   ///
@@ -1742,23 +1724,11 @@ abstract class AppLocalizations {
   /// **'分身管理'**
   String get profilePersonasLabel;
 
-  /// No description provided for @momentPlaceholder.
-  ///
-  /// In zh, this message translates to:
-  /// **'这一刻的想法...'**
-  String get momentPlaceholder;
-
   /// No description provided for @drafts.
   ///
   /// In zh, this message translates to:
   /// **'草稿箱'**
   String get drafts;
-
-  /// No description provided for @postMoment.
-  ///
-  /// In zh, this message translates to:
-  /// **'发微趣'**
-  String get postMoment;
 
   /// No description provided for @postPhoto.
   ///
@@ -2816,18 +2786,6 @@ abstract class AppLocalizations {
   /// **'保存图片成功'**
   String get imageSavedSuccess;
 
-  /// No description provided for @momentImageReorderHint.
-  ///
-  /// In zh, this message translates to:
-  /// **'拖动图片可以调整顺序，点击可以编辑图片'**
-  String get momentImageReorderHint;
-
-  /// No description provided for @momentPublished.
-  ///
-  /// In zh, this message translates to:
-  /// **'已发表'**
-  String get momentPublished;
-
   /// No description provided for @articleCoverLabel.
   ///
   /// In zh, this message translates to:
@@ -2869,12 +2827,6 @@ abstract class AppLocalizations {
   /// In zh, this message translates to:
   /// **'草稿箱'**
   String get draftCount;
-
-  /// No description provided for @draftMoment.
-  ///
-  /// In zh, this message translates to:
-  /// **'微趣草稿'**
-  String get draftMoment;
 
   /// No description provided for @draftPhoto.
   ///

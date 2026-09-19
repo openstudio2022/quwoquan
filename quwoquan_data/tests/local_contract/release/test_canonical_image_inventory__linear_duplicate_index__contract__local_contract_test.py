@@ -7,6 +7,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from support.publish_repository_fixture import make_publish_repository
 from content.release.canonical import canonical_inventory as inventory_subject
 from content.release.canonical.canonical_inventory import (
     apply_inventory_delta,
@@ -43,8 +44,7 @@ def test_image_duplicate_hot_index_is_linear_and_complete_at_one_thousand(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publish = tmp_path / "publish"
-    publish.mkdir()
+    publish = make_publish_repository(tmp_path / "publish")
     inventory = load_or_bootstrap_inventory(publish)
     original_glob = Path.glob
 
@@ -126,8 +126,7 @@ def test_image_duplicate_hot_index_is_linear_and_complete_at_one_thousand(
 def test_duplicate_manifest_rolls_back_inventory_and_image_index_together(
     tmp_path: Path,
 ) -> None:
-    publish = tmp_path / "publish"
-    publish.mkdir()
+    publish = make_publish_repository(tmp_path / "publish")
     inventory = load_or_bootstrap_inventory(publish)
     manifest = _manifest(7)
     payload = (json.dumps(manifest, sort_keys=True) + "\n").encode()
@@ -189,8 +188,7 @@ def test_duplicate_manifest_rolls_back_inventory_and_image_index_together(
 def test_image_index_follows_inverse_and_replay_delta(
     tmp_path: Path,
 ) -> None:
-    publish = tmp_path / "publish"
-    publish.mkdir()
+    publish = make_publish_repository(tmp_path / "publish")
     before = load_or_bootstrap_inventory(publish)
     manifest = _manifest(42)
     payload = (json.dumps(manifest, sort_keys=True) + "\n").encode()
@@ -245,8 +243,7 @@ def test_image_index_follows_inverse_and_replay_delta(
 def test_image_query_fails_closed_when_sidecar_structure_is_incomplete(
     tmp_path: Path,
 ) -> None:
-    publish = tmp_path / "publish"
-    publish.mkdir()
+    publish = make_publish_repository(tmp_path / "publish")
     load_or_bootstrap_inventory(publish)
     database = canonical_inventory_path(publish)
     with sqlite3.connect(database) as connection:
@@ -263,7 +260,7 @@ def test_image_query_fails_closed_when_sidecar_structure_is_incomplete(
 def test_cold_bootstrap_rejects_preexisting_cross_post_duplicate(
     tmp_path: Path,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     for name, asset_id in (("first", None), ("duplicate", "asset-88-copy")):
         payload = (
             json.dumps(_manifest(88, asset_id=asset_id), sort_keys=True) + "\n"
@@ -278,7 +275,7 @@ def test_cold_bootstrap_rejects_preexisting_cross_post_duplicate(
 
 
 def test_replacing_manifest_does_not_erase_old_asset_binding_before_check(tmp_path: Path) -> None:
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     relative = "posts/image/replace/work/1/manifest.json"
     destination = publish / relative
     destination.parent.mkdir(parents=True)
@@ -300,7 +297,7 @@ def test_replacing_manifest_does_not_erase_old_asset_binding_before_check(tmp_pa
 def test_retired_index_is_rejected_without_automatic_rewrite(tmp_path: Path) -> None:
     from content.release.canonical.canonical_image_inventory import readonly_image_inventory
 
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     destination = publish / "posts/image/migration/work/1/manifest.json"
     destination.parent.mkdir(parents=True)
     destination.write_text(json.dumps(_manifest(1)), encoding="utf-8")

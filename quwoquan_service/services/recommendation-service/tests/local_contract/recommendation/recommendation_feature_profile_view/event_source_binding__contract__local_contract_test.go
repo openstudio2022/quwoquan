@@ -40,7 +40,7 @@ func TestRecommendationFeatureProjectionDeclaresActualStreamInputs(t *testing.T)
 		"circle.circle_membership.CircleMembershipRoleChanged", "circle.circle_membership.CircleMembershipRejected",
 		"circle.gathering.GatheringParticipationChanged", "circle.gathering.GatheringPublished",
 		"content.post.PostPublished", "content.post.PostUpdated", "content.post.PostSettingsUpdated",
-		"content.post.PostPromotedToWork", "content.post.PostDeleted",
+		"content.post.PostDeleted",
 		"content.post.PostPrivacyRedacted", "content.post.PostPurged",
 		"search.recommendation_signal_fact.SearchRecommendationSignalPublished",
 	}

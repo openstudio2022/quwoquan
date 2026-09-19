@@ -6,10 +6,7 @@ final class ContentFeedCategoryPolicy {
 
   static const Map<String, String> feedCategoryToRequestType = <String, String>{
     'article': 'article',
-    'following': 'micro',
     'images': 'image',
-    'micro': 'micro',
-    'recommended': 'micro',
     'video': 'video',
   };
 }

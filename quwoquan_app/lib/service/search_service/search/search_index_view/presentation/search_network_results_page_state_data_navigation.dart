@@ -139,15 +139,15 @@ extension _SearchNetworkResultsPageStateDataNavigation
     return switch (_activeTabId) {
       _SearchNetworkResultsPageState._tabImage =>
         _contentResults
-            .where((item) => item.contentType == 'image')
+            .where((item) => item.contentType == ContentType.image)
             .toList(growable: false),
       _SearchNetworkResultsPageState._tabVideo =>
         _contentResults
-            .where((item) => item.contentType == 'video')
+            .where((item) => item.contentType == ContentType.video)
             .toList(growable: false),
       _SearchNetworkResultsPageState._tabArticle =>
         _contentResults
-            .where((item) => item.contentType == 'article')
+            .where((item) => item.contentType == ContentType.article)
             .toList(growable: false),
       _ => _contentResults,
     };
@@ -365,10 +365,8 @@ extension _SearchNetworkResultsPageStateDataNavigation
       final result = await context.push<Object?>(
         AppRoutePaths.workBrowser(
           workId: dto.id,
-          filter: dto.isVideoLike
-              ? 'video'
-              : (dto.isArticleLike ? 'article' : 'image'),
-          source: 'global-search-network',
+          filter: dto.type.wireName,
+          source: ReferralSource.search.value,
           index: '0',
         ),
         extra: MediaViewerExtra(
@@ -377,7 +375,6 @@ extension _SearchNetworkResultsPageStateDataNavigation
           ],
           dtoPosts: <ContentPostViewData>[dto],
           initialIndex: 0,
-          source: 'global-search-network',
           rawPostsById: searchNetworkSinglePostMediaRaws(dto: dto, wire: raw),
           interactionSnapshot: interactionSnapshot,
           referralSource: ReferralSource.search,

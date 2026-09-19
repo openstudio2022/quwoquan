@@ -18,6 +18,7 @@ from typing import Any, Iterator, Mapping
 from urllib.parse import quote
 
 from generated.semantic_document import CAPABILITY_IDS, ValidationCode, validate_envelope
+from core.schema import assert_valid
 
 KNOWN_RENDERERS = {"homepage", "article", "image", "video"}
 VERSIONS = {"R0", "R1", "R2"}
@@ -532,6 +533,15 @@ class WorkbenchService:
 
     @staticmethod
     def _validate_filters(filters):
+        try:
+            assert_valid(
+                filters,
+                "governance",
+                "content_workbench/workbench_filter",
+                label="content workbench filter",
+            )
+        except ValueError as exc:
+            raise WorkbenchError("CONTENT_WORKBENCH.REQUEST_INVALID", str(exc)) from exc
         if filters.get("tagMatch", "subtree") not in {"direct", "subtree"}: raise WorkbenchError("CONTENT_WORKBENCH.REQUEST_INVALID", "tagMatch must be direct or subtree")
         if filters.get("sort", "updated_desc") not in {"updated_desc", "title_asc", "form_asc", "object_asc"}: raise WorkbenchError("CONTENT_WORKBENCH.REQUEST_INVALID", "invalid sort")
         if not isinstance(filters.get("page", 1), int) or filters.get("page", 1) < 1: raise WorkbenchError("CONTENT_WORKBENCH.REQUEST_INVALID", "page must be >= 1")
@@ -666,6 +676,15 @@ class WorkbenchService:
             record = {k: data[k] for k in ("objectId", "versionId", "businessDigest", "decision")}
             if decision == "unqualified": record.update(changes=changes, targetState=target)
             record.update(revision=int(previous.get("revision", 0)) + 1 if previous else 1, previousDigest=previous.get("recordDigest") if previous else None, recordDigest=record_digest)
+            try:
+                assert_valid(
+                    record,
+                    "governance",
+                    "content_workbench/offline_review",
+                    label="content workbench offline review",
+                )
+            except ValueError as exc:
+                raise WorkbenchError("CONTENT_WORKBENCH.REVIEW_INVALID", str(exc)) from exc
             if previous:
                 archive = self.workbench_root / "reviews" / "records" / identity / f"{previous['revision']:06d}-{previous['recordDigest'][7:]}.json"
                 if not archive.exists(): self._atomic_json(archive, previous)
@@ -693,6 +712,7 @@ class WorkbenchService:
             try:
                 shutil.copytree(source, temporary / "business", symlinks=False); prior = sorted(object_dir.glob("R[12]/candidate.json")); previous = json.loads(prior[-1].read_text()).get("recordDigest") if prior else None
                 record = {"objectId": object_id, "versionId": target, "parentVersionId": parent, "businessDigest": business_digest, "candidateRef": f"candidates/{object_hash}/{target}", "reviewState": "pending_review", "revision": len(prior) + 1, "previousDigest": previous, "recordDigest": record_digest}
+                assert_valid(record, "governance", "content_workbench/offline_candidate", label="content workbench offline candidate")
                 self._atomic_json(temporary / "candidate.json", record); os.replace(temporary, destination)
             finally:
                 if temporary.exists(): shutil.rmtree(temporary)

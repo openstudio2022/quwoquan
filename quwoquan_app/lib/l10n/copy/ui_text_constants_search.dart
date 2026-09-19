@@ -124,7 +124,6 @@ abstract final class SearchText {
   static const String searchTargetDirectChats = '单聊';
   static const String searchTargetGroupChats = '群聊';
   static const String searchContentTypeArticle = '文章';
-  static const String searchContentTypeMicro = '微趣';
   static const String searchSuggestionContacts = '联系人';
   static const String searchSuggestionChatRecords = '聊天记录';
   static const String searchSuggestionJoinedCircles = '已加入圈子';

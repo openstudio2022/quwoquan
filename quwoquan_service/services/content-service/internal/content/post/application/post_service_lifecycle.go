@@ -32,22 +32,6 @@ func requirePostOwner(
 	return nil
 }
 
-func promoteSettingsPayload(payload map[string]any) map[string]any {
-	settings := map[string]any{}
-	for _, key := range []string{
-		"primaryHomepageId",
-		"primaryHomepageType",
-		"primaryHomepageSnapshot",
-		"visibility",
-		"assistantUsePolicy",
-	} {
-		if value, exists := payload[key]; exists {
-			settings[key] = value
-		}
-	}
-	return settings
-}
-
 func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID string, payload map[string]any) (*postmodel.Post, error) {
 	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
 	if !ok {
@@ -82,127 +66,6 @@ func (s *PostService) UpdatePostSettings(ctx context.Context, postID, userID str
 	return post, nil
 }
 
-func (s *PostService) PromotePostToWork(ctx context.Context, postID, userID string, payload map[string]any) (*postmodel.Post, error) {
-	post, ok := s.store.FindByID(ctx, strings.TrimSpace(postID))
-	if !ok {
-		return nil, contentgenerated.AppErrorFromPostNotFound("post not found")
-	}
-	if err := requirePostOwner(post, userID, "升级内容", generated.AppErrorFromForbiddenEdit); err != nil {
-		return nil, err
-	}
-	expectedVersion := post.Version
-	post.ContentIdentity = "work"
-	if contentType := strings.TrimSpace(asString(payload["contentType"])); contentType != "" {
-		post.ContentType = contentType
-	} else {
-		post.ContentType = recommendedPromotedContentType(post)
-	}
-	if title, exists := payload["title"]; exists {
-		post.Title = strings.TrimSpace(asString(title))
-	}
-	if summary, exists := payload["summary"]; exists {
-		post.Summary = strings.TrimSpace(asString(summary))
-	}
-	if tags, exists := payload["tagRefs"]; exists {
-		post.TagRefs = asStringSlice(tags)
-	}
-	if entityRefs, exists := payload["entityRefs"]; exists {
-		post.EntityRefs = asStringSlice(entityRefs)
-	}
-	if coverURL, exists := payload["coverUrl"]; exists {
-		post.CoverUrl = strings.TrimSpace(asString(coverURL))
-	}
-	if thumbnailURL, exists := payload["thumbnailUrl"]; exists {
-		post.ThumbnailUrl = strings.TrimSpace(asString(thumbnailURL))
-	}
-	if videoURL, exists := payload["videoUrl"]; exists {
-		post.VideoUrl = strings.TrimSpace(asString(videoURL))
-	}
-	if mediaItems, exists := payload["mediaItems"]; exists {
-		decoded, err := decodePostMediaItems(mediaItems)
-		if err != nil {
-			return nil, rterr.NewInvalidArgument(
-				rterr.ModuleContent,
-				"媒体列表格式不合法",
-				err.Error(),
-			)
-		}
-		post.MediaItems = decoded
-	}
-	if coverStrategy, exists := payload["coverStrategy"]; exists {
-		post.CoverStrategy = strings.TrimSpace(asString(coverStrategy))
-	}
-	if coverFrameTimeMs, exists := payload["coverFrameTimeMs"]; exists {
-		post.CoverFrameTimeMs = asInt64Flexible(coverFrameTimeMs)
-	}
-	if articleMarkdown, exists := payload["articleMarkdown"]; exists {
-		post.ArticleMarkdown = strings.TrimSpace(asString(articleMarkdown))
-	}
-	if semanticDocument, exists := payload["semanticDocument"]; exists {
-		decoded, err := decodeSemanticDocument(semanticDocument)
-		if err != nil {
-			return nil, rterr.NewInvalidArgument(rterr.ModuleContent, "语义文档格式不合法", err.Error())
-		}
-		post.SemanticDocument = decoded
-	}
-	if markdownDialect, exists := payload["markdownDialect"]; exists {
-		post.MarkdownDialect = strings.TrimSpace(asString(markdownDialect))
-	}
-	if articleAssetManifest, exists := payload["articleAssetManifest"]; exists {
-		decoded, err := decodePostArticleAssetManifest(articleAssetManifest)
-		if err != nil {
-			return nil, rterr.NewInvalidArgument(
-				rterr.ModuleContent,
-				"文章素材清单格式不合法",
-				err.Error(),
-			)
-		}
-		post.ArticleAssetManifest = decoded
-	}
-	if articleRenderProfile, exists := payload["articleRenderProfile"]; exists {
-		decoded, err := decodePostArticleRenderProfile(articleRenderProfile)
-		if err != nil {
-			return nil, rterr.NewInvalidArgument(
-				rterr.ModuleContent,
-				"文章渲染配置格式不合法",
-				err.Error(),
-			)
-		}
-		post.ArticleRenderProfile = decoded
-	}
-	if err := NormalizePostObjectAnchors(post, payload); err != nil {
-		return nil, err
-	}
-	if err := applySemanticMentionPayload(post, payload); err != nil {
-		return nil, err
-	}
-	if err := applyPostSettingsPayload(post, promoteSettingsPayload(payload)); err != nil {
-		return nil, err
-	}
-	if err := s.syncArticleMarkdownSnapshot(post); err != nil {
-		return nil, err
-	}
-	normalizeVideoCoverContract(post)
-	now := time.Now().UTC()
-	post.UpdatedAt = now
-	post.ContentDigest = postContentDigest(post)
-	eventPayload := projectionPayloadForPost(post)
-	post, err := s.commitPostCommand(
-		ctx,
-		post,
-		expectedVersion,
-		"PromotePostToWork",
-		payload,
-		"PostPromotedToWork",
-		eventPayload,
-		now,
-	)
-	if err != nil {
-		return nil, contentgenerated.AppErrorFromStorageWriteFailed("promote post to work: " + err.Error())
-	}
-	return post, nil
-}
-
 type PostDeletionReceipt struct {
 	PostID   string `json:"postId"`
 	Status   string `json:"status"`
@@ -224,12 +87,11 @@ func (s *PostService) DeletePost(ctx context.Context, postID, userID string) (Po
 	post.DeletedAt = now
 	post.UpdatedAt = now
 	eventPayload := map[string]any{
-		"postId":          post.ID,
-		"authorId":        post.AuthorId,
-		"contentType":     post.ContentType,
-		"contentIdentity": post.ContentIdentity,
-		"status":          statusBeforeDelete,
-		"deletedAt":       post.DeletedAt.Format(time.RFC3339),
+		"postId":      post.ID,
+		"authorId":    post.AuthorId,
+		"contentType": post.ContentType,
+		"status":      statusBeforeDelete,
+		"deletedAt":   post.DeletedAt.Format(time.RFC3339),
 	}
 	post, replayed, err := s.commitPostCommandWithResult(
 		ctx,

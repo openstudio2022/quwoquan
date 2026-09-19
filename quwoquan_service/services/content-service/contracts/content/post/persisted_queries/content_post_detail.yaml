@@ -4,12 +4,12 @@ objectId: content.post
 document: content_post_detail.graphql
 operationName: ContentPostDetailBase
 operationType: query
-sha256Hash: 7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7
+sha256Hash: 6d1f340a4caedf270c46377b1b3a8ae48e3d669f3f7709ec81b3efcf2f6d9820
 assemblyProjectionId: content.post.ContentPostDetailSlice
 appClientBundle:
   bundleId: content.post.ContentPostDetail
   role: base
-  supportedContentTypes: [article, image, micro, video]
+  supportedContentTypes: [article, image, video]
 runtimeRequest:
   method: POST
   path: /internal/graphql

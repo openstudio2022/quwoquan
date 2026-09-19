@@ -913,8 +913,7 @@ ContentPostViewData _photoPost({
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: id,
-      contentType: 'image',
-      contentIdentity: 'work',
+      contentType: ContentType.image,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author-1',
       authorDisplayName: '摄影师',
@@ -962,8 +961,7 @@ ContentPostViewData _videoPost({
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: 'video-1',
-      contentType: 'video',
-      contentIdentity: 'work',
+      contentType: ContentType.video,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author-video',
       authorDisplayName: '视频作者',
@@ -1011,8 +1009,7 @@ ContentPostViewData _articlePost({
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: 'article-1',
-      contentType: 'article',
-      contentIdentity: 'work',
+      contentType: ContentType.article,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author-3',
       authorDisplayName: '写作者',
@@ -1148,8 +1145,7 @@ ContentPostViewData _textMoment({
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: 'moment-1',
-      contentType: 'micro',
-      contentIdentity: 'moment',
+      contentType: ContentType.article,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author-2',
       authorDisplayName: '圈友',
@@ -3764,8 +3760,8 @@ void main() {
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'micro',
-              'contentType': 'micro',
+              'type': 'article',
+              'contentType': 'article',
               'authorId': post.authorId,
               'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
@@ -3824,8 +3820,8 @@ void main() {
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'micro',
-              'contentType': 'micro',
+              'type': 'article',
+              'contentType': 'article',
               'authorId': post.authorId,
               'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
@@ -3912,8 +3908,8 @@ void main() {
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'micro',
-              'contentType': 'micro',
+              'type': 'article',
+              'contentType': 'article',
               'authorId': post.authorId,
               'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
@@ -3967,8 +3963,8 @@ void main() {
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'micro',
-              'contentType': 'micro',
+              'type': 'article',
+              'contentType': 'article',
               'authorId': post.authorId,
               'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
@@ -4042,8 +4038,8 @@ void main() {
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'micro',
-              'contentType': 'micro',
+              'type': 'article',
+              'contentType': 'article',
               'authorId': post.authorId,
               'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
@@ -4157,8 +4153,8 @@ void main() {
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'micro',
-              'contentType': 'micro',
+              'type': 'article',
+              'contentType': 'article',
               'authorId': post.authorId,
               'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
@@ -4224,8 +4220,8 @@ void main() {
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'micro',
-              'contentType': 'micro',
+              'type': 'article',
+              'contentType': 'article',
               'authorId': post.authorId,
               'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,
@@ -4313,8 +4309,8 @@ void main() {
           rawPostsById: _viewerRawByPostId({
             post.id: <String, dynamic>{
               'postId': post.id,
-              'type': 'micro',
-              'contentType': 'micro',
+              'type': 'article',
+              'contentType': 'article',
               'authorId': post.authorId,
               'authorDisplayName': post.displayName,
               'authorAvatarUrl': post.avatarUrl,

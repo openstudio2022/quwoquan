@@ -281,26 +281,25 @@ func tombstoneMissingLivePosts(
 	snapshots := make([]ImportedPostDeletionSnapshot, 0)
 	for cursor.Next(ctx) {
 		var row struct {
-			ID              string `bson:"_id"`
-			AuthorID        string `bson:"authorId"`
-			ContentType     string `bson:"contentType"`
-			ContentIdentity string `bson:"contentIdentity"`
-			Status          string `bson:"status"`
+			ID          string `bson:"_id"`
+			AuthorID    string `bson:"authorId"`
+			ContentType string `bson:"contentType"`
+			Status      string `bson:"status"`
 		}
 		if err := cursor.Decode(&row); err != nil {
 			return nil, fmt.Errorf("decode previous active Post for tombstone: %w", err)
 		}
-		identity, err := canonicalImportedContentIdentity(row.ContentIdentity)
+		contentType, err := canonicalImportedContentType(row.ContentType)
 		if err != nil {
 			return nil, fmt.Errorf("previous active Post %q: %w", row.ID, err)
 		}
 		if strings.TrimSpace(row.ID) == "" || strings.TrimSpace(row.AuthorID) == "" ||
-			strings.TrimSpace(row.ContentType) == "" || strings.TrimSpace(row.Status) == "" {
+			strings.TrimSpace(row.Status) == "" {
 			return nil, fmt.Errorf("GATE_BLOCK: previous active Post lacks deletion lifecycle fields")
 		}
 		snapshots = append(snapshots, ImportedPostDeletionSnapshot{
-			PostID: row.ID, AuthorID: row.AuthorID, ContentType: row.ContentType,
-			ContentIdentity: identity, Status: "published",
+			PostID: row.ID, AuthorID: row.AuthorID, ContentType: contentType,
+			Status: "published",
 		})
 	}
 	if err := cursor.Err(); err != nil {

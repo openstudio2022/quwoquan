@@ -1,19 +1,20 @@
-schema_version: 1
+schema_version: 2
 
 feature_context_manifest:
-  schema_version: 4
+  schema_version: 5
   max_bytes: 8192
   fingerprint_receipt_max_bytes: 16777216
   required_fields:
     - schema_version
     - target
-    - resolved_owner
-    - owner_chain
+    - context_status
+    - feature_chain
     - canonical_contexts
     - applicable_agents
     - open_items
+    - dependency_evidence
     - evidence_fingerprint
-  owner_chain_fields: [level, node_id, path]
+  feature_chain_fields: [level, node_id, path]
   context_fields: [path, anchor, kind]
   open_item_fields: [path, id, title, release_impact]
   fingerprint_field: evidence_fingerprint
@@ -21,18 +22,17 @@ feature_context_manifest:
   fingerprint_binding_modes: [embedded, referenced]
 
 candidate_path_set:
-  schema_version: 1
+  schema_version: 2
   # 单个无损对象的资源边界，不拆分candidate；远高于当前完整路径负载。
   max_bytes: 16777216
-  required_fields: [schema_version, owner_identity_ref, owner_identity_canonical_bytes_sha256, impacted_owner_groups]
+  required_fields: [schema_version, changed_paths]
   directory: .qwq_output/env/repo/runs/feature-tree/by-fingerprint/candidate-paths
-  identity_fields: [ref, canonical_bytes_sha256, byte_count, path_count, owner_count, changed_paths_digest, impacted_owner_groups_digest]
+  identity_fields: [ref, canonical_bytes_sha256, byte_count, path_count, changed_paths_digest]
 
 candidate_evidence_manifest:
-  schema_version: 3
+  schema_version: 4
   max_bytes: 65536
-  required_fields: [schema_version, owner_identity_ref, owner_identity_canonical_bytes_sha256, delivery_owner, lead_lane, delivery_policy_digests, target, resolved_owner, path_set_identity, workspace_digests, context_snapshots, impact_plan_identity, evidence_fingerprint]
-  owner_identity_ref_semantics: primary_delivery_predecessor
+  required_fields: [schema_version, delivery_writer, lead_lane, delivery_policy_digests, path_set_identity, workspace_digests, context_snapshots, impact_plan_identity, evidence_fingerprint]
   delivery_identity_source: current_branch_or_exact_source_identity_with_git_verified_producer_lane_ref
   delivery_source_policy:
     path: quwoquan_ops/policies/branch_policy.yaml
@@ -46,17 +46,12 @@ candidate_evidence_manifest:
   source_identity_validation: clean_source_HEAD_tree_exact_ancestor_range_complete_changed_paths_and_producer_lane_ref_equals_head
   dependency_root_semantics: runtime_exact_bytes_only_never_source_truth_no_source_fallback
   portable_consumers: [review_dispatch, evidence_runner, handoff_consumer, review_consolidator]
-  owner_chain_fields: [level, node_id, path]
-  impacted_owner_group_fields: [owner_identity, paths]
-  impacted_owner_identity_fields: [resolved_owner, owner_chain_digest]
   delivery_policy_digest_fields: [branch_policy_digest, lane_ownership_digest]
   workspace_digest_fields: [tracked_digest, untracked_digest, deleted_digest, renamed_digest, symlink_digest]
   context_snapshot_fields: [path, anchor, kind, exists, content_digest]
   impact_plan_identity_fields: [schema, digest, projection_ref, timeout_policy_ref, timeout_policy_digest]
-  impacted_owner_group_order: owner_identity.resolved_owner-bytewise-utf8
   changed_path_storage: exactly_once_in_content_addressed_candidate_path_set
-  changed_path_order: repository-relative-bytewise-utf8-within-owner-group
-  owner_chain_storage: digest_only_per_impacted_owner_identity-rebuilt_with_current_feature_tree_resolver
+  changed_path_order: repository-relative-bytewise-utf8
 
 review_plan:
   schema_version: 5
@@ -67,7 +62,6 @@ review_plan:
     - round
     - deliverable
     - scope
-    - owner_identity
     - candidate_evidence_identity
     - human_decision_ref
     - human_decision_projection
@@ -89,8 +83,7 @@ review_plan:
     - head_sha
     - merge_base_sha
     - generated_at
-  owner_identity_fields: [ref, canonical_bytes_sha256, target, scope, resolved_owner, fingerprint_ref, fingerprint_digest]
-  candidate_evidence_identity_fields: [ref, canonical_bytes_sha256, schema_version, owner_identity_ref, delivery_owner, lead_lane, delivery_policy_digests, target, resolved_owner, impacted_owner_groups_digest, changed_paths_digest, workspace_digests, fingerprint_ref, fingerprint_digest, impact_plan_ref, impact_plan_digest]
+  candidate_evidence_identity_fields: [ref, canonical_bytes_sha256, schema_version, delivery_writer, lead_lane, delivery_policy_digests, changed_paths_digest, workspace_digests, fingerprint_ref, fingerprint_digest, impact_plan_ref, impact_plan_digest]
   human_decision_projection_fields: [schema_version, target_kind, admission_class, human_decision_ref, status, projection, decision, redirect_target, authority_status, formal_admission_satisfied, blocks_execution, terminal]
   human_decision_semantics:
     ref_optional: true
@@ -193,11 +186,11 @@ reviewer_input:
     - limit
     - generated_at
   reviewer_fields: [role, kind, required, profile, checklist]
-  assembled_input_identity_fields: [workflow, deliverable, scope, round, reviewer, owner_identity, candidate_evidence_identity, candidate_identity]
+  assembled_input_identity_fields: [workflow, deliverable, scope, round, reviewer, candidate_evidence_identity, candidate_identity]
   assembled_input_sections: [system_prompt, role_prompt, checklist_prompt, grading_prompt, identity, changed_paths_and_diff_summary, evidence_summary, relevant_contexts]
   digest_format: "sha256:<64-lowercase-hex>"
   byte_count_encoding: canonical-compact-json-utf8
-  identity_preservation: owner-and-candidate-identity-never-dropped
+  identity_preservation: candidate-identity-never-dropped
 
 review_result:
   schema_version: 3
@@ -234,14 +227,14 @@ candidate_review_closure:
   health_finding_identity: findingId
   handwritten_dev_requires_health: true
   disposition_fields: [finding_id, disposition, reason, evidence_ids, open_ref]
-  dispositions: [fix-now, owner-open, out-of-scope]
+  dispositions: [fix-now, feature-open, out-of-scope]
   fix_now: later_current_candidate_health_report_without_original_finding_id
   fix_now_reachability: deterministic_immutable_candidate_rerun_cannot_remove_warning_source_fix_requires_new_candidate
   exact_closure_consumer: quwoquan_ops.cli.review_consolidator.validate_exact_consolidation
   exact_closure_inputs: [consolidation, plan, evidence_pairs, reviewer_pairs, registry, exact_bytes_by_ref]
   exact_closure_validation: full_current_chain_recomputation_no_partial_health_projection
-  owner_open: current_lowest_owner_open_with_completion_and_track_impact_bound_in_plan_context
-  out_of_scope: finding_path_and_resolved_owner_outside_candidate_with_named_boundary_evidence
+  feature_open: tracked_open_with_completion_and_track_impact_bound_in_plan_context
+  out_of_scope: finding_path_outside_candidate_with_named_boundary_evidence
   replacement_fields: [old_path, old_symbols, successor_path, successor_symbols, consumers, cleanup, dynamic_entry_status, scan_evidence_ids, test_evidence_ids]
   consumer_fields: [path, status, reason]
   consumer_statuses: [migrated, retained, unknown]
@@ -250,7 +243,7 @@ candidate_review_closure:
   cleanup_actions: [removed, retained, not-applicable]
   cleanup_not_applicable: config_or_test_only_null_path_with_nonempty_reason_and_scan_evidence
   dynamic_entry_statuses: [resolved, unknown]
-  machine_verifies: [exact_candidate_identity, total_unique_dispositions, current_named_evidence, current_owner_open, objective_scope_exclusion, declared_path_state, unknown_entry_no_automatic_deletion]
+  machine_verifies: [exact_candidate_identity, total_unique_dispositions, current_named_evidence, current_feature_open, objective_scope_exclusion, declared_path_state, unknown_entry_no_automatic_deletion]
   reviewer_verifies: [semantic_fix, consumer_completeness, retention_reason, scan_coverage, behavioral_test_adequacy]
   no_replacement: empty_replacements_no_fabricated_deletion_inventory
 
@@ -283,7 +276,7 @@ handoff_manifest:
   schema_version: 5
   max_bytes: 134217728
   candidate_closure_fields: [ref, canonical_json]
-  candidate_closure_max_members: 4
+  candidate_closure_max_members: 2
   required_fields:
     - schema_version
     - intent
@@ -293,7 +286,6 @@ handoff_manifest:
     - downstream
     - human_decision_ref
     - human_decision_projection
-    - owner_identity_ref
     - candidate_evidence_ref
     - candidate_closure
     - review_plan_ref
@@ -406,7 +398,7 @@ evidence_fingerprint:
     - review-tracked-untracked-deleted
     - retired-review-algorithm-not-consumed
     - handoff-stale-missing-fingerprint-and-recovery-failure
-    - feature-manifest-v4-content-addressed-owner-identity-and-budget
+    - feature-manifest-v5-context-query-and-budget
     - named-evidence-dedup-drift-failure-and-result
     - handoff-six-trigger-producer-and-ordinary-noop
     - human-decision-create-once-tamper-ref-drift
@@ -418,47 +410,15 @@ terminal_codes:
   IDENTITY.MIGRATION_REQUIRED:
     severity: GATE_BLOCK
     automatic_retry: false
-    recovery: regenerate_owner_and_candidate_with_current_schema
+    recovery: regenerate_candidate_with_current_schema
   CANDIDATE.EMPTY_CHANGED_PATHS:
     severity: GATE_BLOCK
     automatic_retry: false
     recovery: provide_complete_nonempty_changed_paths
-  CANDIDATE.OWNER_RESOLUTION_FAILED:
-    severity: GATE_BLOCK
-    automatic_retry: false
-    recovery: resolve_every_changed_path_to_one_feature_owner
-  CANDIDATE.OWNER_DRIFT:
-    severity: GATE_BLOCK
-    automatic_retry: false
-    recovery: regenerate_owner_identity_then_candidate
   CANDIDATE.STALE:
     severity: GATE_BLOCK
     automatic_retry: false
     recovery: regenerate_candidate_evidence_for_current_bytes
-  REVIEW.OWNER_MANIFEST_REQUIRED:
-    severity: GATE_BLOCK
-    automatic_retry: false
-    recovery: generate_current_owner_manifest
-  REVIEW.OWNER_MANIFEST_SCHEMA_UNSUPPORTED:
-    severity: GATE_BLOCK
-    automatic_retry: false
-    recovery: regenerate_owner_manifest_with_current_schema
-  REVIEW.OWNER_MANIFEST_INVALID:
-    severity: GATE_BLOCK
-    automatic_retry: false
-    recovery: repair_owner_manifest_then_regenerate
-  REVIEW.OWNER_MANIFEST_TARGET_MISMATCH:
-    severity: GATE_BLOCK
-    automatic_retry: false
-    recovery: resolve_target_owner_then_regenerate_manifest
-  REVIEW.OWNER_MANIFEST_SCOPE_MISMATCH:
-    severity: GATE_BLOCK
-    automatic_retry: false
-    recovery: align_review_scope_to_owner_manifest
-  REVIEW.OWNER_MANIFEST_STALE:
-    severity: GATE_BLOCK
-    automatic_retry: false
-    recovery: regenerate_current_owner_manifest
   REVIEW.CONTEXT_MANIFEST_BUDGET_EXCEEDED:
     severity: GATE_BLOCK
     automatic_retry: false

@@ -91,8 +91,7 @@ final class RemoteSearchPageRepository implements SearchRepository {
     final values = <String>{};
     for (final contentType in requested) {
       final value = switch (contentType) {
-        SearchContentTypeFilter.article ||
-        SearchContentTypeFilter.micro => SearchPageContentType.article,
+        SearchContentTypeFilter.article => SearchPageContentType.article,
         SearchContentTypeFilter.image => SearchPageContentType.image,
         SearchContentTypeFilter.video => SearchPageContentType.video,
       };

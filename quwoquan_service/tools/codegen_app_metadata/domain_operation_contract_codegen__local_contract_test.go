@@ -619,6 +619,12 @@ func TestContentAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *t
 		`map["feature_flags"]`,
 		`map["gray_release"]`,
 		"final class ContentDiscoveryFeedPageSlice {",
+		"final class ContentListItemProjection {",
+		"final List<ContentListItemProjection> items;",
+		"final ListItemPresentationEnvelope envelope;",
+		"final ContentPostProjection? post;",
+		"final HomepageSearchItemView? homepage;",
+		"final DocumentEnvelope? semanticDocument;",
 		"final class PostPublicationReceipt {",
 		"final class AuthorPostPageSlice {",
 		"final class ContentPostDetailSlice {",
@@ -693,18 +699,20 @@ func TestUserAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *test
 		}
 		lock.AppExposedOperations = append(lock.AppExposedOperations, operation)
 	}
-	// 正式会话契约不再签发或回读研究态身份。
-	for _, operation := range lock.AppExposedOperations {
-		if operation.LocalOperationID == "IssueWhitelistedResearchSession" || operation.LocalOperationID == "GetResearchSessionAttestation" {
-			t.Fatal("User App surface retained retired research identity")
+	// 59744f676 同时退役签发与回读两个入口：原 75 - 2 = 73，不能只减签发入口。
+	// 在完整契约图检查退役，不允许仅通过隐藏 client_contract 使 App 子集通过。
+	for _, operation := range graphSourceOperations {
+		if operation.LocalID == "IssueWhitelistedResearchSession" || operation.LocalID == "GetResearchSessionAttestation" {
+			t.Fatalf("canonical graph retained retired research identity: %s", operation.ID)
 		}
 	}
-	if got := len(lock.AppExposedOperations); got != 74 {
+	const expectedUserOperations = 73
+	if got := len(lock.AppExposedOperations); got != expectedUserOperations {
 		ids := make([]string, 0, len(lock.AppExposedOperations))
 		for _, operation := range lock.AppExposedOperations {
 			ids = append(ids, operation.CanonicalOperationID)
 		}
-		t.Fatalf("User App-exposed operations = %d, want 74: %s", got, strings.Join(ids, ", "))
+		t.Fatalf("User App-exposed operations = %d, want %d: %s", got, expectedUserOperations, strings.Join(ids, ", "))
 	}
 
 	appDir := t.TempDir()
@@ -716,8 +724,8 @@ func TestUserAppSurfaceUsesCanonicalResponseEntitiesAndOneGeneratedOwner(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := len(artifacts); got != 74 {
-		t.Fatalf("User typed request artifacts = %d, want 74", got)
+	if got := len(artifacts); got != expectedUserOperations {
+		t.Fatalf("User typed request artifacts = %d, want %d", got, expectedUserOperations)
 	}
 	ownerPayload := readGeneratedTestFile(t, filepath.Join(
 		appDir,

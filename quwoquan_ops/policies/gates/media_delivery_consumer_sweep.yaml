@@ -54,11 +54,11 @@ allowlist:
   service/chat_service/chat/message/presentation/chat_message_bubble.dart:357: 会话分享卡缩略沿用 ContentSurfaceView 的公开取值；release post 的私有封面由内容面 typed 入口承载，chat 侧不另建授权路径
   service/chat_service/chat/message/presentation/chat_message_bubble.dart:509: 会话自有图片与成员头像，不属 release 交付闭包
   service/chat_service/chat/message/presentation/chat_message_bubble.dart:518: 会话自有图片与成员头像，不属 release 交付闭包
-  service/circle_service/circle_management/circle/presentation/circle_edit_settings_page_state_helpers.dart:165: 自有圈子设置页的封面/头像编辑预览，渲染本地选择或已上传的圈子自有媒体
-  service/circle_service/circle_management/circle/presentation/circle_edit_settings_page_state_helpers.dart:272: 自有圈子设置页的封面/头像编辑预览，渲染本地选择或已上传的圈子自有媒体
-  service/circle_service/circle_management/circle/presentation/circle_edit_settings_page_state_helpers.dart:30: 自有圈子设置页的封面/头像编辑预览，渲染本地选择或已上传的圈子自有媒体
-  service/circle_service/circle_management/circle/presentation/circle_edit_settings_page_state_helpers.dart:74: 自有圈子设置页的封面/头像编辑预览，渲染本地选择或已上传的圈子自有媒体
-  service/circle_service/circle_management/circle/presentation/circle_header.dart:80: 同上：圈子头像为用户自建社区媒体
+  service/circle_service/circle_management/circle/presentation/circle_edit_settings_page_state_helpers.dart:182: 自有圈子设置页的封面/头像编辑预览，渲染本地选择或已上传的圈子自有媒体
+  service/circle_service/circle_management/circle/presentation/circle_edit_settings_page_state_helpers.dart:294: 自有圈子设置页的封面/头像编辑预览，渲染本地选择或已上传的圈子自有媒体
+  service/circle_service/circle_management/circle/presentation/circle_edit_settings_page_state_helpers.dart:35: 自有圈子设置页的封面/头像编辑预览，渲染本地选择或已上传的圈子自有媒体
+  service/circle_service/circle_management/circle/presentation/circle_edit_settings_page_state_helpers.dart:86: 自有圈子设置页的封面/头像编辑预览，渲染本地选择或已上传的圈子自有媒体
+  service/circle_service/circle_management/circle/presentation/circle_header.dart:78: 同上：圈子头像为用户自建社区媒体
   service/circle_service/circle_management/circle/presentation/circle_shell_builders.dart:273: 圈子封面由 CreateCircle 用户命令写入（circle_command_facade.go），非 release 导入
   service/circle_service/circle_management/circle/presentation/circle_shell_builders.dart:424: 圈子封面由 CreateCircle 用户命令写入（circle_command_facade.go），非 release 导入
   service/circle_service/circle_management/circle/presentation/circle_stats_page.dart:366: 圈子成员头像取自 user account 域
@@ -79,12 +79,12 @@ allowlist:
   service/content_service/content/post/presentation/content_share_sheet_components.dart:87: 分享模板封面沿用 ContentSurfaceView 的公开取值；release post 分享的私有缩略由 chat 卡侧承载
   service/content_service/content/post/presentation/following_subject_strip.dart:389: 关注对象为圈子/主页 subject，封面同圈子域来源，非 release post 交付
   service/content_service/content/post/presentation/publish_circle_select_page.dart:177: 同上：圈子封面为用户自建社区媒体
-  service/content_service/content/profile_interaction_activity_view/presentation/profile_interaction_tab.dart:378: 互动 Tab 头像取自 user account 域的互动发起者，非 release creator 交付
+  service/content_service/content/profile_interaction_activity_view/presentation/profile_interaction_tab.dart:375: 互动 Tab 头像取自 user account 域的互动发起者，非 release creator 交付
   service/content_service/media/filter_catalog_release/presentation/image_editor_page_preview_layers.dart:138: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
   service/content_service/media/filter_catalog_release/presentation/image_editor_page_preview_layers.dart:214: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
   service/content_service/media/media_asset/presentation/media_viewer_toolbar.dart:242: 工具条为无状态展示件，作者头像由调用方交出；其唯一调用链已在沉浸页经 typed 绑定收口
   service/content_service/media/media_asset/presentation/video_media_viewer.dart:249: 全仓零引用（含路由与测试）的历史脚手架，不构成运行时消费点；其 posts 为 List<dynamic> 亦无交付声明来源，重新接入前必须先接 typed 绑定
-  service/content_service/media/media_asset/presentation/video_timeline_preview.dart:160: timeline sprite 由媒体处理管线运行时生成并强制 public slice（video_preview_track_remote.dart 校验 accessPolicy==public），非 release 导入的私有 CAS 字段
+  service/content_service/media/media_asset/presentation/video_timeline_preview.dart:161: timeline sprite 由媒体处理管线运行时生成并强制 public slice（video_preview_track_remote.dart 校验 accessPolicy==public），非 release 导入的私有 CAS 字段
   service/entity_service/entity_homepage/homepage/presentation/homepage_detail_shell_components2.dart:95: 唯一调用点传空封面（同文件 18 行），网络封面分支不可达；contentPreview 亦不由 release 导入填充
   service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/interactive_intersection_text.dart:217: 交集视觉的 imageUrl 来自 persona avatar 与静态交集 icon 注册表（intersection_hydration.go 的 AvatarURL / IntersectionIconAssetByIconKey），不是 release post/homepage 封面
   service/recommendation_service/recommendation/recommendation_feature_profile_view/presentation/intersection_entity.dart:422: 交集视觉的 imageUrl 来自 persona avatar 与静态交集 icon 注册表（intersection_hydration.go 的 AvatarURL / IntersectionIconAssetByIconKey），不是 release post/homepage 封面
@@ -100,9 +100,9 @@ allowlist:
   service/rtc_service/rtc/call_session/presentation/voice_call_page.dart:328: 通话参与者头像取自 user account 域的实时会话成员，不属 release 交付闭包
   service/search_service/search/search_index_view/presentation/global_search_page_suggestion_widgets.dart:336: 搜索建议里的会话入口头像取自 user account 域的会话成员（_buildConversationLeading），非 release creator 交付
   service/user_service/account/user_account/presentation/my_qr_card.dart:409: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
-  service/user_service/persona_management/persona/presentation/edit_profile_page.dart:153: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
-  service/user_service/persona_management/persona/presentation/profile_shell_builders_parts.dart:540: persona 背景由用户自行上传（persona_service.go 的 backgroundAssetId/backgroundUrl）；release creator 导入只写 avatar 不写 background
-  service/user_service/persona_management/persona/presentation/profile_shell_builders_parts.dart:849: 已在 mediaDeliveryImage 的 publicBuilder 内完成 typed 分流，公开头像分支因本地文件分支展开超出扫描回看窗口
+  service/user_service/persona_management/persona/presentation/edit_profile_page.dart:158: 创作/编辑/上传本地预览，渲染的是本机草稿或待上传字节，不经 release 交付
+  service/user_service/persona_management/persona/presentation/profile_shell_builders_parts.dart:538: persona 背景由用户自行上传（persona_service.go 的 backgroundAssetId/backgroundUrl）；release creator 导入只写 avatar 不写 background
+  service/user_service/persona_management/persona/presentation/profile_shell_builders_parts.dart:847: 已在 mediaDeliveryImage 的 publicBuilder 内完成 typed 分流，公开头像分支因本地文件分支展开超出扫描回看窗口
   service/user_service/persona_management/persona/presentation/share_interaction/share_interaction_row.dart:246: 分享互动行渲染 user account 域的联系人头像，非 release creator 交付
   service/user_service/persona_management/persona/presentation/share_interaction/share_target_preview.dart:51: 分享目标预览沿用 ContentSurfaceView 公开取值，与 chat 分享卡同源
   service/user_service/relationship/persona_relationship/presentation/blocked_users_page.dart:449: 通讯录与拉黑名单渲染 user account 头像，不属 release 交付闭包

@@ -18,6 +18,7 @@ _STATIC_GATES = {
     "no-flat-roots": "verify_no_flat_roots",
     "tag-tree": "verify_tag_tree",
     "output-root-isolation": "verify_output_root_isolation",
+    "contract-closure": "verify_contract_closure",
 }
 # 历史 execution 与独立内容仓是运行输入，不属于源码提交的静态判据。
 # 完整 verify all 及点名检查仍严格校验，不改写原件或按旧 schema 放行。

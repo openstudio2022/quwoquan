@@ -92,7 +92,7 @@ final class _NoopPostInteractionStateNotifier
 }
 
 ContentPostViewData _post({
-  String contentType = 'micro',
+  String contentType = 'article',
   String? videoUrl,
   String? mediaAssetId,
   int? mediaAssetVersion,
@@ -108,7 +108,6 @@ ContentPostViewData _post({
     ContentPostProjection(
       postId: 'post_signed_routing',
       contentType: contentType,
-      contentIdentity: 'moment',
       authorId: 'author_signed_routing',
       authorDisplayName: 'Routing Author',
       authorAvatarUrl: authorAvatarUrl,
@@ -179,7 +178,6 @@ Future<void> _pumpFeed(
             child: HomeMultiFormFeed(
               isDark: false,
               channelId: 'recommend',
-              template: 'single_column_multiform',
               onUserTap: (id, {avatarUrl, backgroundUrl, displayName}) =>
                   onUserTap?.call(id),
             ),

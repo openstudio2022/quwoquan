@@ -308,7 +308,7 @@ func TestModerationDecisionOutboxAppliesPostLifecycleAndVisibility(t *testing.T)
 	published := submitPublishedPostWithAuthor(
 		t,
 		"moderation-lifecycle-author",
-		`{"contentType":"micro","title":"审核可见性目标","body":"moderation-lifecycle-unique-term","visibility":"public"}`,
+		`{"contentType":"article","title":"审核可见性目标","body":"moderation-lifecycle-unique-term","visibility":"public"}`,
 	)
 	postID := asTestString(published["postId"])
 	if postID == "" {

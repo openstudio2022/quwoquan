@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：不直接参与用户 Journey；为 Human-Agent 交付与 Objective 执行提供独立、可认证、可回读的 hosted authority
 >
-> 设计归属：[L2 DEC-005](../design.md#dec-005)
+> 设计引用：[L2 DEC-005](../design.md#dec-005)
 
 ## 1. 用户价值
 

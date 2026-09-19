@@ -1,16 +1,19 @@
 schema: content_post_publication_policy
 text_limits:
   title_max_runes: 80
-  micro_body_max_runes: 5000
+  # 纯正文长度上限的唯一口径。article 正文是主体，image/video 只能短配文，
+  # 三类 Post 共用同一条 body 限制，不再存在退役 micro 形态的第二口径。
+  article_body_max_runes: 5000
   article_markdown_max_runes: 20000
   summary_max_runes: 240
   semantic_mentions_max_items: 30
+# 只描述“什么样的正文更适合走长文编辑器”，不产生形态确认弹窗：
+# contentType 在写入时由创作入口确定，不由发布期让用户在点滴/作品之间二选一。
 format_recommendation:
   article_body_min_runes: 140
   article_paragraph_min_count: 2
   article_when_title_present: true
   article_when_media_present: true
-  user_confirmation_required: true
 rate_limit:
   persona_window_seconds: 60
   persona_max_publications: 5

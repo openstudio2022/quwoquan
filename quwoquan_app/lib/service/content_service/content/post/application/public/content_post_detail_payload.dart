@@ -11,7 +11,6 @@ final class ContentPostDetailPayload {
         ContentPostProjection(
           postId: wire.postId,
           contentType: wire.contentType,
-          contentIdentity: wire.contentIdentity,
           assistantUsePolicy: wire.assistantUsePolicy,
           authorId: wire.authorId,
           authorDisplayName: wire.authorDisplayName,

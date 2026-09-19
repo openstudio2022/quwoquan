@@ -33,11 +33,11 @@ func releaseCASOptions(releaseID, digest string, version int64) ImportOptions {
 func releaseCASPost(contentID, postRef string, now time.Time) PostDoc {
 	return PostDoc{
 		PostRef: postRef, ContentID: contentID, ContentVersion: 1,
-		PoolSourceType: "data", VariantPurpose: "original", PoolStatus: "active",
-		ContentType: "article", ContentIdentity: "work", Title: contentID,
+		PoolSourceType: "data", PoolStatus: "active",
+		ContentType: "article", Title: contentID,
 		AuthorID: "builtin_travel_blogger", ArticleMarkdown: "# " + contentID,
 		Admission: ContentAdmission{
-			ProcessResult: "completed", QualityResult: "passed", UsageScope: "production",
+			ProcessResult: "completed", QualityResult: "passed", RightsResult: "passed", RightsAuthorityRef: "content_review.json", RightsAuthorityDigest: "sha256:" + strings.Repeat("b", 64),
 			EvidenceRef: "audit/attestation.json", EvidenceDigest: "sha256:" + strings.Repeat("a", 64),
 		},
 		CreatedAt: now.Add(-time.Hour), UpdatedAt: now, PublishedAt: now,

@@ -17,19 +17,18 @@ import (
 const postDeletionReactionBatchSize = 500
 
 type postDeletedFact struct {
-	PostID          string  `json:"postId"`
-	AuthorID        string  `json:"authorId"`
-	ContentType     string  `json:"contentType"`
-	ContentIdentity string  `json:"contentIdentity"`
-	Status          string  `json:"status"`
-	DeletedAt       string  `json:"deletedAt"`
-	Environment     *string `json:"environment"`
-	SourceOwner     *string `json:"sourceOwner"`
-	ReleaseID       *string `json:"releaseId"`
-	ManifestDigest  *string `json:"manifestDigest"`
-	ReleaseDigest   *string `json:"releaseDigest"`
-	SourceVersion   int64   `json:"sourceVersion"`
-	SafetyRevision  int64   `json:"safetyRevision"`
+	PostID         string  `json:"postId"`
+	AuthorID       string  `json:"authorId"`
+	ContentType    string  `json:"contentType"`
+	Status         string  `json:"status"`
+	DeletedAt      string  `json:"deletedAt"`
+	Environment    *string `json:"environment"`
+	SourceOwner    *string `json:"sourceOwner"`
+	ReleaseID      *string `json:"releaseId"`
+	ManifestDigest *string `json:"manifestDigest"`
+	ReleaseDigest  *string `json:"releaseDigest"`
+	SourceVersion  int64   `json:"sourceVersion"`
+	SafetyRevision int64   `json:"safetyRevision"`
 }
 
 // PostDeletionConsumer 是 Post 与 ContentReaction 之间的唯一删除生命周期边界。

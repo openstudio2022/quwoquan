@@ -134,11 +134,10 @@ func buildContentTypeToRender(contentTypes []string) map[string]string {
 }
 
 func buildDiscoveryMappings(contentTypes []string) (map[string]string, map[string]string) {
-	// requestType 全部使用 canonical ContentType（micro/image/...），无 moment/photo 同义词。
-	feedCategoryToType := map[string]string{
-		"recommended": "micro",
-		"following":   "micro",
-	}
+	// requestType 全部使用 canonical ContentType，无 moment/photo 同义词。
+	// recommended/following 是频道路由，不是内容类型过滤条件，因此不映射到
+	// 任何 ContentType 成员——按退役类型过滤会让整条频道空掉。
+	feedCategoryToType := map[string]string{}
 	for _, ct := range contentTypes {
 		category := ct
 		feedType := ct
@@ -149,7 +148,6 @@ func buildDiscoveryMappings(contentTypes []string) (map[string]string, map[strin
 	}
 
 	appTabToCategory := map[string]string{
-		"micro":   "recommended",
 		"image":   "images",
 		"video":   "video",
 		"article": "article",

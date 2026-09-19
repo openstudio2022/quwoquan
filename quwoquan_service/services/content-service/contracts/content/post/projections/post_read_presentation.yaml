@@ -10,17 +10,12 @@ fields:
   dart_type: String
   post_base: id
 - name: contentType
-  type: string
+  type: enum
+  enum_ref: ContentType
   nullable: false
   source: contentType
   dart_type: String
   post_base: type
-- name: contentIdentity
-  type: string
-  nullable: false
-  source: contentIdentity
-  dart_type: String
-  post_base: identity
 - name: displayName
   type: string
   nullable: false

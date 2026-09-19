@@ -308,9 +308,7 @@ class FeedRealtimePatchNotifier extends Notifier<FeedRealtimePatchState> {
       case FeedPatchRemovalDimension.author:
         return item.authorId == value || item.personaId == value;
       case FeedPatchRemovalDimension.contentType:
-        return item.identity == value ||
-            item.type == value ||
-            item.displayFormat == value;
+        return item.type.wireName == value;
     }
   }
 

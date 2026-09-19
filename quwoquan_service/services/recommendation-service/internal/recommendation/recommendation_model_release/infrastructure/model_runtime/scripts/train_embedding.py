@@ -29,6 +29,7 @@ try:
 except ImportError:
     np = None
 
+from generated.recommendation.recommendation_model_release.content_type_encoding import CONTENT_TYPE_MAP
 from privacy_guard import reject_closed_documents
 from time_utils import utc_now
 from training_sample_policy import (
@@ -46,7 +47,6 @@ ITEM_FEATURE_KEYS = [
     "ageHours", "viewCount", "likeCount", "commentCount", "shareCount",
     "tagCount", "qualityScore", "publishHour",
 ]
-CONTENT_TYPE_MAP = {"image": 0, "video": 1, "article": 2, "micro": 3}
 
 
 def _build_user_vector(sample: dict) -> list[float]:
@@ -69,7 +69,7 @@ def _build_item_vector(sample: dict) -> list[float]:
     vec = []
     for k in ITEM_FEATURE_KEYS:
         vec.append(float(item.get(k, 0) or 0))
-    vec.append(float(CONTENT_TYPE_MAP.get(item.get("contentType", ""), -1)))
+    vec.append(float(CONTENT_TYPE_MAP[item.get("contentType")]))
     return vec
 
 

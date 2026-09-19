@@ -28,7 +28,7 @@
 - [`realtime-gateway`](./realtime-gateway/spec.md)：提供有状态的双向实时会话、重连与投递确认
 - [`request-context-propagation`](./request-context-propagation/spec.md)：让同一请求的主体、客户端、requestId、traceId 与 causationId 在同步和异步边界保持一致且可审计
 - [`unified-entry-security`](./unified-entry-security/spec.md)：在统一入口完成认证、operation scope 授权、限流与安全观测，失败时拒绝进入业务 owner
-- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
+- Feature 层表达业务与设计边界；工程影响由 current actual diff 与 dependency closure 推导。
 
 ## 5. 关键决策
 

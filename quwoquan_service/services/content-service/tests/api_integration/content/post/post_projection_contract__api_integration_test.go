@@ -54,7 +54,7 @@ func TestGetHelperRead_NonArticle_Returns404(t *testing.T) {
 func TestSubmitPostPublicationResponseShapeNoPrivateFields(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := submitPublishedPost(t, `{"contentType":"micro","body":"hello world"}`)
+	created := submitPublishedPost(t, `{"contentType":"article","body":"hello world"}`)
 	postID, _ := created["postId"].(string)
 
 	req := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)

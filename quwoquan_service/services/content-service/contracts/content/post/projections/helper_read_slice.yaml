@@ -8,6 +8,6 @@ consumers:
 - app
 fields:
 - {name: postId, type: string, nullable: false}
-- {name: contentType, type: string, nullable: false}
+- {name: contentType, type: enum, enum_ref: ContentType, nullable: false}
 - {name: title, type: string, nullable: false}
 - {name: summary, type: string, nullable: false}

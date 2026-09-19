@@ -648,8 +648,6 @@ rollback_layers:
     mechanism: "policy 热更：opsIntervention.enabled=false"
   - id: disable_intersection_affinity_signal
     mechanism: "policy 热更：scorer.intersectionAffinityFactor=0"
-  - id: disable_object_cards
-    mechanism: "policy 热更：objectCards.enabled=false（混合对象卡零成本关闭）"
   - id: disable_recall_fusion
     mechanism: "policy 热更：recallFusion.enabled=false（回退无配额/无 boost 原始合并）"
   - id: neutralize_discovery_tuning

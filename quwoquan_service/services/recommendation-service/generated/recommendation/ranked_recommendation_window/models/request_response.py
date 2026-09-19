@@ -7,6 +7,55 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from enum import Enum
+from pydantic_core import core_schema
+
+
+class _ContractEnum(str, Enum):
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        return core_schema.no_info_before_validator_function(
+            cls._validate_wire,
+            handler(source_type),
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize_wire),
+        )
+
+    @classmethod
+    def _serialize_wire(cls, value):
+        return cls._validate_wire(value).value
+
+    @classmethod
+    def _validate_wire(cls, value):
+        if isinstance(value, cls):
+            return value
+        if type(value) is not str:
+            raise ValueError("enum wire value must be a string")
+        return cls(value)
+
+
+class ContentType(_ContractEnum):
+    VALUE_IMAGE = "image"
+    VALUE_VIDEO = "video"
+    VALUE_ARTICLE = "article"
+
+
+class ContentUiSurface(_ContractEnum):
+    VALUE_HOME_FEED = "home_feed"
+    VALUE_PROFILE_WORKS = "profile_works"
+    VALUE_MEDIA_IMMERSIVE = "media_immersive"
+    VALUE_ARTICLE_READER = "article_reader"
+    VALUE_HOMEPAGE_DETAIL = "homepage_detail"
+
+
+class FeedPresentationRecipe(_ContractEnum):
+    VALUE_COVER_MEDIA_CARD = "cover_media_card"
+    VALUE_ARTICLE_EXCERPT_CARD = "article_excerpt_card"
+    VALUE_HOMEPAGE_SUMMARY_CARD = "homepage_summary_card"
+
+
+class ListObjectKind(_ContractEnum):
+    VALUE_POST = "post"
+    VALUE_ENTITY_HOMEPAGE = "entity_homepage"
 
 
 class ReleaseCandidateBinding(BaseModel):
@@ -27,12 +76,24 @@ class ReleasePinnedQueryFence(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class ClientContentPresentationContract(BaseModel):
+    """客户端编译期能力闭集广告（DEC-006）。四个集合与 App 生成枚举同源，由 codegen 产出， 禁止手写数组，也不得由 X-Client-App-Build 维护第二张「版本→能力」表。 云在建窗与 hydrate 之前丢弃任一字段不在闭集内的候选再补足 page size： 「怎么不下发」是集合差，不是 build 黑名单。contractDigest 是四个有序闭集的 canonical 摘要并进入窗口 identity，不同代 App 不复用同一窗口；它不是协议版本号。 摘要输入仅含 contentTypes、listObjectKinds、openSurfaces、presentationRecipes 四键， 不含 contractDigest；按键名字典序排列，各数组按 canonical wire 值的 UTF-8 字节序排列， 编码为无空白 UTF-8 JSON，SHA-256 输出小写十六进制并加 sha256: 前缀。 集合不得含重复值、未知成员或空白别名；服务端验证集合后独立计算摘要并精确比较， 不信任调用方摘要，不把非法声明归为缺席。空集合合法且表示该维度不支持任何成员， 不以全集补齐；可选 recipe 缺席不要求 recipe 集合成员。 只有整个能力声明缺席时使用本类型 missing_declaration 声明的固定最小集合； 该结构化集合是唯一生成来源，不随闭集新增自动扩大。 正式 App 始终携带由其生成闭集形成的显式声明。请求传输采用有界 JSON 对象， 集合排序只影响摘要，不改变已交付列表序位；重复 query 参数、非对象或超限输入拒绝。"""
+    contentTypes: list[ContentType]
+    listObjectKinds: list[ListObjectKind]
+    presentationRecipes: list[FeedPresentationRecipe]
+    openSurfaces: list[ContentUiSurface]
+    contractDigest: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class CreateRankedRecommendationWindowCommand(BaseModel):
     """创建稳定推荐窗口的内部强类型命令；Content唯一pin请求fence，Recommendation不自行查询active或接受public提供的fence。"""
     contentFence: ReleasePinnedQueryFence
     idempotencyKey: str
     subjectId: str
     scenario: str
+    clientPresentationContract: ClientContentPresentationContract
     limit: int
 
     model_config = ConfigDict(extra="forbid")
@@ -43,33 +104,46 @@ class GetRankedRecommendationPageQuery(BaseModel):
     contentFence: ReleasePinnedQueryFence
     subjectId: str
     windowId: str
+    clientPresentationContract: ClientContentPresentationContract
     fromOrdinal: int | None = None
     limit: int | None = None
 
     model_config = ConfigDict(extra="forbid")
 
 
-class RankedRecommendationItem(BaseModel):
-    """排序窗口中不可变序位的一项候选。"""
-    ordinal: int
-    contentId: str
-    score: float
-    featureSnapshotDigest: str
-    itemFeatureSnapshot: dict[str, Any]
+class ListItemPostRef(BaseModel):
+    """objectKind=post 的对象引用；只带 canonical identity，不复制可变展示字段。"""
+    postId: str
 
     model_config = ConfigDict(extra="forbid")
 
 
-class RecommendationObjectCard(BaseModel):
-    """排序窗口内冻结的个性化对象卡；objectKind 支持 entity_homepage 与 gathering，Content 仅按当前 policy 锚定并随 FeedDeliveryPage 交付。"""
-    objectKind: str
-    objectId: str
-    title: str
-    subtitle: str | None = None
-    coverUrl: str | None = None
-    tagRefs: list[str]
-    reasonKey: str
-    recallPath: str
+class ListItemHomepageRef(BaseModel):
+    """objectKind=entity_homepage 的对象引用；主页由 entity-service 拥有，不入库为 Post。"""
+    homepageId: str
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class ListItemPresentationEnvelope(BaseModel):
+    """混排列表项的自描述展示信封。每个展示与跳转语义只占一个出站字段（DEC-004）： objectKind 选投影，contentType 做筛选与媒体槽，presentationRecipe 选首页卡， openSurface 决定跳转。端一次只读一个字段做一件事，禁止用取值交叉推出第三种语义。 信封没有 columns / wideLayout / surface：当前页面身份来自路由上的 ContentUiSurface， 列数只由该面的 SurfaceLayoutPolicy 对当前视口求值（DEC-003）。 openSurface 与 presentationRecipe 由云按契约赋值表物化，赋值表不下发到 App（DEC-005）。"""
+    objectKind: ListObjectKind
+    contentType: ContentType | None = None
+    presentationRecipe: FeedPresentationRecipe | None = None
+    openSurface: ContentUiSurface
+    post: ListItemPostRef | None = None
+    homepage: ListItemHomepageRef | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class RankedRecommendationItem(BaseModel):
+    """排序窗口中不可变序位的一项候选。envelope 是该项的自描述展示信封，Post 与实体主页共用同一条序列，不再按对象种类分叉成第二套 sidecar。"""
+    ordinal: int
+    envelope: ListItemPresentationEnvelope
+    score: float
+    featureSnapshotDigest: str
+    itemFeatureSnapshot: dict[str, Any]
 
     model_config = ConfigDict(extra="forbid")
 
@@ -88,7 +162,7 @@ class RankedRecommendationPage(BaseModel):
     featureSnapshotAt: datetime
     userFeatureSnapshot: dict[str, Any]
     items: list[RankedRecommendationItem]
-    objectCards: list[RecommendationObjectCard]
+    clientPresentationContract: ClientContentPresentationContract
     nextOrdinal: int | None = None
     expiresAt: datetime
 

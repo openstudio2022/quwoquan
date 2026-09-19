@@ -28,6 +28,19 @@ from core.io import read_json, write_json
 from core.release_layout import attestation_root, payload_digest, payload_file
 from core.schema import assert_valid
 
+_READINESS_INPUT_SCHEMAS = {
+    "release_desired_state": ("release", "release_desired_state"),
+    "release_attestation": ("release", "release_attestation"),
+    "media_manifest": ("release", "media_manifest"),
+    "release_asset_admission": ("release", "release_asset_admission"),
+    "import_report": ("release", "import_report"),
+    "creator_import_report": ("release", "creator_import_report"),
+    "tag_consumer_verification": ("release", "tag_consumer_verification"),
+    "homepage_api_verification": ("release", "homepage_api_verification"),
+    "post_api_verification": ("release", "post_api_verification"),
+}
+
+
 class EnvironmentReleaseReadinessError(ValueError):
     """Release/environment evidence cannot support a commercial readiness claim."""
 
@@ -127,7 +140,10 @@ def write_environment_release_readiness(
             if schema_name == "release_header":
                 validate_release_header(document, label=label)
             else:
-                assert_valid(document, "release", schema_name, label=label)
+                schema_target = _READINESS_INPUT_SCHEMAS.get(schema_name)
+                if schema_target is None:
+                    raise EnvironmentReleaseReadinessError(f"unregistered readiness schema: {schema_name}")
+                assert_valid(document, *schema_target, label=label)
         except (FileNotFoundError, TypeError, ValueError) as exc:
             raise EnvironmentReleaseReadinessError(str(exc)) from exc
     if any(

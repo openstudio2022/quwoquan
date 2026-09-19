@@ -91,6 +91,30 @@ def test_each_python_script_owner_runs_only_its_own_governance_scope() -> None:
         assert sum(item.startswith("python_script_governance_") for item in checks) == 1
 
 
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-009.t6
+def test_contract_closure_is_selected_from_each_contract_surface() -> None:
+    for path in (
+        "quwoquan_data/schema/content/post_manifest.schema.json",
+        "quwoquan_data/scripts/core/schema.py",
+        "quwoquan_service/services/content-service/contracts/content/post/fields.yaml",
+        "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/loader.go",
+        "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post.g.dart",
+        "quwoquan_app/scripts/runtime/codegen/verify_app_generated_manifest.py",
+        "quwoquan_ops/cli/lib/content_api_consumer.py",
+        "quwoquan_ops/gate/verify_app_client_contract_kind_alignment.py",
+    ):
+        assert _checks(path).count("contract_closure") == 1, path
+    assert "contract_closure" not in _checks("README.md")
+    for unrelated in (
+        "quwoquan_service/services/chat-service/internal/chat/conversation/application/send.go",
+        "quwoquan_app/lib/design_system/button.dart",
+        "quwoquan_ops/cli/lib/local_worktree_inventory.py",
+        "quwoquan_ops/ci/device_matrix/runner.py",
+        "quwoquan_ops/gate/verify_git_branch_policy.py",
+    ):
+        assert "contract_closure" not in _checks(unrelated), unrelated
+
+
 def test_contract_spec_and_dart_changes_keep_their_required_static_gates() -> None:
     spec_checks = _checks("specs/feature-tree/runtime/example/spec.md")
     assert "feature_tree" in spec_checks

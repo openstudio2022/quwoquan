@@ -26,6 +26,13 @@ def test_artifact_gc_has_no_workflow_run_fanout() -> None:
     assert "github.event.workflow_run" not in text
 
 
+def test_service_pipeline_consumes_actual_impact_plan() -> None:
+    source, _workflow = load("service_pipeline.yml")
+    assert '--impact-plan "$IMPACT_PLAN"' in source
+    assert "--changed-file .github/workflows/service_pipeline.yml" not in source
+    assert "validate_impact_plan_projection" in source
+
+
 def test_environment_and_device_actions_are_deleted_after_cutover() -> None:
     for name in (
         "pre-release-gate.yml", "app-env-device-matrix-self-hosted.yml",

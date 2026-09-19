@@ -174,25 +174,6 @@ class MockUserProfileRepository
   }
 
   @override
-  Future<ProfileQrResolveWire> resolveProfileQrToken({
-    required String token,
-    String handle = '',
-  }) async {
-    if (token.trim().isEmpty) {
-      throw ArgumentError.value(token, 'token', 'must not be empty');
-    }
-    final personaId = handle.trim().isEmpty
-        ? kMockCurrentPersonaId
-        : FixtureUserResolver.resolvePersonaId(handle);
-    return ProfileQrResolveWire(
-      personaId: personaId,
-      userHandle: personaId,
-      publicProfileUrl: 'https://quwoquan.com/u/$personaId',
-      scanStatus: 'accepted',
-    );
-  }
-
-  @override
   Future<List<SocialRelationSearchItemViewData>> searchSocialRelations({
     required String query,
     int limit = SearchSocialRelationsQuery.defaultLimit,

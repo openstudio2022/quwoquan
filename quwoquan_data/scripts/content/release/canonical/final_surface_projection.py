@@ -405,7 +405,6 @@ def _post_manifest(
         "topicId": target_ref.removeprefix("posts/"),
         "objectRef": target_ref.removeprefix("posts/"),
         "contentType": carrier,
-        "contentIdentity": "work",
         "title": str(draft.get("title") or compose.get("title") or target.get("publishTitle") or ""),
         "entityRefs": _target_entity_refs(target, carrier=carrier),
         "tagRefs": sorted(
@@ -415,14 +414,7 @@ def _post_manifest(
         "sourceUrls": [str(row["sourceUrl"]) for row in source_rows],
         "sourceAttribution": attribution,
         "assets": assets,
-        "carrier": carrier,
         "generator": "agent",
-        "generatorModel": _author_model(execution_root),
-        "citedSourceRefs": [
-            str(value) for value in compose.get("selectedSourceRefs") or []
-        ],
-        "reviewDecision": "approved",
-        "publishLayout": str(compose.get("publishLayout") or carrier),
         "publishAngle": str(target.get("publishAngle") or ""),
         "publishTitle": str(target.get("publishTitle") or compose.get("title") or ""),
         "publishSeq": int(target.get("publishSeq") or 1),
@@ -430,10 +422,15 @@ def _post_manifest(
         "updatedAt": created_at,
         "executionId": execution_root.name,
     }
-    if compose.get("writingIntent"):
-        manifest["writingIntent"] = compose["writingIntent"]
     if carrier == "article":
         manifest.update(
+            carrier=carrier,
+            generatorModel=_author_model(execution_root),
+            citedSourceRefs=[
+                str(value) for value in compose.get("selectedSourceRefs") or []
+            ],
+            reviewDecision="approved",
+            publishLayout=str(compose.get("publishLayout") or carrier),
             publishMediaMode="illustrated" if assets else "text_only",
             markdownDialect="qwq-rich-md",
             articleRenderProfile={
@@ -445,6 +442,8 @@ def _post_manifest(
                 },
             },
         )
+        if compose.get("writingIntent"):
+            manifest["writingIntent"] = compose["writingIntent"]
     elif carrier == "image":
         first = assets[0]
         manifest.update(

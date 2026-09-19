@@ -37,9 +37,8 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
 
   void _sharePost(
     BuildContext ctx,
-    ContentPostViewData post, {
-    required bool enableIdentityTemplate,
-  }) {
+    ContentPostViewData post,
+  ) {
     runWhenLoggedIn(ref, context, AuthGateReason.share, () {
       final raw = _rawPostById(post.id);
       final visibility =
@@ -48,7 +47,6 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
       WorksViewerContentActionsComposition.showShareSheet(
         ctx,
         surfaceView: ContentSurfaceViewMapper.fromDto(post, wire: raw),
-        enableIdentityTemplate: enableIdentityTemplate,
         visibility: visibility,
         circlePostPlacementWriter: ref.read(
           workBrowserCirclePostPlacementWriterProvider,
@@ -66,14 +64,12 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
 
   Future<void> _copyLink(
     BuildContext context,
-    ContentPostViewData post, {
-    required bool enableIdentityTemplate,
-  }) async {
+    ContentPostViewData post,
+  ) async {
     final raw = _rawPostById(post.id);
     final result = await WorksViewerContentActionsComposition.copyLink(
       context,
       surfaceView: ContentSurfaceViewMapper.fromDto(post, wire: raw),
-      enableIdentityTemplate: enableIdentityTemplate,
       visibility:
           raw?[ContentMediaPostProjectionKeys.visibility]?.toString() ??
           'public',
@@ -523,7 +519,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
           .trackHideAuthor(
             post.id,
             authorId: post.authorId,
-            contentType: post.type,
+            contentType: post.type.wireName,
             referralSource: widget.referralSource,
             feedRequestId: attribution.feedRequestId,
             channelId: _immersiveChannelId(),
@@ -600,7 +596,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
           .read(contentBehaviorTrackerProvider)
           .trackHideContentType(
             post.id,
-            contentType: post.type,
+            contentType: post.type.wireName,
             authorId: post.authorId,
             referralSource: widget.referralSource,
             feedRequestId: attribution.feedRequestId,
@@ -649,9 +645,6 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
         targetType: 'post',
         targetKey: post.id,
       ),
-    );
-    final enableIdentityTemplate = ref.read(
-      contentFeatureFlagProvider('enable_identity_share_template'),
     );
     final activePersonaContext = ref
         .read(activePersonaContextProvider)
@@ -722,12 +715,10 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
         onCopyLink: () => _copyLink(
           context,
           post,
-          enableIdentityTemplate: enableIdentityTemplate,
         ),
         onShare: () => _sharePost(
           context,
           post,
-          enableIdentityTemplate: enableIdentityTemplate,
         ),
         onNotInterested: () {
           final attribution = _feedAttributionForPost(post);
@@ -736,7 +727,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
               .read(contentBehaviorTrackerProvider)
               .trackDislike(
                 post.id,
-                contentType: post.type,
+                contentType: post.type.wireName,
                 authorId: post.authorId,
                 referralSource: widget.referralSource,
                 feedRequestId: attribution.feedRequestId,
@@ -755,7 +746,7 @@ extension _WorksImmersiveViewerEngagementActions on _WorksImmersiveViewerState {
                   .read(contentBehaviorTrackerProvider)
                   .trackUndoDislike(
                     post.id,
-                    contentType: post.type,
+                    contentType: post.type.wireName,
                     authorId: post.authorId,
                     referralSource: widget.referralSource,
                     feedRequestId: attribution.feedRequestId,

@@ -47,8 +47,7 @@ void main() {
         SubmitContentPostPublicationCommand(
           publishIntentId: 'placement-post-$sequence',
           localDraftId: 'placement-draft-$sequence',
-          contentType: ContentType.micro,
-          contentIdentity: ContentIdentity.moment,
+          contentType: ContentType.article,
           body: 'Circle placement API contract post $sequence',
           visibility: Visibility.public,
         ),

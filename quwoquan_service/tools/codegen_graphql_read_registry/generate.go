@@ -19,7 +19,20 @@ import (
 	contractvalidate "quwoquan_service/internal/metadata/validate"
 )
 
+type generatedOutputs struct {
+	registry  []byte
+	documents map[string][]byte
+}
+
 func Generate(options Options) ([]byte, error) {
+	outputs, err := generateOutputs(options)
+	if err != nil {
+		return nil, err
+	}
+	return outputs.registry, nil
+}
+
+func generateOutputs(options Options) (*generatedOutputs, error) {
 	if strings.TrimSpace(options.MetadataDir) == "" {
 		return nil, errors.New("metadataDir is required")
 	}
@@ -33,7 +46,7 @@ func Generate(options Options) ([]byte, error) {
 	return generateWithSource(options, source)
 }
 
-func generateWithSource(options Options, source *contractcodegen.Source) ([]byte, error) {
+func generateWithSource(options Options, source *contractcodegen.Source) (*generatedOutputs, error) {
 	if !digestPattern.MatchString(options.CandidateDigest) {
 		return nil, errors.New("candidateDigest must be canonical sha256")
 	}
@@ -58,6 +71,7 @@ func generateWithSource(options Options, source *contractcodegen.Source) ([]byte
 		return nil, err
 	}
 	metadataRoot := filepath.Dir(options.MetadataPath)
+	outputs := &generatedOutputs{documents: make(map[string][]byte, len(metadata.Entries))}
 	entries := make([]RegistryEntry, 0, len(metadata.Entries))
 	seenHashes := map[string]string{}
 	seenOperationNames := map[string]string{}
@@ -67,10 +81,11 @@ func generateWithSource(options Options, source *contractcodegen.Source) ([]byte
 			return nil, err
 		}
 		documentPath := filepath.Join(metadataRoot, filepath.FromSlash(entryMetadata.Document))
-		documentBytes, err := readRegularBytes(documentPath, "persisted query document")
+		documentBytes, err := loadOwnerPersistedDocument(source, entryMetadata, operationBinding)
 		if err != nil {
 			return nil, fmt.Errorf("operation %s: %w", entryMetadata.CanonicalOperationID, err)
 		}
+		outputs.documents[documentPath] = documentBytes
 		document, queryErrors := gqlparser.LoadQuery(schema, string(documentBytes))
 		if queryErrors != nil {
 			return nil, fmt.Errorf("operation %s: parse persisted query: %w", entryMetadata.CanonicalOperationID, queryErrors)
@@ -175,7 +190,25 @@ func generateWithSource(options Options, source *contractcodegen.Source) ([]byte
 	if err != nil {
 		return nil, fmt.Errorf("encode persisted query registry: %w", err)
 	}
-	return append(encoded, '\n'), nil
+	outputs.registry = append(encoded, '\n')
+	return outputs, nil
+}
+
+func writeOutputs(registryPath string, outputs *generatedOutputs, check bool) error {
+	paths := make([]string, 0, len(outputs.documents))
+	for path := range outputs.documents {
+		if filepath.Clean(path) == filepath.Clean(registryPath) {
+			return fmt.Errorf("registry output conflicts with persisted document %s", path)
+		}
+		paths = append(paths, path)
+	}
+	sort.Strings(paths)
+	for _, path := range paths {
+		if err := WriteOrCheck(path, outputs.documents[path], check); err != nil {
+			return fmt.Errorf("generated persisted document %s: %w", path, err)
+		}
+	}
+	return WriteOrCheck(registryPath, outputs.registry, check)
 }
 
 func validateComputedCost(metadata metadataEntry, summary costSummary) error {

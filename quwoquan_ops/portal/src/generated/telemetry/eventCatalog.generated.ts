@@ -146,7 +146,7 @@ export const eventCatalog = {
         "buildNumber",
         "launchManifestDigest",
         "terminalState",
-        "contentIdentityOutcome"
+        "contentReleaseIdentityOutcome"
       ],
       "required_extensions": [
         "tClickToFirstFrameMs",
@@ -778,7 +778,7 @@ export const eventCatalog = {
       "max_length": 32,
       "type": "string"
     },
-    "contentIdentityOutcome": {
+    "contentReleaseIdentityOutcome": {
       "enum": [
         "bound",
         "absent",
@@ -789,7 +789,6 @@ export const eventCatalog = {
     },
     "contentType": {
       "enum": [
-        "micro",
         "article",
         "image",
         "video",

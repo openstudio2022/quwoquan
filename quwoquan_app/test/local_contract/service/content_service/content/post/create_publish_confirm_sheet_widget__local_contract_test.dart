@@ -38,7 +38,6 @@ Widget _buildApp({
   ValueChanged<PublishSettings>? onConfirm,
   bool circleLoadUnavailable = false,
   CreateLocationCoordinator? locationCoordinator,
-  String? suggestedTextContentType,
 }) {
   final settings = initialSettings ?? const PublishSettings();
   return ProviderScope(
@@ -53,7 +52,6 @@ Widget _buildApp({
           onConfirm: onConfirm,
           circleLoadUnavailable: circleLoadUnavailable,
           locationCoordinator: locationCoordinator,
-          suggestedTextContentType: suggestedTextContentType,
         ),
       ),
     ),
@@ -66,14 +64,12 @@ class _Host extends StatelessWidget {
     this.onConfirm,
     required this.circleLoadUnavailable,
     this.locationCoordinator,
-    this.suggestedTextContentType,
   });
 
   final PublishSettings initialSettings;
   final ValueChanged<PublishSettings>? onConfirm;
   final bool circleLoadUnavailable;
   final CreateLocationCoordinator? locationCoordinator;
-  final String? suggestedTextContentType;
 
   @override
   Widget build(BuildContext context) {
@@ -91,7 +87,6 @@ class _Host extends StatelessWidget {
                   joinedCircles: const <CreateCircleOption>[],
                   recommendedCircles: const <CreateCircleOption>[],
                   circleLoadUnavailable: circleLoadUnavailable,
-                  suggestedTextContentType: suggestedTextContentType,
                 ),
               ),
             );
@@ -140,7 +135,6 @@ void main() {
     );
     expect(find.text('小趣使用'), findsNothing);
     expect(find.text('内容概览'), findsNothing);
-    expect(find.text(CreationText.circlePublishModeLabel), findsNothing);
     // 已删区块对应的 TestKey 控件也不应存在。
     expect(find.byKey(TestKeys.createPublishSummaryField), findsNothing);
     expect(find.byKey(TestKeys.createPublishTagInput), findsNothing);
@@ -215,79 +209,12 @@ void main() {
     expect(confirmed!.isPublic, isFalse);
   });
 
-  testWidgets('文字创作固化系统建议形态并显示形态行（GWT-001）', (tester) async {
-    PublishSettings? confirmed;
-    await tester.pumpWidget(
-      _buildApp(
-        suggestedTextContentType: 'article',
-        onConfirm: (settings) => confirmed = settings,
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('打开发布确认'));
-    await tester.pumpAndSettle();
-
-    expect(find.text(CreationText.publishFormLabel), findsOneWidget);
-    expect(find.text(CreationText.publishFormArticle), findsOneWidget);
-
-    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
-    await tester.pumpAndSettle();
-
-    expect(confirmed, isNotNull);
-    expect(confirmed!.textContentType, 'article');
-  });
-
-  testWidgets('用户在确认页把建议 article 改为 micro，确认值优先（GWT-001）', (tester) async {
-    PublishSettings? confirmed;
-    await tester.pumpWidget(
-      _buildApp(
-        suggestedTextContentType: 'article',
-        onConfirm: (settings) => confirmed = settings,
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('打开发布确认'));
-    await tester.pumpAndSettle();
-
-    await tester.tap(find.text(CreationText.publishFormLabel));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(CreationText.publishFormMicro).last);
-    await tester.pumpAndSettle();
-    await tester.tap(find.text(FoundationText.confirm));
-    await tester.pumpAndSettle();
-
-    expect(find.text(CreationText.publishFormMicro), findsOneWidget);
-    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
-    await tester.pumpAndSettle();
-
-    expect(confirmed, isNotNull);
-    expect(confirmed!.textContentType, 'micro');
-  });
-
-  testWidgets('草稿已确认的形态不被建议覆盖（GWT-001）', (tester) async {
-    PublishSettings? confirmed;
-    await tester.pumpWidget(
-      _buildApp(
-        initialSettings: const PublishSettings(textContentType: 'micro'),
-        suggestedTextContentType: 'article',
-        onConfirm: (settings) => confirmed = settings,
-      ),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('打开发布确认'));
-    await tester.pumpAndSettle();
-
-    expect(find.text(CreationText.publishFormMicro), findsOneWidget);
-    await tester.tap(find.byKey(TestKeys.createPublishConfirmButton));
-    await tester.pumpAndSettle();
-
-    expect(confirmed!.textContentType, 'micro');
-  });
-
-  testWidgets('非文字创作不显示发布形态行', (tester) async {
+  testWidgets('发布确认页不再出现内容形态确认行（形态由 contentType 单轨决定）', (
+    tester,
+  ) async {
     await _openSheet(tester);
 
-    expect(find.text(CreationText.publishFormLabel), findsNothing);
+    expect(find.text('发布形态'), findsNothing);
   });
 
   testWidgets('未绑定地点时不展示出行时间入口', (tester) async {

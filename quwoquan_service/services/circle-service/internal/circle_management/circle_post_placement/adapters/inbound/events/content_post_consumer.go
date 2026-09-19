@@ -240,7 +240,6 @@ func decodePostLifecycleMessage(values map[string]string) (placementports.PostLi
 		Visibility                string   `json:"visibility"`
 		ModerationStatus          string   `json:"moderationStatus"`
 		ContentType               string   `json:"contentType"`
-		ContentIdentity           string   `json:"contentIdentity"`
 		AssistantUsePolicy        string   `json:"assistantUsePolicy"`
 		Title                     string   `json:"title"`
 		Body                      string   `json:"body"`
@@ -299,7 +298,6 @@ func decodePostLifecycleMessage(values map[string]string) (placementports.PostLi
 		mediaURLs := compactPostMediaURLs(payload.MediaURLs, payload.MediaItems)
 		event.FeedItem = &placementports.PostFeedItemSnapshot{
 			ContentType:        strings.TrimSpace(payload.ContentType),
-			ContentIdentity:    strings.TrimSpace(payload.ContentIdentity),
 			AssistantUsePolicy: strings.TrimSpace(payload.AssistantUsePolicy),
 			AuthorDisplayName:  strings.TrimSpace(payload.AuthorDisplayNameSnapshot),
 			AuthorAvatarURL:    strings.TrimSpace(payload.AuthorAvatarURLSnapshot),
@@ -317,7 +315,7 @@ func decodePostLifecycleMessage(values map[string]string) (placementports.PostLi
 
 func postLifecycleCarriesFeedSnapshot(eventType string) bool {
 	switch strings.TrimSpace(eventType) {
-	case "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostPromotedToWork":
+	case "PostPublished", "PostUpdated", "PostSettingsUpdated":
 		return true
 	default:
 		return false

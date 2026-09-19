@@ -239,7 +239,7 @@ def render_weekly(report: dict[str, Any]) -> str:
     lines.append("")
     lines.append("## 全模块结构 scope 健康事实")
     lines.append("")
-    lines.append("结构 scope 不等同于已解析的 Feature owner；未测证据不能推导为健康。")
+    lines.append("结构 scope 不等同于Feature mutation authority；未测证据不能推导为健康。")
     lines.append("")
     lines.extend(_module_rows(report))
     lines.append("")

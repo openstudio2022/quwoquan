@@ -19,7 +19,6 @@ VALID_SOURCE_TIERS = (
     "tier4_casual",
     "tier5_reject",
 )
-VALID_WORKS_AFFINITIES = ("work_strong", "work", "neutral", "moment", "reject")
 def load_content_source_registry() -> dict[str, Any]:
     if not CONTENT_SOURCE_REGISTRY_PATH.is_file():
         raise FileNotFoundError(f"missing content source registry: {CONTENT_SOURCE_REGISTRY_PATH}")
@@ -172,9 +171,9 @@ def homepage_core_source_limit() -> int:
 
 
 def resolve_source_tier(source_class: str, *, data: Mapping[str, Any] | None = None) -> dict[str, str]:
-    """按 sourceClass 解析来源专业度先验（baseTier + worksAffinity）；缺失走 default。
+    """按 sourceClass 解析来源专业度先验（baseTier）；缺失走 default。
 
-    单一真相源 = content_source_registry.yaml: sourceTierSignals。供 WorksClassifier 消费，
+    单一真相源 = content_source_registry.yaml: sourceTierSignals，
     禁止在判定代码里另维护第二套 sourceClass→tier 映射。
     """
     registry = data if data is not None else load_content_source_registry()
@@ -184,9 +183,7 @@ def resolve_source_tier(source_class: str, *, data: Mapping[str, Any] | None = N
     row = by_class.get(str(source_class or "").strip())
     if not isinstance(row, dict):
         row = default if isinstance(default, dict) else {}
-    base_tier = str(row.get("baseTier") or "tier4_casual")
-    affinity = str(row.get("worksAffinity") or "neutral")
-    return {"baseTier": base_tier, "worksAffinity": affinity}
+    return {"baseTier": str(row.get("baseTier") or "tier4_casual")}
 
 
 def resolve_source_class(
@@ -395,22 +392,23 @@ def verify_content_source_registry(
     issues.extend(_structured_facts_policy_issues(data, homepage_policy))
     signals = data.get("sourceTierSignals") if isinstance(data.get("sourceTierSignals"), dict) else {}
     if not signals:
-        issues.append("sourceTierSignals: missing (作品判定来源专业度先验真相源)")
+        issues.append("sourceTierSignals: missing (来源专业度先验真相源)")
     else:
         if "version" in signals:
             issues.append("sourceTierSignals must not declare a parallel version")
         default = signals.get("default") if isinstance(signals.get("default"), dict) else {}
         by_class = signals.get("bySourceClass") if isinstance(signals.get("bySourceClass"), dict) else {}
         if not default:
-            issues.append("sourceTierSignals.default: missing 兜底 baseTier/worksAffinity")
+            issues.append("sourceTierSignals.default: missing 兜底 baseTier")
 
         def _check_tier_row(name: str, row: Mapping[str, Any]) -> None:
             base_tier = str(row.get("baseTier") or "")
-            affinity = str(row.get("worksAffinity") or "")
             if base_tier not in VALID_SOURCE_TIERS:
                 issues.append(f"sourceTierSignals.{name}: invalid baseTier {base_tier!r}")
-            if affinity not in VALID_WORKS_AFFINITIES:
-                issues.append(f"sourceTierSignals.{name}: invalid worksAffinity {affinity!r}")
+            if "worksAffinity" in row:
+                issues.append(
+                    f"sourceTierSignals.{name}: retired contract field worksAffinity is not allowed"
+                )
 
         if default:
             _check_tier_row("default", default)

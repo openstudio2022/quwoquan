@@ -47,7 +47,7 @@ func TestPost_RequestEntity_UnknownFieldRejected(t *testing.T) {
 	req := newPostPublicationRequestForTest(
 		t,
 		"unknown-field-author",
-		`{"unknownField":"x","contentType":"micro","body":"field injection"}`,
+		`{"unknownField":"x","contentType":"article","body":"field injection"}`,
 	)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
@@ -68,7 +68,7 @@ func TestPost_RequestEntity_UnknownFieldRejected(t *testing.T) {
 // still receives every server-owned default during SubmitPostPublication.
 func TestPost_MinimalCanonicalRecordRemainsReadable(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	created := submitPublishedPost(t, `{"contentType":"micro","body":"minimal post"}`)
+	created := submitPublishedPost(t, `{"contentType":"article","body":"minimal post"}`)
 	postID, _ := created["postId"].(string)
 	if postID == "" {
 		t.Fatal("no _id in created post")

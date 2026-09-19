@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：[`JNY-004 / SCN-001`](../../../spec.md#scn-001)
 >
-> 设计归属：[L2 DEC-001](../design.md#dec-001)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
@@ -33,7 +33,7 @@
 
 ## 4. 契约引用
 
-- release：`quwoquan_data/schema/release/release_manifest.schema.json`
+- release：`quwoquan_data/schema/release/producer_release_handoff.schema.json`
 - content：`quwoquan_service/services/content-service/contracts/content/post/operations.yaml`
 
 ## 5. 验收场景

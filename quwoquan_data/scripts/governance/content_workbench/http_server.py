@@ -4,6 +4,7 @@ import json, mimetypes, sys, time
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
+from core.schema import assert_valid
 from .service import WorkbenchError, WorkbenchService
 
 class WorkbenchHandler(SimpleHTTPRequestHandler):
@@ -14,6 +15,10 @@ class WorkbenchHandler(SimpleHTTPRequestHandler):
     def _timing(self): return (time.perf_counter() - getattr(self, "_started", time.perf_counter())) * 1000
     def _headers(self): self.send_header("Server-Timing", f'app;dur={self._timing():.3f}')
     def _json(self, status, payload):
+        if status == 200 and isinstance(payload, dict) and urlparse(self.path).path in {
+            "/api/overview", "/api/facets", "/api/items"
+        }:
+            assert_valid(payload, "governance", "content_workbench/read_models", label=self.path)
         body = json.dumps(payload, ensure_ascii=False).encode(); self.send_response(status); self.send_header("Content-Type", "application/json; charset=utf-8"); self.send_header("Content-Length", str(len(body))); self._headers(); self.end_headers()
         try: self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError): pass
@@ -26,6 +31,15 @@ class WorkbenchHandler(SimpleHTTPRequestHandler):
             if query.get(name):
                 try: filters[name] = int(query[name][-1])
                 except ValueError as exc: raise WorkbenchError("CONTENT_WORKBENCH.REQUEST_INVALID", f"{name} must be an integer") from exc
+        try:
+            assert_valid(
+                filters,
+                "governance",
+                "content_workbench/workbench_filter",
+                label="content workbench HTTP filter",
+            )
+        except ValueError as exc:
+            raise WorkbenchError("CONTENT_WORKBENCH.REQUEST_INVALID", str(exc)) from exc
         return filters
     def _error(self, exc): self._json(exc.status, {"error": {"code": exc.code, "message": str(exc)}})
     def _finish_log(self, operation, status):
@@ -102,6 +116,17 @@ class WorkbenchHandler(SimpleHTTPRequestHandler):
     def log_message(self, format, *args): pass
 
 def serve(service, static_root, host="127.0.0.1", port=0):
+    operations_path = Path(__file__).resolve().parents[3] / "schema/governance/content_workbench/operations.json"
+    try:
+        operations = json.loads(operations_path.read_text(encoding="utf-8"))
+        assert_valid(
+            operations,
+            "governance",
+            "content_workbench/local_api",
+            label="content workbench operations",
+        )
+    except (OSError, json.JSONDecodeError, ValueError) as exc:
+        raise WorkbenchError("CONTENT_WORKBENCH.LOCAL_API_INVALID", str(exc), 500) from exc
     if host not in {"127.0.0.1", "::1", "localhost"}: raise WorkbenchError("CONTENT_WORKBENCH.NON_LOOPBACK", "only loopback bind is allowed")
     static_root = static_root.expanduser().resolve(strict=True)
     handler = type("ConfiguredWorkbenchHandler", (WorkbenchHandler,), {"service": service, "static_root": static_root})

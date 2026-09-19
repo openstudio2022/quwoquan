@@ -83,7 +83,7 @@ func TestAuthorImpactReaderClientPreservesOpaqueEvidenceCursor(t *testing.T) {
 				"evidenceId":"evidence-001",
 				"impactId":"impact-001",
 				"contentId":"post-001",
-				"contentType":"post",
+				"contentType":"article",
 				"helpType":"decision",
 				"action":"content_depth",
 				"intersectionDimension":"content",

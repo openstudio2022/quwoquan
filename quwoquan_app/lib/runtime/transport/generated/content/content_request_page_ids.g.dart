@@ -72,7 +72,6 @@ class ContentRequestPageIds {
     'PauseMediaImageReprocessRun': 'content.pause.media.image.reprocess.run',
     'PinComment': 'content.pin.comment',
     'PreparePostReleaseQueries': 'content.prepare.post.release.queries',
-    'PromotePostToWork': 'content.post.promote',
     'ReactToComment': 'content.react.to.comment',
     'ReadActiveReleaseFence': 'content.read.active.release.fence',
     'ReadContentReleaseCommitReceipt':
@@ -193,7 +192,6 @@ class ContentRequestPageIds {
   static const String pinComment = 'content.pin.comment';
   static const String preparePostReleaseQueries =
       'content.prepare.post.release.queries';
-  static const String promotePostToWork = 'content.post.promote';
   static const String reactToComment = 'content.react.to.comment';
   static const String readActiveReleaseFence =
       'content.read.active.release.fence';

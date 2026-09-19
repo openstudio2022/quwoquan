@@ -14,6 +14,7 @@ from internal.recommendation.ranked_recommendation_window.domain.model import (
 )
 from security.service_authorization import AuthorizationFailure
 from datetime import datetime, timezone
+from tests.support.presentation import presentation_contract, post_envelope
 
 
 def _fence():
@@ -45,7 +46,7 @@ class _Store:
 
 
 class _Ranker:
-    def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int, content_fence):
+    def rank(self, *, subject_id: str, scenario: str, session_id: str, limit: int, content_fence, client_presentation_contract):
         assert limit == 300
         return RankingResult(
             experiment_bucket="model",
@@ -58,7 +59,7 @@ class _Ranker:
             user_feature_snapshot={"engagement": 0.7},
             candidates=tuple(
                 RankedCandidate(
-                    content_id=f"post-{index}",
+                    envelope=post_envelope(f"post-{index}", "image"),
                     score=float(5 - index),
                     feature_snapshot_digest=f"feature-digest-{index}",
                     item_feature_snapshot={"quality": index / 10},
@@ -118,14 +119,14 @@ def _headers(idempotency_key: str = "request-001") -> dict[str, str]:
 
 def test_create_replay_and_continue_ranked_window() -> None:
     client = _client()
-    body = {"contentFence": _fence(), "subjectId": "persona-001", "scenario": "content_feed", "limit": 2}
+    body = {"contentFence": _fence(), "clientPresentationContract": presentation_contract().model_dump(mode="json"), "subjectId": "persona-001", "scenario": "content_feed", "limit": 2}
     created = client.post(
         "/internal/recommendation/ranked-pages",
         headers=_headers(),
         json=body,
     )
     assert created.status_code == 200
-    assert [item["contentId"] for item in created.json()["items"]] == ["post-0", "post-1"]
+    assert [item["envelope"]["post"]["postId"] for item in created.json()["items"]] == ["post-0", "post-1"]
     assert created.json()["nextOrdinal"] == 2
     assert created.json()["modelReleaseId"] == "release-001"
     assert created.json()["items"][0]["featureSnapshotDigest"] == "feature-digest-0"
@@ -140,7 +141,7 @@ def test_create_replay_and_continue_ranked_window() -> None:
     continued = client.post(
         "/internal/recommendation/ranked-pages/window-001:query",
         headers={"Authorization": "Bearer ranked-window-service"},
-        json={"contentFence": _fence(), "subjectId": "persona-001", "fromOrdinal": 2, "limit": 2},
+        json={"contentFence": _fence(), "clientPresentationContract": presentation_contract().model_dump(mode="json"), "subjectId": "persona-001", "fromOrdinal": 2, "limit": 2},
     )
     assert continued.status_code == 200
     assert [item["ordinal"] for item in continued.json()["items"]] == [2, 3]
@@ -149,14 +150,14 @@ def test_create_replay_and_continue_ranked_window() -> None:
     wrong_subject = client.post(
         "/internal/recommendation/ranked-pages/window-001:query",
         headers={"Authorization": "Bearer ranked-window-service"},
-        json={"contentFence": _fence(), "subjectId": "persona-other", "fromOrdinal": 2, "limit": 2},
+        json={"contentFence": _fence(), "clientPresentationContract": presentation_contract().model_dump(mode="json"), "subjectId": "persona-other", "fromOrdinal": 2, "limit": 2},
     )
     assert wrong_subject.status_code == 404
 
 
 def test_ranked_window_rejects_auth_invalid_body_and_idempotency_conflict() -> None:
     client = _client()
-    body = {"contentFence": _fence(), "subjectId": "persona-001", "scenario": "content_feed", "limit": 2}
+    body = {"contentFence": _fence(), "clientPresentationContract": presentation_contract().model_dump(mode="json"), "subjectId": "persona-001", "scenario": "content_feed", "limit": 2}
     unauthorized = client.post("/internal/recommendation/ranked-pages", json=body)
     assert unauthorized.status_code == 401
     assert unauthorized.json()["detail"]["code"].endswith("ranked_window_unauthorized")
@@ -183,12 +184,30 @@ def test_ranked_window_rejects_auth_invalid_body_and_idempotency_conflict() -> N
     assert conflict.json()["detail"]["code"].endswith("ranked_window_conflict")
 
 
+def test_http_rejects_digest_tampering_and_changed_cursor_capabilities():
+    client = _client()
+    contract = presentation_contract().model_dump(mode="json")
+    body = {"contentFence": _fence(), "clientPresentationContract": contract,
+            "subjectId": "persona-001", "scenario": "content_feed", "limit": 2}
+    invalid = client.post("/internal/recommendation/ranked-pages", headers=_headers(),
+                          json={**body, "clientPresentationContract": {**contract, "contractDigest": "sha256:" + "0" * 64}})
+    assert invalid.status_code == 400
+    created = client.post("/internal/recommendation/ranked-pages", headers=_headers(), json=body)
+    assert created.status_code == 200
+    assert "objectCards" not in created.json()
+    changed = presentation_contract(openSurfaces=["article_reader"]).model_dump(mode="json")
+    continued = client.post("/internal/recommendation/ranked-pages/window-001:query", headers=_headers(),
+                            json={"contentFence": _fence(), "subjectId": "persona-001", "clientPresentationContract": changed})
+    assert continued.status_code == 409
+    assert continued.json()["detail"]["code"].endswith("ranked_window_conflict")
+
+
 def test_ranked_window_returns_terminal_subject_closed_error() -> None:
     client = _client(closed={"account-closed"})
     response = client.post(
         "/internal/recommendation/ranked-pages",
         headers=_headers(),
-        json={"contentFence": _fence(), "subjectId": "account-closed", "scenario": "content_feed", "limit": 2},
+        json={"contentFence": _fence(), "clientPresentationContract": presentation_contract().model_dump(mode="json"), "subjectId": "account-closed", "scenario": "content_feed", "limit": 2},
     )
     assert response.status_code == 410
     assert response.json()["detail"]["code"].endswith("ranked_window_subject_closed")

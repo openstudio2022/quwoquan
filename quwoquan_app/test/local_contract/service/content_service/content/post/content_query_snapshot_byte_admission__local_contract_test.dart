@@ -54,8 +54,7 @@ void main() {
 ContentPostViewData _post(String id, {required String authorId}) {
   return contentPostViewDataFromReadModelMap(<String, dynamic>{
     'postId': id,
-    'contentType': 'micro',
-    'contentIdentity': 'moment',
+    'contentType': 'article',
     'authorId': authorId,
     'authorDisplayName': '用户一',
     'authorAvatarUrl': '',

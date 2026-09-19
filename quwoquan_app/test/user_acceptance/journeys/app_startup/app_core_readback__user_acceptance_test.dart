@@ -15,11 +15,14 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:patrol/patrol.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentType;
 import 'package:quwoquan_app/design_system/layout/app_terminal_viewport.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/runtime/shell/bottom_navigation.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/works_immersive_viewer.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/works_viewer_article.dart';
 import 'package:quwoquan_app/service/content_service/media/original_access_quota/presentation/signed_grant_image.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
@@ -71,7 +74,7 @@ const _feedCardProbeKeys = <ValueKey<String>>[
   ValueKey<String>('feed-patch-reporter-0'),
 ];
 const _homeContentTapKeys = <ValueKey<String>>[
-  ValueKey<String>('home-moment-grid-tile-0'),
+  ValueKey<String>('home-image-grid-tile-0'),
   ValueKey<String>('home-relation-card-media'),
   ValueKey<String>('home-article-card'),
 ];
@@ -380,7 +383,7 @@ Future<void> _expectOpenedHomeMedia(PatrolIntegrationTester $) async {
     ValueKey<String>('works-status-content-canvas-${post.id}'),
   );
   final Finder terminal;
-  if (post.type == 'image') {
+  if (post.type == ContentType.image) {
     final selectedImage = find.descendant(
       of: canvas,
       matching: find.byKey(
@@ -393,7 +396,7 @@ Future<void> _expectOpenedHomeMedia(PatrolIntegrationTester $) async {
         const ValueKey<String>('image-book-decoded-surface'),
       ),
     );
-  } else if (post.type == 'video') {
+  } else if (post.type == ContentType.video) {
     final stage = find.byKey(
       ValueKey<String>(
         'works-video-stage-${post.id}-${viewer.initialImageIndex}',
@@ -404,13 +407,19 @@ Future<void> _expectOpenedHomeMedia(PatrolIntegrationTester $) async {
       matching: find.byKey(const ValueKey<String>('video-player-ready')),
     );
   } else {
-    // 文章/文字的成功终态由各自阅读验收负责，不伪造媒体解码要求。
-    return;
+    expect(post.type, ContentType.article);
+    terminal = find.descendant(
+      of: canvas,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is PostWorksViewerArticle && widget.post.id == post.id,
+      ),
+    );
   }
   expect(
     await _waitForAnyFinder($, <Finder>[terminal]),
     isTrue,
-    reason: '首页点击的当前作品必须完成真实图片解码或原生视频就绪，而非仅挂载页面',
+    reason: '首页当前作品必须完成图片解码、视频就绪或挂载同一 Post 的文章阅读面',
   );
   expect($.tester.takeException(), isNull, reason: '媒体加载期间不得产生未处理异常');
 }

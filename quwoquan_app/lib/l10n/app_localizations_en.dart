@@ -16,9 +16,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discovery => 'TODO: translate';
 
   @override
-  String get discoveryTabMoment => 'TODO: translate';
-
-  @override
   String get discoveryTabPhoto => 'TODO: translate';
 
   @override
@@ -69,13 +66,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discoveryHelperTimelineThisWeek => 'TODO: translate';
 
   @override
-  String get discoveryHelperExpandMoments => 'TODO: translate';
-
-  @override
   String get discoveryHelperExpandArticles => 'TODO: translate';
-
-  @override
-  String get discoveryHelperSectionMoments => 'TODO: translate';
 
   @override
   String get discoveryHelperSectionArticles => 'TODO: translate';
@@ -849,13 +840,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get profilePersonasLabel => 'TODO: translate';
 
   @override
-  String get momentPlaceholder => 'TODO: translate';
-
-  @override
   String get drafts => 'TODO: translate';
-
-  @override
-  String get postMoment => 'TODO: translate';
 
   @override
   String get postPhoto => 'TODO: translate';
@@ -1393,12 +1378,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get imageSavedSuccess => 'TODO: translate';
 
   @override
-  String get momentImageReorderHint => 'TODO: translate';
-
-  @override
-  String get momentPublished => 'TODO: translate';
-
-  @override
   String get articleCoverLabel => 'TODO: translate';
 
   @override
@@ -1418,9 +1397,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get draftCount => 'TODO: translate';
-
-  @override
-  String get draftMoment => 'TODO: translate';
 
   @override
   String get draftPhoto => 'TODO: translate';

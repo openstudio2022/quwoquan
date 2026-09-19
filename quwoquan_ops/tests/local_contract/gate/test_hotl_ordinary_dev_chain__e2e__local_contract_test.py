@@ -110,9 +110,7 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
         owner_raw = (ROOT / owner_ref).read_bytes()
         owner = json.loads(owner_raw)
         assert owner["target"] == TARGET
-        assert owner["resolved_owner"].endswith(
-            "agent-skill-review-context-organization/spec.md"
-        )
+        assert owner["context_status"] == "context_unresolved"
 
         probe.write_text("ordinary dev mutation\n", encoding="utf-8")
         candidate_ref = _last_line(
@@ -120,7 +118,6 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
                 [
                     "make",
                     "feature-candidate-evidence",
-                    f"OWNER_IDENTITY={owner_ref}",
                     f"CHANGED_PATHS={probe.relative_to(ROOT).as_posix()}",
                 ],
                 env=env,
@@ -131,14 +128,12 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
         assert candidate["schema_version"] == contract_schema_version(
             "candidate_evidence_manifest"
         )
-        assert candidate["owner_identity_ref"] == owner_ref
+        assert "context_ref" not in candidate
         # 完整路径从不可变对象读取，manifest不重复内嵌。
         from lib.candidate_evidence import load_candidate_path_set
-        assert [
-            path
-            for group in load_candidate_path_set(candidate, repo_root=ROOT)["impacted_owner_groups"]
-            for path in group["paths"]
-        ] == [probe.relative_to(ROOT).as_posix()]
+        assert load_candidate_path_set(candidate, repo_root=ROOT)["changed_paths"] == [
+            probe.relative_to(ROOT).as_posix()
+        ]
         assert candidate["impact_plan_identity"]["digest"].startswith("sha256:")
         assert candidate["impact_plan_identity"]["projection_ref"].startswith(
             "local-readiness-plan:sha256:"
@@ -155,7 +150,6 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
         _, _, current_candidate, _ = validate_candidate_ref(
             candidate_ref,
             repo_root=ROOT,
-            expected_owner_identity_ref=owner_ref,
             expected_changed_paths=[probe.relative_to(ROOT).as_posix()],
         )
         assert unrelated.relative_to(ROOT).as_posix() not in current_candidate[
@@ -176,7 +170,7 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
                 probe.relative_to(ROOT).as_posix(),
                 "--scope",
                 TARGET,
-                "--owner-identity",
+                "--context-manifest",
                 owner_ref,
                 "--candidate-evidence",
                 candidate_ref,
@@ -187,7 +181,8 @@ def test_ordinary_dirty_dev_chain_completes_review_but_blocks_scope_admission() 
         )
         plan_path = plan_dir / "plan.json"
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
-        assert plan["owner_identity"]["ref"] == owner_ref
+        assert "owner_identity" not in plan
+        assert plan["contexts"] == []
         assert plan["candidate_evidence_identity"]["ref"] == candidate_ref
         assert plan["profiles"] == []
         assert [item["role"] for item in plan["reviewers"]] == ["developer"]

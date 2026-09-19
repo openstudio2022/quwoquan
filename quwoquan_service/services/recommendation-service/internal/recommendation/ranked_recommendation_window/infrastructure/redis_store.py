@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from generated.recommendation.ranked_recommendation_window.models.request_response import ReleasePinnedQueryFence
+from generated.recommendation.ranked_recommendation_window.models.request_response import (
+    ReleasePinnedQueryFence, ClientContentPresentationContract, ListItemPresentationEnvelope,
+)
 
 from collections.abc import Mapping, Sequence
 from dataclasses import replace
@@ -12,8 +14,6 @@ from typing import Any, Callable, Protocol
 
 from ..domain.model import (
     RankedCandidate,
-    RankedRecommendationItem,
-    RecommendationObjectCard,
     RankedRecommendationWindow,
     RankingResult,
     WINDOW_TTL,
@@ -330,9 +330,9 @@ class RedisWindowStore:
             raise ValueError("windowId is required")
         tag = f"{{rfw-{self._shard(subject_hash)}}}"
         return (
-            f"rec:ranked_feed_window:{tag}:{subject_hash}:{normalized_window}",
-            f"rec:ranked_feed_window_index:{tag}",
-            f"rec:ranked_feed_window_metadata:{tag}",
+            f"rec:ranked_feed_window_v2:{tag}:{subject_hash}:{normalized_window}",
+            f"rec:ranked_feed_window_v2_index:{tag}",
+            f"rec:ranked_feed_window_v2_metadata:{tag}",
         )
 
     @staticmethod
@@ -376,7 +376,7 @@ class RedisWindowStore:
             window.window_id,
         )
         value_prefix = (
-            f"rec:ranked_feed_window:{{rfw-{self._shard(subject_hash)}}}:"
+            f"rec:ranked_feed_window_v2:{{rfw-{self._shard(subject_hash)}}}:"
         )
         for _attempt in range(self.MAX_ATOMIC_ATTEMPTS):
             indexed = self._indexed_keys(index_key, value_prefix)
@@ -465,7 +465,7 @@ class RedisWindowStore:
             "subject-erase-probe",
         )
         value_prefix = (
-            f"rec:ranked_feed_window:{{rfw-{self._shard(subject_hash)}}}:"
+            f"rec:ranked_feed_window_v2:{{rfw-{self._shard(subject_hash)}}}:"
         )
         for _attempt in range(self.MAX_ATOMIC_ATTEMPTS):
             indexed = self._indexed_keys(index_key, value_prefix)
@@ -501,6 +501,7 @@ class RedisWindowStore:
         writer.raw(b"{")
         fields: tuple[tuple[str, Any], ...] = (
             ("contentFence", window.content_fence.model_dump(mode="json")),
+            ("clientPresentationContract", window.client_presentation_contract.model_dump(mode="json")),
             ("windowId", window.window_id),
             ("subjectId", window.subject_id),
             ("scenario", window.scenario),
@@ -531,26 +532,10 @@ class RedisWindowStore:
             writer.value(
                 {
                     "ordinal": item.ordinal,
-                    "contentId": item.content_id,
+                    "envelope": item.envelope.model_dump(mode="json"),
                     "score": item.score,
                     "featureSnapshotDigest": item.feature_snapshot_digest,
                     "itemFeatureSnapshot": item.item_feature_snapshot,
-                }
-            )
-        writer.raw(b'],"objectCards":[')
-        for index, card in enumerate(window.object_cards):
-            if index:
-                writer.raw(b",")
-            writer.value(
-                {
-                    "objectKind": card.object_kind,
-                    "objectId": card.object_id,
-                    "title": card.title,
-                    "subtitle": card.subtitle,
-                    "coverUrl": card.cover_url,
-                    "tagRefs": card.tag_refs,
-                    "reasonKey": card.reason_key,
-                    "recallPath": card.recall_path,
                 }
             )
         writer.raw(b"]}")
@@ -610,25 +595,13 @@ class RedisWindowStore:
                 window.user_feature_snapshot,
                 tuple(
                     (
-                        item.content_id,
+                        item.envelope.model_dump(mode="json"),
                         item.feature_snapshot_digest,
                         item.item_feature_snapshot,
                     )
                     for item in window.items
                 ),
-                tuple(
-                    (
-                        card.object_kind,
-                        card.object_id,
-                        card.title,
-                        card.subtitle,
-                        card.cover_url,
-                        card.tag_refs,
-                        card.reason_key,
-                        card.recall_path,
-                    )
-                    for card in window.object_cards
-                ),
+                window.client_presentation_contract.model_dump(mode="json"),
             )
         )
 
@@ -667,14 +640,12 @@ class RedisWindowStore:
                     "createdAt",
                     "expiresAt",
                     "items",
-                    "objectCards",
+                    "clientPresentationContract",
                 },
                 "window",
             )
-            if not isinstance(document["items"], list) or not isinstance(
-                document["objectCards"], list
-            ):
-                raise ValueError("ranked window items and objectCards must be arrays")
+            if not isinstance(document["items"], list):
+                raise ValueError("ranked window items must be an array")
             if not isinstance(document["userFeatureSnapshot"], dict):
                 raise ValueError("ranked window userFeatureSnapshot must be an object")
             subject_id = self._required_text(document["subjectId"], "subjectId")
@@ -695,7 +666,7 @@ class RedisWindowStore:
                     item,
                     {
                         "ordinal",
-                        "contentId",
+                        "envelope",
                         "score",
                         "featureSnapshotDigest",
                         "itemFeatureSnapshot",
@@ -717,45 +688,13 @@ class RedisWindowStore:
                     raise ValueError("ranked window item snapshot is invalid")
                 candidates.append(
                     RankedCandidate(
-                        content_id=self._required_text(item["contentId"], "contentId"),
+                        envelope=ListItemPresentationEnvelope.model_validate(item["envelope"]),
                         score=float(item["score"]),
                         feature_snapshot_digest=self._required_text(
                             item["featureSnapshotDigest"],
                             "featureSnapshotDigest",
                         ),
                         item_feature_snapshot=item["itemFeatureSnapshot"],
-                    )
-                )
-            cards: list[RecommendationObjectCard] = []
-            for card in document["objectCards"]:
-                self._require_exact_fields(
-                    card,
-                    {
-                        "objectKind",
-                        "objectId",
-                        "title",
-                        "subtitle",
-                        "coverUrl",
-                        "tagRefs",
-                        "reasonKey",
-                        "recallPath",
-                    },
-                    "object card",
-                )
-                if not isinstance(card["tagRefs"], list) or any(
-                    not isinstance(tag, str) for tag in card["tagRefs"]
-                ):
-                    raise ValueError("ranked window object card tagRefs are invalid")
-                cards.append(
-                    RecommendationObjectCard(
-                        object_kind=self._required_text(card["objectKind"], "objectKind"),
-                        object_id=self._required_text(card["objectId"], "objectId"),
-                        title=self._required_text(card["title"], "title"),
-                        subtitle=self._optional_text(card["subtitle"], "subtitle"),
-                        cover_url=self._optional_text(card["coverUrl"], "coverUrl"),
-                        tag_refs=tuple(card["tagRefs"]),
-                        reason_key=self._required_text(card["reasonKey"], "reasonKey"),
-                        recall_path=self._required_text(card["recallPath"], "recallPath"),
                     )
                 )
             ranking = RankingResult(
@@ -776,7 +715,6 @@ class RedisWindowStore:
                 ),
                 user_feature_snapshot=document["userFeatureSnapshot"],
                 candidates=tuple(candidates),
-                object_cards=tuple(cards),
             )
             window = RankedRecommendationWindow.create(
                 window_id=window_id,
@@ -787,8 +725,11 @@ class RedisWindowStore:
                 ),
                 ranking=ranking,
                 content_fence=ReleasePinnedQueryFence.model_validate(document["contentFence"]),
+                client_presentation_contract=ClientContentPresentationContract.model_validate(document["clientPresentationContract"]),
                 now=created_at,
             )
+            if len(window.items) != len(candidates):
+                raise ValueError("stored window contains unsupported presentation items")
             if window.expires_at != expires_at:
                 raise ValueError("ranked window expiry is not canonical")
             return window

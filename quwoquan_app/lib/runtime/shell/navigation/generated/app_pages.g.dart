@@ -12,8 +12,6 @@ abstract final class PageNames {
   static const String addContact = 'add_contact';
   static const String addContactConfirm = 'add_contact_confirm';
   static const String addContactPhone = 'add_contact_phone';
-  static const String addContactScan = 'add_contact_scan';
-  static const String addContactScanGallery = 'add_contact_scan_gallery';
   static const String addContactSearch = 'add_contact_search';
   static const String appBackground = 'app_background';
   static const String appBootstrap = 'app_bootstrap';
@@ -146,7 +144,6 @@ abstract final class AppPages {
     AppPageDefinition(pageName: 'suggest_homepage', routeId: 'suggestHomepage', pathTemplate: '/homepages/suggest', collectPageAccess: true),
     AppPageDefinition(pageName: 'legal_permissions', routeId: 'legalPermissions', pathTemplate: '/legal/permissions', collectPageAccess: true),
     AppPageDefinition(pageName: 'my_footprint', routeId: 'myFootprint', pathTemplate: '/profile/footprint', collectPageAccess: true),
-    AppPageDefinition(pageName: 'add_contact_scan', routeId: 'addContactScan', pathTemplate: '/add-contact/scan', collectPageAccess: true),
     AppPageDefinition(pageName: 'assistant_skills', routeId: 'assistantSkills', pathTemplate: '/assistant/skills', collectPageAccess: true),
     AppPageDefinition(pageName: 'start_group_chat', routeId: 'startGroupChat', pathTemplate: '/chat/start-group', collectPageAccess: true),
     AppPageDefinition(pageName: 'homepage_picker', routeId: 'homepagePicker', pathTemplate: '/homepages/picker', collectPageAccess: true),
@@ -221,7 +218,6 @@ abstract final class AppPages {
     'page_internal_profile_media_gallery': 'profile_media_gallery',
     'page_internal_comment_media_camera': 'comment_media_camera',
     'page_internal_comment_media_gallery': 'comment_media_gallery',
-    'page_internal_add_contact_scan_gallery': 'add_contact_scan_gallery',
     'page_internal_global_circle_edit_create': 'circle_edit_create',
     'page_internal_publish_location_search': 'publish_location_search',
     'page_internal_chat_input_expanded_draft': 'chat_input_expanded_draft',

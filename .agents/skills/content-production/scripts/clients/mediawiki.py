@@ -215,6 +215,8 @@ def wiki_parse(body, request):
         path = f"{unit}/source.md"
         texts[path] = text
         summary = next((str(block.get("text") or "")[:300] for block in layout.get("blocks", []) if block.get("type") == "paragraph"), "")
+        if not summary and not exact:
+            summary = str(page.get("extract") or "")[:300]
         row = {"id": "wikipedia:" + str(page.get("pageid") or identifier), "kind": "page", "source": "wikipedia", "sourceUrl": source_url, "title": title, "sourceMarkdownPath": path, "summary": summary, "disambiguation": "disambiguation" in page.get("pageprops", {})}
         if revid:
             row["revision"] = revid

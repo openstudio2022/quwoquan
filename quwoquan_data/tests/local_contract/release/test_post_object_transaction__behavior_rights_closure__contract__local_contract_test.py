@@ -103,11 +103,11 @@ def test_unverified_asset_publishes_with_rights_recorded_not_enforced(
         package_root=package,
     )
 
-    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
-    recorded = rights["assets"][0]
+    manifest = json.loads((package / "object/manifest.json").read_text(encoding="utf-8"))
+    source = json.loads((package / "object" / manifest["sourceRefs"][0]).read_text(encoding="utf-8"))
+    recorded = source["assets"][0]["sourceAsset"]
     assert recorded["rightsAuditStatus"] == "unverified"
     assert recorded["rightsAuditIssues"] == issues
-    assert_valid(rights, "release", "asset_rights_closure")
 
 
 def test_verified_license_without_separate_proof_remains_record_only(tmp_path: Path) -> None:
@@ -125,11 +125,12 @@ def test_verified_license_without_separate_proof_remains_record_only(tmp_path: P
     review["assetRights"][0]["authorizationProof"] = None
     _write_json(review_path, review)
     build_post_object_transaction_package(execution_root=execution, object_ref=POST_REF, transaction_id=transaction_id, package_root=package)
-    document = json.loads((package / "object/rights.json").read_bytes())
-    assert_valid(document, "release", "asset_rights_closure")
-    assert document["assets"][0]["rightsAuditStatus"] == "verified"
+    manifest = json.loads((package / "object/manifest.json").read_bytes())
+    source = json.loads((package / "object" / manifest["sourceRefs"][0]).read_bytes())
+    recorded = source["assets"][0]
+    assert recorded["rightsAuditStatus"] == "verified"
     for key, value in rights.items():
-        assert document["assets"][0][key] == value
+        assert recorded[key] == value
 
 
 def test_rights_source_fields_prefer_source_page_over_license_page(
@@ -162,16 +163,16 @@ def test_rights_source_fields_prefer_source_page_over_license_page(
         package_root=package,
     )
 
-    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
-    recorded = rights["assets"][0]
+    manifest = json.loads((package / "object/manifest.json").read_text(encoding="utf-8"))
+    source = json.loads((package / "object" / manifest["sourceRefs"][0]).read_text(encoding="utf-8"))
+    recorded = source["assets"][0]
     assert recorded["authorizationProof"] == license_page
     assert recorded["canonicalFilePage"] == file_page
-    assert recorded["snapshotUrl"] == file_page
+    assert "snapshotUrl" not in recorded
     assert recorded["source"] == file_page
     assert recorded["originalAssetUrl"] == upload_url
     assert license_page not in {
         recorded["canonicalFilePage"],
-        recorded["snapshotUrl"],
         recorded["originalAssetUrl"],
         recorded["source"],
     }
@@ -234,6 +235,9 @@ def test_canonical_source_catalog_preserves_factual_reference_only_truth(
         {
             "sourceUseMode": "factual_reference_only",
             "carrier": "image",
+            "canonicalUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+            "fetchedAt": "2026-07-18T04:00:00Z",
+            "sourceMarkdownSha256": "sha256:" + hashlib.sha256((execution / "sources/commons/source.md").read_bytes()).hexdigest(),
         },
     )
 
@@ -244,21 +248,13 @@ def test_canonical_source_catalog_preserves_factual_reference_only_truth(
         package_root=package,
     )
 
-    catalog = json.loads(
-        (package / "object/source_catalog.json").read_text(encoding="utf-8")
-    )
-    assert catalog["sources"] == [
-        {
-            "sourceUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
-            "sourceUseMode": "factual_reference_only",
-        }
-    ]
-    rights = json.loads(
-        (package / "object/rights.json").read_text(encoding="utf-8")
-    )
-    assert rights["assets"][0]["sourceUseMode"] == "factual_reference_only"
-    assert_valid(rights, "release", "asset_rights_closure")
-    assert validate_result(rights, "release", "asset_rights_closure") == []
+    manifest = json.loads((package / "object/manifest.json").read_bytes())
+    assert not (package / "object/source_catalog.json").exists()
+    assert not (package / "object/rights.json").exists()
+    source = json.loads((package / "object" / manifest["sourceRefs"][0]).read_bytes())
+    assert source["sourceUrl"] == "https://commons.wikimedia.org/wiki/File:Example.jpg"
+    assert source["sourceUseMode"] == "factual_reference_only"
+    assert source["assets"][0]["sourceUseMode"] == "factual_reference_only"
 
 
 def test_internal_reference_asset_is_rejected_without_scope_upgrade(
@@ -328,6 +324,9 @@ def test_canonical_transaction_rejects_source_use_mode_upgrade(
         {
             "sourceUseMode": "factual_reference_only",
             "carrier": "image",
+            "canonicalUrl": "https://commons.wikimedia.org/wiki/File:Example.jpg",
+            "fetchedAt": "2026-07-18T04:00:00Z",
+            "sourceMarkdownSha256": "sha256:" + hashlib.sha256((execution / "sources/commons/source.md").read_bytes()).hexdigest(),
         },
     )
     manifest_path = execution / "posts" / POST_REF / "manifest.json"

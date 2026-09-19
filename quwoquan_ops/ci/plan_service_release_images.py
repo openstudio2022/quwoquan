@@ -65,33 +65,6 @@ SERVICE_BUILD_DEFINITIONS: tuple[dict[str, str], ...] = tuple(
     _build_definition(owner) for owner in RUNTIME_IMAGE_OWNERS
 )
 
-# Feature ownership maps product domains to logical services. The final image
-# owner is always projected through the canonical service-core composition.
-FEATURE_OWNERS: dict[str, frozenset[str]] = {
-    "assistant-run-learning": frozenset({"assistant-service", "user-service"}),
-    "chat-conversation": frozenset(
-        {"chat-service", "notification-service", "realtime-gateway", "rtc-service"}
-    ),
-    "circle-community": frozenset({"circle-service", "recommendation-service"}),
-    "discovery-content": frozenset({"content-service", "recommendation-service"}),
-    "gateway-orchestrator-foundation": frozenset(
-        {"integration-service", "realtime-gateway"}
-    ),
-    "global-search-experience": frozenset({"search-service"}),
-    "object-homepage-network": frozenset(
-        {"circle-service", "content-service", "entity-service", "user-service"}
-    ),
-    "platform-ops-governance": frozenset({"platform-ops-service"}),
-    "product-ops-growth": frozenset({"product-ops-service"}),
-    "recommendation-platform": frozenset({"recommendation-service"}),
-    "travel-journey": frozenset({"circle-service"}),
-    "runtime": frozenset({"integration-service", "platform-ops-service"}),
-    "shared-homepage-network": frozenset(
-        {"circle-service", "content-service", "entity-service", "user-service"}
-    ),
-    "user-identity-profile-relationship": frozenset({"user-service"}),
-}
-
 SHARED_PREFIXES = (
     ".github/workflows/",
     "quwoquan_ops/",
@@ -117,6 +90,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--base-sha", default="")
     parser.add_argument("--head-sha", default="HEAD")
     parser.add_argument("--previous-manifest", type=Path)
+    parser.add_argument("--impact-plan", type=Path)
     parser.add_argument("--changed-file", action="append", default=[])
     parser.add_argument("--github-output", default="")
     return parser.parse_args()
@@ -145,80 +119,40 @@ def _runtime_owner(logical_service: str) -> str:
     )
 
 
-def _contract_graph_domains() -> frozenset[str]:
-    path = ROOT / "quwoquan_service/generated/contract_graph.json"
-    payload = json.loads(path.read_text(encoding="utf-8"))
-    domains = {
-        str(item.get("domain") or "").strip()
-        for item in payload.get("operations", [])
-        if isinstance(item, dict)
-    }
-    domains.discard("")
-    if not domains:
-        raise ValueError("ContractGraph contains no operation domains")
-    return frozenset(domains)
-
-
-def _validate_feature_owners() -> None:
-    domains = _contract_graph_domains()
-    graph_services = {
-        "realtime-gateway" if domain == "realtime" else f"{domain}-service"
-        for domain in domains
-    }
-    graph_services.discard("ops-service")
-    graph_services.add("platform-ops-service")
-    for feature, services in FEATURE_OWNERS.items():
-        unknown = services - LOGICAL_SERVICES
-        if unknown:
-            raise ValueError(
-                f"feature owner {feature} names unknown logical services: {sorted(unknown)}"
-            )
-        not_in_graph = services - graph_services - {"product-ops-service"}
-        if not_in_graph:
-            raise ValueError(
-                f"feature owner {feature} is not backed by ContractGraph domains: "
-                f"{sorted(not_in_graph)}"
-            )
-
-
 def _runtime_owners(services: set[str] | frozenset[str]) -> set[str]:
     return {_runtime_owner(service) for service in services}
 
 
 def affected_services(paths: list[str]) -> tuple[frozenset[str], list[str]]:
-    _validate_feature_owners()
+    """Compatibility projection for exact paths; canonical callers pass ImpactPlan."""
+    from quwoquan_ops.ci.impact_planner_core import _affected_service_owners
+
     if not paths:
         return ALL_SERVICES, ["missing-diff-range"]
-    affected: set[str] = set()
-    reasons: list[str] = []
-    for raw_path in paths:
-        path = raw_path.removeprefix("./")
-        if path in SHARED_FILES or path.startswith(SHARED_PREFIXES):
-            return ALL_SERVICES, [f"shared-change:{path}"]
-        direct = re.match(r"quwoquan_service/services/([^/]+)/(.*)", path)
-        if direct and direct.group(1) in LOGICAL_SERVICES:
-            service = direct.group(1)
-            first_segment = direct.group(2).split("/", 1)[0]
-            if first_segment in SERVICE_WIDE_IMPACT_SEGMENTS:
-                return ALL_SERVICES, [f"service-wide-impact:{service}/{first_segment}"]
-            owner = _runtime_owner(service)
-            affected.add(owner)
-            reasons.append(f"runtime-image-owner:{owner}")
-            continue
-        if path.startswith("quwoquan_service/control-plane/platform-ops/"):
-            affected.add("platform-ops-service")
-            reasons.append("runtime-image-owner:platform-ops-service")
-            continue
-        feature = re.match(r"specs/feature-tree/([^/]+)/", path)
-        if feature and feature.group(1) in FEATURE_OWNERS:
-            affected.update(_runtime_owners(FEATURE_OWNERS[feature.group(1)]))
-            reasons.append(f"feature-owner:{feature.group(1)}")
-            continue
-        if path.startswith("quwoquan_service/"):
-            return ALL_SERVICES, [f"unclassified-service-change:{path}"]
-        if path.startswith("specs/feature-tree/"):
-            return ALL_SERVICES, [f"unclassified-feature-owner:{path}"]
-    return frozenset(affected), sorted(set(reasons))
+    affected = frozenset(_affected_service_owners(paths))
+    return affected, [f"impact-plan-service:{owner}" for owner in sorted(affected)]
+
+
+def affected_services_from_impact_plan(path: Path) -> tuple[frozenset[str], list[str]]:
+    from quwoquan_ops.ci.impact_planner_core import validate_delivery_impact_plan
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    plan = validate_delivery_impact_plan(payload)
+    services = plan.get("affected_services")
+    products = plan.get("candidate_products")
+    if (
+        not isinstance(services, list)
+        or any(not isinstance(item, str) for item in services)
+        or services != sorted(set(services))
+        or not isinstance(products, list)
+    ):
+        raise ValueError("ImpactPlan service projection is invalid")
+    unknown = set(services) - ALL_SERVICES
+    if unknown:
+        raise ValueError(f"ImpactPlan names unknown runtime image owners: {sorted(unknown)}")
+    if services and "service" not in products:
+        raise ValueError("ImpactPlan service projection is inconsistent with candidate products")
+    return frozenset(services), [f"impact-plan:{plan['plan_digest']}"]
 
 
 def reusable_refs(path: Path | None) -> dict[tuple[str, str], str]:
@@ -280,9 +214,13 @@ def reusable_refs(path: Path | None) -> dict[tuple[str, str], str]:
 
 
 def build_plan(
-    paths: list[str], previous_manifest: Path | None
+    paths: list[str], previous_manifest: Path | None, impact_plan: Path | None = None
 ) -> tuple[list[dict[str, str]], list[str]]:
-    affected, reasons = affected_services(paths)
+    affected, reasons = (
+        affected_services_from_impact_plan(impact_plan)
+        if impact_plan is not None
+        else affected_services(paths)
+    )
     previous = reusable_refs(previous_manifest)
     expected_previous = len(TRUST_DOMAINS) * len(RUNTIME_IMAGE_OWNERS)
     if affected != ALL_SERVICES and len(previous) != expected_previous:
@@ -327,7 +265,7 @@ def main() -> int:
         changed = [item for item in args.changed_file if item.strip()]
         if not changed:
             changed = git_changed_files(args.base_sha, args.head_sha)
-        plan, reasons = build_plan(changed, args.previous_manifest)
+        plan, reasons = build_plan(changed, args.previous_manifest, args.impact_plan)
         if args.github_output:
             _write_outputs(args.github_output, plan, reasons)
     except (OSError, ValueError, RuntimeError, json.JSONDecodeError) as error:

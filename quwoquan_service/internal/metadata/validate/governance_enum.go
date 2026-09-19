@@ -37,6 +37,7 @@ func validateEnumGovernance(contractGraph *graph.ContractGraph) []Issue {
 			}
 			seenValues[value] = struct{}{}
 		}
+		issues = append(issues, retiredEnumValueIssues(definition, seenValues)...)
 	}
 	for _, indexes := range byScope {
 		if len(indexes) < 2 {
@@ -115,6 +116,49 @@ func validateEnumGovernance(contractGraph *graph.ContractGraph) []Issue {
 			definition.Name,
 			definition.OwnerLevel,
 		))
+	}
+	return issues
+}
+
+// retiredEnumValueIssues keeps a retired member from buying back any standing in
+// the live closed set. A retired value that is still a legal member, is blank, or
+// is declared twice would make the declaration a compatibility channel instead of
+// a one-time migration input, so each case is reported rather than normalized.
+func retiredEnumValueIssues(
+	definition ast.EnumDefinition,
+	liveValues map[string]struct{},
+) []Issue {
+	var issues []Issue
+	seen := map[string]struct{}{}
+	for _, retired := range definition.RetiredValues {
+		if strings.TrimSpace(retired) == "" {
+			issues = append(issues, issue(
+				"CONTRACT.ENUM.RETIRED_VALUE_BLANK",
+				definition.SourcePath,
+				"enum %q declares a blank retired value",
+				definition.Name,
+			))
+			continue
+		}
+		if _, live := liveValues[retired]; live {
+			issues = append(issues, issue(
+				"CONTRACT.ENUM.RETIRED_VALUE_STILL_LIVE",
+				definition.SourcePath,
+				"enum %q declares retired value %q that is still in its closed set",
+				definition.Name,
+				retired,
+			))
+		}
+		if _, duplicate := seen[retired]; duplicate {
+			issues = append(issues, issue(
+				"CONTRACT.ENUM.RETIRED_VALUE_DUPLICATE",
+				definition.SourcePath,
+				"enum %q declares retired value %q more than once",
+				definition.Name,
+				retired,
+			))
+		}
+		seen[retired] = struct{}{}
 	}
 	return issues
 }

@@ -22,7 +22,7 @@ func TestPersistenceProviderState_ContentReadsViaHandler(t *testing.T) {
 	reader := persistence.NewMongoPostQueryReader(mongoDB.Collection("posts"))
 	if _, err := reader.ListPublishedFeedPosts(
 		context.Background(),
-		postports.NewPostFeedReadRequest("", "", "", 100),
+		postports.NewPostFeedReadRequest("", "", 100),
 	); err != nil {
 		t.Fatalf("typed feed reader must decode canonical contract fixtures: %v", err)
 	}
@@ -159,7 +159,6 @@ func TestContentFixturePostFromFixture_UsesExplicitUpdatedAndPublishedAt(t *test
 	post := contentPostFromFixture(contentFixturePost{
 		PostID:      "fixture_time_semantics_001",
 		ContentType: "article",
-		Identity:    "work",
 		AuthorID:    "fixture_user_current",
 		DisplayName: "新同学_260622_6698692",
 		AvatarURL:   "media/avatar/example.png",

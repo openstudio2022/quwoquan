@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：不直接参与用户 Journey；为编程与审核提供最小完整上下文
 >
-> 设计归属：[L1 DEC-001](../../design.md#dec-001)
+> 设计引用：[L1 DEC-001](../../design.md#dec-001)
 
 ## 1. 用户价值
 
@@ -14,7 +14,7 @@
 
 ### In Scope
 
-- 从 spec 路径直接定位节点；从代码路径按 L1 工程归属定位唯一 owner。
+- 从 spec 路径直接定位节点；从代码路径按 dependency evidence 关联零个或多个 context。
 - 输出父链、Journey、REQ/验收/DEC/OPEN、metadata、`spec_ref`、Git 增量和依赖节点。
 
 ### Out of Scope
@@ -45,7 +45,7 @@
 
 ## 6. 依赖
 
-- 前置要求：各 L1 工程归属真实存在且无未裁决重叠。
+- 前置要求：Feature 目录父链有效；context unresolved 或多关联均不授予写权限且不阻断 mutation。
 - 上游事实：目录、Markdown、Git diff 与测试引用。
 - 下游结果：`.qwq_output` 中的只读上下文报告。
 - 父级设计：`DEC-001`

@@ -10,9 +10,12 @@ from __future__ import annotations
 import ast
 import importlib.util
 import sys
+
+import pytest
 from pathlib import Path
 
 from support.path_setup import model_runtime_root
+from generated.recommendation.recommendation_model_release.content_type_encoding import CONTENT_TYPE_MAP
 
 _RUNTIME_ROOT = model_runtime_root()
 _SCRIPTS_DIR = _RUNTIME_ROOT / "scripts"
@@ -55,8 +58,8 @@ _EXTRACTOR_CONSTANTS = {
     "USER_NUMERIC",
     "CONTEXT_NUMERIC_FEATURES",
     "CONTEXT_NUMERIC",
-    "CONTENT_TYPE_MAP",
     "RECALL_PATH_MAP",
+    "ITEM_FEATURE_KEYS",
 }
 
 
@@ -78,12 +81,70 @@ def _load_extractor(path: Path, function_name: str):
                 selected.append(node)
     namespace = {
         "append_intersection_features": _ENCODER.append_intersection_features,
+        "CONTENT_TYPE_MAP": CONTENT_TYPE_MAP,
     }
     exec(  # noqa: S102 - compile only selected pure constants/function from repo source.
         compile(ast.Module(body=selected, type_ignores=[]), str(path), "exec"),
         namespace,
     )
     return namespace[function_name]
+
+
+@pytest.mark.parametrize("content_type,code", [("image", 0), ("video", 1), ("article", 2)])
+def test_content_type_encoding_is_stable_across_serving_and_training(content_type, code):
+    item = {"contentType": content_type}
+    vectors = []
+    for label, (path, name) in _SOURCES.items():
+        extractor = _load_extractor(path, name)
+        vector = extractor(item, {}, {}) if label == "serving" else extractor({"itemFeatures": item})
+        assert vector[14] == code
+        vectors.append(vector)
+    assert vectors[0] == vectors[1] == vectors[2]
+    embedding = _load_extractor(_SCRIPTS_DIR / "train_embedding.py", "_build_item_vector")
+    assert embedding({"itemFeatures": item})[-1] == code
+
+
+@pytest.mark.parametrize("content_type", ["micro", "moment", "photo", "homepage", "unknown", "", None])
+def test_retired_or_unknown_content_type_is_not_an_encodable_category(content_type):
+    item = {"contentType": content_type}
+    for label, (path, name) in _SOURCES.items():
+        extractor = _load_extractor(path, name)
+        with pytest.raises((KeyError, ValueError)):
+            extractor(item, {}, {}) if label == "serving" else extractor({"itemFeatures": item})
+    embedding = _load_extractor(_SCRIPTS_DIR / "train_embedding.py", "_build_item_vector")
+    with pytest.raises((KeyError, ValueError)):
+        embedding({"itemFeatures": item})
+
+
+@pytest.mark.parametrize("model", [None, object()])
+def test_scorer_rejects_retired_type_before_model_or_rule_fallback(model):
+    from types import SimpleNamespace
+
+    path = _RUNTIME_ROOT / "models" / "content_feed.py"
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    scorer = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == "ContentFeedScorer")
+    score = next(node for node in scorer.body if isinstance(node, ast.FunctionDef) and node.name == "score")
+    namespace = {"ModelScoreRequest": object, "ModelScoreResponse": object,
+                 "CONTENT_TYPE_MAP": CONTENT_TYPE_MAP,
+                 "build_candidate_features": lambda request: [{"contentType": "micro"}]}
+    validator = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
+                     and node.name == "_validated_candidate_features")
+    exec(compile(ast.Module(body=[validator, score], type_ignores=[]), str(path), "exec"), namespace)
+    with pytest.raises(ValueError, match="unsupported content type"):
+        namespace["score"](SimpleNamespace(_model=model), object())
+
+
+def test_seed_content_types_match_training_categories_without_database_access():
+    tree = ast.parse((_SCRIPTS_DIR / "generate_seed_data.py").read_text(encoding="utf-8"))
+    constants = {
+        node.targets[0].id: ast.literal_eval(node.value)
+        for node in tree.body
+        if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id in {"CONTENT_TYPES", "CONTENT_TYPE_WEIGHTS"}
+    }
+    assert constants["CONTENT_TYPES"] == ["image", "video", "article"]
+    assert len(constants["CONTENT_TYPE_WEIGHTS"]) == 3
+    assert sum(constants["CONTENT_TYPE_WEIGHTS"]) == 1
 
 
 _SAMPLE_USER = {
@@ -213,6 +274,22 @@ def test_kind_encoding_is_derived_from_canonical_registry() -> None:
     vector_width = len(_vector("train"))
     indexes = _ENCODER.matched_edge_categorical_features(vector_width)
     assert indexes == [vector_width - 5]
+
+
+def test_all_content_type_consumers_import_generated_encoding() -> None:
+    paths = [path for path, _ in _SOURCES.values()] + [_SCRIPTS_DIR / "train_embedding.py"]
+    for path in paths:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        imports = [node for node in tree.body if isinstance(node, ast.ImportFrom)
+                   and node.module == "generated.recommendation.recommendation_model_release.content_type_encoding"
+                   and any(alias.name == "CONTENT_TYPE_MAP" and alias.asname is None for alias in node.names)]
+        assert len(imports) == 1, f"{path} must import the canonical encoding"
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Store):
+                assert node.id != "CONTENT_TYPE_MAP", f"{path} redefines model encoding"
+    assert dict(CONTENT_TYPE_MAP) == {"image": 0, "video": 1, "article": 2}
+    with pytest.raises(TypeError):
+        CONTENT_TYPE_MAP["image"] = 99
 
 
 def test_all_rankers_import_one_matched_edge_encoder() -> None:

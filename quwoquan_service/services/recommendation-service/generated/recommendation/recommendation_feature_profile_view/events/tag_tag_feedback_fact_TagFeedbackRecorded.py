@@ -8,6 +8,37 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from enum import Enum
+from pydantic_core import core_schema
+
+
+class _ContractEnum(str, Enum):
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        return core_schema.no_info_before_validator_function(
+            cls._validate_wire,
+            handler(source_type),
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize_wire),
+        )
+
+    @classmethod
+    def _serialize_wire(cls, value):
+        return cls._validate_wire(value).value
+
+    @classmethod
+    def _validate_wire(cls, value):
+        if isinstance(value, cls):
+            return value
+        if type(value) is not str:
+            raise ValueError("enum wire value must be a string")
+        return cls(value)
+
+
+class TagFeedbackAction(_ContractEnum):
+    VALUE_CLICK = "click"
+    VALUE_IGNORE = "ignore"
+    VALUE_CORRECT = "correct"
+    VALUE_DISLIKE = "dislike"
 
 
 class TagFeedbackFact(BaseModel):
@@ -15,7 +46,7 @@ class TagFeedbackFact(BaseModel):
     actorId: str
     actorKind: str
     tagRef: str
-    action: str
+    action: TagFeedbackAction
     recordedAt: datetime
 
     model_config = ConfigDict(extra="forbid")

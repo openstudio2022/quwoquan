@@ -14,8 +14,7 @@ final _publicLinks = PublicContentLinkBuilder(
 
 ContentPostViewData _post({
   required String id,
-  required String contentType,
-  required String identity,
+  required ContentType contentType,
   required String authorId,
   required String displayName,
   String? title,
@@ -25,7 +24,6 @@ ContentPostViewData _post({
   ContentPostProjection(
     postId: id,
     contentType: contentType,
-    contentIdentity: identity,
     assistantUsePolicy: AssistantUsePolicy.inherit,
     authorId: authorId,
     authorDisplayName: displayName,
@@ -37,8 +35,8 @@ ContentPostViewData _post({
     body: body,
     summary: summary,
     coverUrl: '',
-    articleTemplate: contentType == 'article' ? 'gentle' : null,
-    articleFontPreset: contentType == 'article' ? 'clean' : null,
+    articleTemplate: contentType == ContentType.article ? 'gentle' : null,
+    articleFontPreset: contentType == ContentType.article ? 'clean' : null,
     likeCount: 0,
     commentCount: 0,
     shareCount: 0,
@@ -55,14 +53,12 @@ void main() {
           surfaceView: ContentSurfaceViewMapper.fromDto(
             _post(
               id: 'moment_public_link',
-              contentType: 'micro',
-              identity: 'moment',
+              contentType: ContentType.article,
               authorId: 'user_public_link',
               displayName: '阿宁',
               body: '公开分享链路应该指向 Web 公共页',
             ),
           ),
-          enableIdentityTemplate: true,
           visibility: 'public',
           publicLinks: _publicLinks,
         );
@@ -89,8 +85,7 @@ void main() {
             surfaceView: ContentSurfaceViewMapper.fromDto(
               _post(
                 id: 'work_circle_link',
-                contentType: 'article',
-                identity: 'work',
+                contentType: ContentType.article,
                 authorId: 'user_circle_link',
                 displayName: '洛白',
                 title: '已退役可见性',
@@ -98,7 +93,6 @@ void main() {
                 summary: '该值必须失败关闭',
               ),
             ),
-            enableIdentityTemplate: true,
             visibility: 'circle-visible',
           ),
           throwsArgumentError,
@@ -111,8 +105,7 @@ void main() {
         surfaceView: ContentSurfaceViewMapper.fromDto(
           _post(
             id: 'private_link',
-            contentType: 'article',
-            identity: 'work',
+            contentType: ContentType.article,
             authorId: 'user_private',
             displayName: '周周',
             title: '私密内容',
@@ -120,7 +113,6 @@ void main() {
             summary: '仅自己可见',
           ),
         ),
-        enableIdentityTemplate: true,
         visibility: 'private',
       );
 

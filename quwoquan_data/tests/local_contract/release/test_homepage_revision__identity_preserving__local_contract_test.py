@@ -18,6 +18,7 @@ from content.release.canonical.pool_query import query_pool
 from content.source import acquire
 from core import paths
 from support.media_fixture import seed_system_creator_avatar_holding
+from support.semantic_review_fixture import approved_semantic_judgement
 
 REF = "entities/travel/stable/xihu"
 CREATOR = "qwq_creator_geo_editor_001"
@@ -54,7 +55,7 @@ def _execution(base, index, *, region="中国/浙江省/杭州市", identity="en
             break
         payload = {"actor": REVIEWER if stage == "5.review" else AUTHOR, "verdict": "pass"}
         if stage == "5.review":
-            payload["reviews"] = {process_ref: {"decision": "approved", "blockingIssues": [], "advisories": []}}
+            payload["reviews"] = {process_ref: approved_semantic_judgement(root, process_ref)}
         seal_path = base / f"seal-{index}-{stage}.json"
         _write_json(seal_path, payload)
         seal.seal_stage(execution_id=execution_id, stage=stage, input_path=seal_path)

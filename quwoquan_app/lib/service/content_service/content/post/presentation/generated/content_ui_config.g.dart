@@ -230,10 +230,6 @@ abstract final class ContentFeatureFlags {
   static const String enableCreateActionEntry = "enable_create_action_entry";
   static const String enableHelperRead = "enable_helper_read";
   static const String enableHlsCmafAbr = "enable_hls_cmaf_abr";
-  static const String enableIdentityBasedSurfaces =
-      "enable_identity_based_surfaces";
-  static const String enableIdentityShareTemplate =
-      "enable_identity_share_template";
   static const String enablePhotoWaterfall = "enable_photo_waterfall";
   static const String enableShareToCircle = "enable_share_to_circle";
   static const String enableSharedVideoTimeline =
@@ -359,13 +355,6 @@ class ContentUIConfig {
       layout: "full_width_vertical_pager",
     ),
     DiscoveryTabConfig(
-      id: "moment",
-      labelKey: "tab_moment",
-      icon: "chat_bubble_outline",
-      contentType: "micro",
-      layout: "list_with_optional_media",
-    ),
-    DiscoveryTabConfig(
       id: "article",
       labelKey: "tab_article",
       icon: "article_outlined",
@@ -374,39 +363,11 @@ class ContentUIConfig {
     ),
   ];
 
-  static const List<DiscoveryRailConfig> discoveryRails = <DiscoveryRailConfig>[
-    DiscoveryRailConfig(
-      id: "moment",
-      labelKey: "discovery_rail_moment",
-      identity: "moment",
-      isDefault: true,
-    ),
-    DiscoveryRailConfig(
-      id: "work",
-      labelKey: "discovery_rail_work",
-      identity: "work",
-      isDefault: false,
-    ),
-  ];
+  static const List<DiscoveryRailConfig> discoveryRails =
+      <DiscoveryRailConfig>[];
 
   static const List<IdentityFilterConfig> creationIdentityFilters =
-      <IdentityFilterConfig>[
-        IdentityFilterConfig(
-          id: "all",
-          labelKey: "creation_filter_all",
-          identity: null,
-        ),
-        IdentityFilterConfig(
-          id: "moment",
-          labelKey: "creation_filter_moment",
-          identity: "moment",
-        ),
-        IdentityFilterConfig(
-          id: "work",
-          labelKey: "creation_filter_work",
-          identity: "work",
-        ),
-      ];
+      <IdentityFilterConfig>[];
 
   static const List<WorkFormatFilterConfig> workFormatFilters =
       <WorkFormatFilterConfig>[
@@ -473,28 +434,7 @@ class ContentUIConfig {
       );
 
   static const List<ShareTemplateProfileConfig> shareTemplateProfiles =
-      <ShareTemplateProfileConfig>[
-        ShareTemplateProfileConfig(
-          id: "moment",
-          titleKey: "share_template_moment_title",
-          subtitleKey: "share_template_moment_subtitle",
-          layout: "moment_card",
-          coverStrategy: "first_media_or_gradient",
-          includeAuthor: true,
-          includeTimeContext: true,
-          includeTags: false,
-        ),
-        ShareTemplateProfileConfig(
-          id: "work",
-          titleKey: "share_template_work_title",
-          subtitleKey: "share_template_work_subtitle",
-          layout: "work_card",
-          coverStrategy: "cover_or_first_media",
-          includeAuthor: true,
-          includeTimeContext: false,
-          includeTags: true,
-        ),
-      ];
+      <ShareTemplateProfileConfig>[];
 
   static const List<ArticleDistributionProfileConfig>
   articleDistributionProfiles = <ArticleDistributionProfileConfig>[
@@ -686,8 +626,6 @@ class ContentUIConfig {
     'enable_create_action_entry': false,
     'enable_helper_read': false,
     'enable_hls_cmaf_abr': false,
-    'enable_identity_based_surfaces': false,
-    'enable_identity_share_template': false,
     'enable_photo_waterfall': true,
     'enable_share_to_circle': true,
     'enable_shared_video_timeline': true,

@@ -21,7 +21,7 @@ fields:
   api_exposure: none
   ops_exposure: read
   role: append_only_fact
-  description: actor/session/route/pageSize 的 SHA-256 摘要；原始主体不进入 Redis key 或日志
+  description: actor/session/route/pageSize/clientPresentationContract.contractDigest 的 SHA-256 摘要；contractDigest 必须经 canonical 闭集规范化与服务端重算校验，原始主体不进入 Redis key 或日志
 - name: feedRequestId
   source: feedRequestId
   type: string
@@ -63,7 +63,7 @@ fields:
   reference: true
 - name: items
   source: items
-  type: '[]FeedDeliveryPostReference'
+  type: '[]FeedDeliveryListItem'
   max_items: 20
   constraints: [NOT_NULL]
   classification: INTERNAL
@@ -71,16 +71,17 @@ fields:
   api_exposure: none
   ops_exposure: read
   role: append_only_fact
-- name: objectCards
-  source: objectCards
-  type: '[]FeedDeliveryObjectCard'
-  max_items: 20
-  constraints: [NULLABLE]
-  classification: PUBLIC
+  description: 已交付页的唯一混排序列；按 envelope 的 objectKind 与对应 Post/Homepage 引用确定稳定身份并去重，保留原序及决策，不保存可变展示快照。实体主页作为 objectKind=entity_homepage 的一项直接进入本序列，不存在与之并存的 objectCards + anchorIndex 插卡旁路。
+- name: clientPresentationContract
+  source: clientPresentationContract
+  type: ClientContentPresentationContract
+  constraints: [NOT_NULL]
+  classification: INTERNAL
   log_policy: metadata_only
   api_exposure: none
   ops_exposure: read
   role: append_only_fact
+  description: 本次交付所依据且已由服务端验证的客户端能力闭集（DEC-006）。其 contractDigest 同时进入 scopeHash 与前后向 cursor 的认证身份；每次续页、回翻均核对当前请求、cursor 与交付页的摘要一致，不一致按 canonical typed 失败恢复首刷，禁止复用或重新解释旧页。
 - name: outboundCursor
   source: outboundCursor
   type: string
@@ -155,17 +156,15 @@ fields:
   ops_exposure: read
   role: append_only_fact
 types:
-  FeedDeliveryPostReference:
-    description: 已交付 Post identity 与推荐归因快照；不复制可变 Post 展示字段
+  FeedDeliveryListItem:
+    description: 已交付列表项的自描述信封与推荐归因快照；不复制可变展示字段，也不携带 columns/wideLayout/surface
     fields:
-    - name: postId
-      source: postId
-      type: string
-      max_utf8_bytes: 256
-      semantic_type: identifier
+    - name: envelope
+      source: envelope
+      type: ListItemPresentationEnvelope
       constraints: [NOT_NULL]
       classification: PUBLIC
-      log_policy: hash
+      log_policy: metadata_only
       api_exposure: none
       ops_exposure: read
     - name: qualityScore
@@ -203,100 +202,15 @@ types:
       log_policy: allow
       api_exposure: none
       ops_exposure: read
-  FeedDeliveryObjectCard:
-    description: 已交付对象卡的短期公开展示快照与页内锚点
-    fields:
-    - name: objectKind
-      source: objectKind
-      type: string
-      max_utf8_bytes: 64
-      constraints: [NOT_NULL]
-      classification: PUBLIC
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: objectId
-      source: objectId
-      type: string
-      max_utf8_bytes: 256
-      constraints: [NOT_NULL]
-      classification: PUBLIC
-      log_policy: hash
-      api_exposure: none
-      ops_exposure: read
-    - name: title
-      source: title
-      type: string
-      max_utf8_bytes: 512
-      constraints: [NOT_NULL]
-      classification: PUBLIC
-      log_policy: drop
-      api_exposure: none
-      ops_exposure: none
-    - name: subtitle
-      source: subtitle
-      type: string
-      max_utf8_bytes: 1024
-      constraints: [NULLABLE]
-      classification: PUBLIC
-      log_policy: drop
-      api_exposure: none
-      ops_exposure: none
-    - name: coverUrl
-      source: coverUrl
-      type: string
-      max_utf8_bytes: 4096
-      constraints: [NULLABLE]
-      classification: PUBLIC
-      log_policy: drop
-      api_exposure: none
-      ops_exposure: none
-    - name: tagRefs
-      source: tagRefs
-      type: '[]string'
-      max_items: 20
-      item_max_utf8_bytes: 256
-      constraints: [NULLABLE]
-      classification: PUBLIC
-      log_policy: metadata_only
-      api_exposure: none
-      ops_exposure: read
-    - name: reasonText
-      source: reasonText
-      type: string
-      max_utf8_bytes: 512
-      constraints: [NULLABLE]
-      classification: PUBLIC
-      log_policy: drop
-      api_exposure: none
-      ops_exposure: none
-    - name: recallPath
-      source: recallPath
-      type: string
-      max_utf8_bytes: 64
-      constraints: [NULLABLE]
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
-    - name: anchorIndex
-      source: anchorIndex
-      type: int
-      constraints: [NOT_NULL]
-      classification: INTERNAL
-      log_policy: allow
-      api_exposure: none
-      ops_exposure: read
   FeedPageDeliveredRecommendationItem:
-    description: Content 权限 hydration 后实际进入响应的一项推荐归因；ordinal 与特征只能来自 Recommendation 稳定窗口。
+    description: Content 当前权限 hydration 后实际进入响应的一项推荐归因；envelope 原样保留共享稳定身份与决策，ordinal 与特征只能来自同一 Recommendation 稳定窗口，过滤后不得重编号。主页使用 homepage 引用且 envelope.contentType 为 null，不伪造 Post 字段。
     fields:
     - {name: ordinal, source: ordinal, type: int, constraints: [NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read}
-    - {name: contentId, source: contentId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read}
-    - {name: contentType, source: contentType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read}
+    - {name: envelope, source: envelope, type: ListItemPresentationEnvelope, constraints: [NOT_NULL], classification: PUBLIC, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
     - {name: featureSnapshotDigest, source: featureSnapshotDigest, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
     - {name: itemFeatureSnapshot, source: itemFeatureSnapshot, type: object, constraints: [NOT_NULL], classification: INTERNAL, log_policy: metadata_only, api_exposure: none, ops_exposure: read}
   FeedPageDelivered:
-    description: FeedDeliveryPage 成功持久化后发布的推荐交付事件；只包含最终响应项，不包含 hydration/权限过滤丢弃项。
+    description: FeedDeliveryPage 成功持久化后发布的推荐交付事件；只包含最终响应的统一列表项，不包含 hydration/权限过滤丢弃项。items 按原窗口 ordinal 保序且 ordinal 唯一，按 envelope 的对象种类与稳定引用去重；不将 Homepage 当作 Post 归因。
     fields:
     - {name: deliveryPageId, source: deliveryPageId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}
     - {name: feedRequestId, source: feedRequestId, type: string, constraints: [NOT_NULL], classification: INTERNAL, log_policy: hash, api_exposure: none, ops_exposure: read}

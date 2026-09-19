@@ -41,8 +41,7 @@ void main() {
         SubmitContentPostPublicationCommand(
           publishIntentId: 'reaction-post-$sequence',
           localDraftId: 'reaction-draft-$sequence',
-          contentType: ContentType.micro,
-          contentIdentity: ContentIdentity.moment,
+          contentType: ContentType.article,
           body: 'Reaction API contract post $sequence',
           visibility: Visibility.public,
         ),

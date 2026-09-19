@@ -1,6 +1,6 @@
 package recommendation
 
-// N1-2 契约：二期新能力（objectCards/edge/embedding/gate/shadow/per-source
+// N1-2 契约：二期新能力（edge/embedding/gate/shadow/per-source
 // 召回失败/Redis 降级/policy reload）的观测挂点存在且可安全调用。
 // 历史断裂：这些能力零指标，provider 静默吞错、edge 表 TTL 清空无人知。
 
@@ -11,9 +11,6 @@ import (
 
 func TestNewCapabilityMetricRecordersAreSafe(t *testing.T) {
 	// 全部 Record 函数必须可在任意输入下安全调用（含空值），不 panic。
-	RecordObjectCardsAssembled(0)
-	RecordObjectCardsAssembled(3)
-	RecordObjectCardsProviderError()
 
 	RecordEdgeMaterializerRun("", nil)
 	RecordEdgeMaterializerRun("all", errors.New("boom"))

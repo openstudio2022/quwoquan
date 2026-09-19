@@ -66,7 +66,7 @@ def test_feed_delivery_stream_persists_exposure_before_ack(
         "items": [{
             "ordinal": 0,
             "contentId": "post-stream-001",
-            "contentType": "post",
+            "contentType": "article",
             "featureSnapshotDigest": canonical_snapshot_digest(
                 user_snapshot, item_snapshot
             ),

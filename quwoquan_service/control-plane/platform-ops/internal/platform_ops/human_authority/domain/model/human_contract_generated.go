@@ -3,7 +3,7 @@
 package model
 
 const CanonicalHumanContractSource = "quwoquan_ops/policies/human_agent_delivery_contract.yaml"
-const CanonicalHumanContractSHA256 = "sha256:72058b4473f8fad0f65432b0caa0fd4163b6a3b3491f5e75f3e20683fbcf1e5a"
+const CanonicalHumanContractSHA256 = "sha256:43ef7679215493792a68e3341460afc8f5909294da20c0238f814f072f6c917f"
 const CanonicalAuthorityFieldsSource = "quwoquan_service/control-plane/platform-ops/contracts/platform_ops/human_authority/fields.yaml"
 const CanonicalAuthorityFieldsSHA256 = "sha256:e0d48389883190f2a5ae4d414ac21f734d0951488dbc26dfe1c320918e3393e9"
 

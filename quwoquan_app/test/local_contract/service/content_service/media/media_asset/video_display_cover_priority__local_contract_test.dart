@@ -20,8 +20,7 @@ ContentPostViewData _video({
 }) => ContentPostViewData.fromWire(
   ContentPostProjection(
     postId: postId,
-    contentType: 'video',
-    contentIdentity: 'work',
+    contentType: ContentType.video,
     authorId: 'author',
     authorDisplayName: '作者',
     authorAvatarUrl: '',

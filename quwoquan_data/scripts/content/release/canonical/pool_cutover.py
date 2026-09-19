@@ -68,6 +68,9 @@ def _regular_tree(root: Path) -> list[Path]:
     files: list[Path] = []
     device = root.stat().st_dev
     for path in sorted(root.rglob("*")):
+        relative = path.relative_to(root)
+        if relative.parts and relative.parts[0] in {".git", "releases", "repository.json", ".gitignore"}:
+            continue
         metadata = path.lstat()
         if stat.S_ISLNK(metadata.st_mode):
             _fail("SYMLINK_FORBIDDEN", path)
@@ -141,16 +144,32 @@ def _object_snapshot(pool: Path, ref: str) -> dict[str, Any]:
     document = _read_json(primary) if primary.is_file() else {}
     id_key = "authorId" if author else "entityId" if ref.startswith("entities/") else "contentId"
     records = []
-    for path in sorted((root / "_pool/versions").glob("*.json")):
+    for path in sorted((root / "records").glob("*.json")):
         raw = _read_json(path)
         records.append({key: raw.get(key) for key in ("objectId", "contentVersion", "objectRef", "recordSequence")})
+    dependencies = _dependencies(root, document)
+    from content.release.canonical.aggregate_release_closure import object_root
+    dependencies = [
+        object_root(pool, kind, logical).relative_to(pool).as_posix()
+        if kind in {"entities", "posts"} else dependency
+        for dependency in dependencies
+        for kind, logical in [dependency.split("/", 1)]
+    ]
     return {
         "objectRef": ref, "treeDigest": _tree_digest(root),
         "identity": {"objectId": document.get(id_key), "contentVersion": document.get("version")},
-        "recordIdentities": records, "dependencyRefs": _dependencies(root, document),
+        "recordIdentities": records, "dependencyRefs": sorted(dependencies),
         "sourceDigest": _source_digest(document),
     }
 
+
+
+def _pool_content_digest(root: Path, files: list[Path]) -> str:
+    """Digest canonical content bytes while excluding repository metadata and rebuildable sidecars."""
+    return _digest_bytes(_json_bytes([
+        {"path": path.relative_to(root).as_posix(), "sha256": _digest_file(path), "bytes": path.stat().st_size}
+        for path in files
+    ]))
 
 def _occupied_ref(relative: Path) -> str | None:
     prefix = relative.parts[0]
@@ -179,7 +198,7 @@ def snapshot_pool(publish_root: Path) -> dict[str, Any]:
         relative = path.relative_to(pool)
         if relative.parts[0] != "tags" and not roots.intersection(path.parents):
             _fail("UNOWNED_POOL_BYTES", relative)
-    return {"treeDigest": _tree_digest(pool), "objects": [_object_snapshot(pool, ref) for ref in sorted(refs)]}
+    return {"treeDigest": _pool_content_digest(pool, files), "objects": [_object_snapshot(pool, ref) for ref in sorted(refs)]}
 
 
 def _inputs(plan_path: Path, expected_plan_digest: str, authorization: Mapping[str, str], operation: str) -> tuple[dict, Path, Path]:
@@ -281,7 +300,7 @@ def _verify_migration(action: dict, stage: Path) -> None:
     if not is_pool_record_admitted(record):
         _fail("OBJECT_NOT_ADMITTED", ref)
     assert_valid(record, "release", "pool_object_record", label=ref)
-    for record_path in (root / "_pool/versions").glob("*.json"):
+    for record_path in (root / "records").glob("*.json"):
         assert_valid(_read_json(record_path), "release", "pool_object_record", label=str(record_path))
     if record["objectId"] != action["after"]["identity"]["objectId"] or record["contentVersion"] != action["after"]["identity"]["contentVersion"]:
         _fail("RECORD_IDENTITY_DRIFT", ref)
@@ -304,7 +323,7 @@ def _verify_migration(action: dict, stage: Path) -> None:
     if object_type == "content":
         assert_valid(document, "content", "post_manifest", label=ref)
     else:
-        assert_valid(_read_json(root / "_entity.json"), "publish", "entity", label=ref)
+        assert_valid(document, "publish", "entity", label=ref)
     _verify_content_evidence(action, stage)
 
 
@@ -314,19 +333,22 @@ def _verify_content_evidence(action: dict, stage: Path) -> None:
     execution = _role(action, "execution", "tree")
     package_root = _role(action, "package", "tree")
     package = _verify_package(package_root, canonical_root=stage, require_target_absent=False)
-    if f"{package['objectKind']}/{package['objectRef']}" != ref or package["executionId"] != execution.name:
+    if package.get("objectPath") != ref or package["executionId"] != execution.name:
         _fail("PACKAGE_IDENTITY_DRIFT", ref)
     if pool_payload_digest(package["objectRoot"]) != pool_payload_digest(root):
         _fail("PACKAGE_PAYLOAD_DRIFT", ref)
-    _chain, review = validate_publish_review_chain(execution_id=execution.name, execution_root=execution, target_ref=ref)
     canonical_review = root / "content_review.json"
-    if canonical_review.read_bytes() != (execution / ref / "5.review/content_review.json").read_bytes():
+    review_document = _read_json(canonical_review)
+    process_ref = _relative(str(review_document.get("objectRef") or ""))
+    _chain, review = validate_publish_review_chain(execution_id=execution.name, execution_root=execution, target_ref=process_ref)
+    if canonical_review.read_bytes() != (execution / process_ref / "5.review/content_review.json").read_bytes():
         _fail("REVIEW_BINDING_DRIFT", ref)
     manifest = _read_json(root / "manifest.json")
     if manifest.get("sourceIdentity", {}).get("executionId") != execution.name:
         _fail("EXECUTION_IDENTITY_DRIFT", ref)
-    draft = execution / ref / _relative(review["draft"]["ref"])
-    if _digest_file(draft) != review["draft"]["digest"]:
+    draft_binding = review["candidateBindings"]["page"]
+    draft = execution / process_ref / _relative(draft_binding["ref"])
+    if _digest_file(draft) != draft_binding["digest"]:
         _fail("REVIEW_DRAFT_DRIFT", ref)
     if draft.suffix == ".md":
         final = root / _relative(str(manifest.get("finalContentRef") or ""))
@@ -337,7 +359,7 @@ def _verify_content_evidence(action: dict, stage: Path) -> None:
     from content.release.canonical.entity_transaction_sources import source_assets_by_ref
     from content.release.canonical.post_transaction_assets import source_assets
     index = source_assets_by_ref(execution) if ref.startswith("entities/") else source_assets(execution)
-    validate_review_authority(review_root=root, manifest=manifest, object_kind=package["objectKind"], execution_id=execution.name, object_ref=ref, source_assets=index)
+    validate_review_authority(review_root=root, manifest=manifest, object_kind=package["objectKind"], execution_id=execution.name, object_ref=ref, object_aliases=(process_ref,), source_assets=index, candidate_root=execution / process_ref)
 
 
 def _verify_json_surface(execution: Path, ref: str, manifest: dict) -> None:
@@ -345,20 +367,25 @@ def _verify_json_surface(execution: Path, ref: str, manifest: dict) -> None:
     import json
     from content.release.canonical import final_surface_projection as projection
     from content.release.canonical.post_transaction_assets import canonical_post_asset_row
-    from content.release.canonical.post_asset_identity import freeze_canonical_video_poster_identities
+    from content.release.canonical.post_asset_identity import (
+        freeze_canonical_video_poster_identities, project_canonical_post_asset_paths,
+    )
     targets = _read_json(execution / "0.plan/target_set.json")
-    matches = [target for target_ref, target in zip(targets["targetRefs"], targets["targets"], strict=True) if target_ref == ref]
+    process_ref = str(manifest.get("objectRef") or "")
+    if manifest.get("contentType") in {"article", "image", "video"}:
+        process_ref = "posts/" + process_ref.removeprefix("posts/")
+    matches = [target for target_ref, target in zip(targets["targetRefs"], targets["targets"], strict=True) if target_ref == process_ref]
     if len(matches) != 1:
-        _fail("PROJECTION_TARGET_MISMATCH", ref)
+        _fail("PROJECTION_TARGET_MISMATCH", process_ref)
     carrier = manifest["contentType"]
     if carrier not in {"image", "video"}:
         _fail("PROJECTION_CARRIER_INVALID", carrier)
-    root = execution / ref
+    root = execution / process_ref
     rows = projection._source_rows(execution, root)
     prefixes = tuple(f"{row['sourceRef'].rsplit('/', 1)[0]}/assets/" for row in rows)
     index = {key: row for key, row in projection.source_assets(execution).items() if key.startswith(prefixes)}
     compose = projection._author_intent(object_dir=root, carrier=carrier, target=matches[0], source_rows=rows, asset_index=index)
-    surface = projection._post_surface(execution_root=execution, object_dir=root, target_ref=ref, target=matches[0], carrier=carrier, compose=compose, source_rows=rows)
+    surface = projection._post_surface(execution_root=execution, object_dir=root, target_ref=process_ref, target=matches[0], carrier=carrier, compose=compose, source_rows=rows)
     projected = json.loads(surface[Path("manifest.json")])
     # 验证 execution 上已保存的 surface，不能只信任 package 与刷新后的摘要互证。
     if any(not projection._same_content(root / relative, expected) for relative, expected in surface.items()):
@@ -366,7 +393,13 @@ def _verify_json_surface(execution: Path, ref: str, manifest: dict) -> None:
     assets = [canonical_post_asset_row(row, asset_source=surface[Path(row["fileName"])], mime_type=row["mimeType"],
                                        object_key=row["objectKey"], source_assets_by_ref=index) for row in projected["assets"]]
     freeze_canonical_video_poster_identities(assets)
-    projected["assets"] = assets
+    projected["assets"] = project_canonical_post_asset_paths(
+        assets, destination_paths={row["assetId"]: row["path"] for row in manifest["assets"]},
+    )
+    for asset in projected["assets"]:
+        matching = next(row for row in manifest["assets"] if row["assetId"] == asset["assetId"])
+        if matching.get("sourceRefs"):
+            asset["sourceRefs"] = matching["sourceRefs"]
     # 只有事务身份/版本由受治理切换改变；所有 author/source/媒体投影字段必须 exact。
     for key, value in projected.items():
         if key not in {"schema", "version"} and manifest.get(key) != value:

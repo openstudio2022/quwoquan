@@ -28,7 +28,6 @@ _IDENTITY_FIELDS = (
     "downstream",
     "human_decision_ref",
     "human_decision_projection",
-    "owner_identity_ref",
     "candidate_evidence_ref",
     "candidate_closure",
     "review_plan_ref",
@@ -151,7 +150,6 @@ def validate_ref_bytes(handoff_ref: str, exact_bytes: bytes) -> dict[str, Any]:
         from .candidate_evidence import validate_candidate_closure
         validate_candidate_closure(
             payload["candidate_closure"], candidate_ref=payload["candidate_evidence_ref"],
-            owner_identity_ref=payload["owner_identity_ref"],
         )
     except (TypeError, ValueError) as error:
         raise HandoffStoreError(str(error)) from error

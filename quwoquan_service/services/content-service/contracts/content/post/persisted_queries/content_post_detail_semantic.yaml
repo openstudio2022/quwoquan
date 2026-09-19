@@ -4,12 +4,12 @@ objectId: content.post
 document: content_post_detail_semantic.graphql
 operationName: ContentPostDetailSemantic
 operationType: query
-sha256Hash: b425b396c13494d91b0e970d0e9c2328d07d549c492bd76537dace26ea74aa04
+sha256Hash: 8f01162d0d879ffbdc5e96c93145b5c005b7b03582e52dfaa8c390424c62debd
 assemblyProjectionId: content.post.ContentPostDetailSlice
 appClientBundle:
   bundleId: content.post.ContentPostDetail
   role: extension
-  requiredForContentTypes: [article, image, micro, video]
+  requiredForContentTypes: [article, image, video]
 runtimeRequest:
   method: POST
   path: /internal/graphql

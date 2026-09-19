@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import unittest
+from unittest import mock
 
 from quwoquan_ops.cli.lib import deployment_candidate_manifest as subject
 from quwoquan_ops.tests.support.deployment_candidate_manifest_test_support import (
@@ -491,14 +492,53 @@ class DeploymentCandidateManifestContractTest(
                 candidate_root=self.candidate,
             )
 
+    def test_alpha_local_candidate_evidence_is_explicitly_non_promotable(self) -> None:
+        local_binding = {
+            "authority": "local-candidate-evidence",
+            "environmentScope": "alpha-local",
+            "nonPromotable": True,
+            "workspaceRootDigest": subject._workspace_root_digest(),
+            "candidateEvidence": {
+                "ref": ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/candidates/by-fingerprint/" + "2" * 64 + ".json",
+                "canonicalBytesSha256": "sha256:" + "2" * 64,
+                "changedPathsDigest": "sha256:" + "3" * 64,
+                "impactPlanRef": "local-readiness-plan:sha256:" + "4" * 64,
+                "impactPlanDigest": "sha256:" + "4" * 64,
+                "workspaceDigests": {"quwoquan_ops/cli/stackctl.py": "sha256:" + "5" * 64},
+            },
+        }
+        with mock.patch.object(subject, "resolve_package_release_binding", return_value=local_binding):
+            path = subject.write_candidate_manifest(
+                "alpha", "alpha-local", package_snapshot=self.snapshot,
+                candidate_evidence=local_binding["candidateEvidence"]["ref"],
+            )
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(payload["release"], local_binding)
+
     def test_full_candidate_rejects_missing_release_binding(self) -> None:
         with self.assertRaisesRegex(
-            ValueError, "candidate release attestation is required"
+            ValueError, "alpha-local package requires current candidate evidence"
         ):
             subject.write_candidate_manifest(
                 "alpha",
                 "alpha-local",
                 package_snapshot=self.snapshot,
+            )
+
+    def test_prod_cannot_consume_local_candidate_evidence(self) -> None:
+        with self.assertRaisesRegex(
+            ValueError, "local candidate evidence is restricted to alpha-local packaging"
+        ):
+            subject.resolve_package_release_binding(
+                "prod", "prod-hosted", release_attestation="",
+                rollback_release_attestation="", candidate_evidence="candidate.json",
+            )
+
+    def test_prod_still_requires_formal_release_attestation(self) -> None:
+        with self.assertRaisesRegex(ValueError, "candidate release attestation is required"):
+            subject.resolve_package_release_binding(
+                "prod", "prod-hosted", release_attestation="",
+                rollback_release_attestation="", candidate_evidence="",
             )
 
     def test_package_preflight_rejects_same_candidate_and_rollback(self) -> None:

@@ -11,6 +11,7 @@ import (
 	. "quwoquan_service/services/content-service/internal/content/post/application"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
+	semanticfixture "quwoquan_service/services/content-service/tests/support/semanticfixture"
 )
 
 // spec_ref: specs/feature-tree/object-homepage-network/intersection-unified-experience/spec.md#sit-008
@@ -61,7 +62,7 @@ func newGatheringRefService(
 	return NewPostService(BindDataPorts(store), opts...)
 }
 
-func gatheringRefPublicationCommand(
+func gatheringRefPublicationCommand(t *testing.T,
 	suffix string,
 	gatheringRef string,
 ) SubmitPostPublicationCommand {
@@ -70,10 +71,13 @@ func gatheringRefPublicationCommand(
 		LocalDraftID:    "draft-gathering-" + suffix,
 		AuthorID:        "persona-gathering",
 		Content: postmodel.Post{
-			ContentType:  "micro",
-			Body:         "黄龙五彩池同行的回顾",
-			Visibility:   "public",
-			GatheringRef: gatheringRef,
+			ContentType:      "article",
+			ArticleMarkdown:  "黄龙五彩池同行的回顾",
+			MarkdownDialect:  "qwq-rich-md",
+			SemanticDocument: semanticfixture.Envelope(t),
+			Body:             "黄龙五彩池同行的回顾",
+			Visibility:       "public",
+			GatheringRef:     gatheringRef,
 		},
 	}
 }
@@ -90,7 +94,7 @@ func TestSubmitPostPublicationPersistsGatheringRefForActiveParticipant(t *testin
 	}
 	service := newGatheringRefService(store, reader)
 
-	command := gatheringRefPublicationCommand("active", "gathering_huanglong_walk")
+	command := gatheringRefPublicationCommand(t, "active", "gathering_huanglong_walk")
 	receipt, err := service.SubmitPostPublication(
 		commandmeta.WithIdempotencyKey(context.Background(), command.PublishIntentID),
 		command,
@@ -146,7 +150,7 @@ func TestSubmitPostPublicationRejectsGatheringRefWithoutActiveParticipation(t *t
 			}
 			service := newGatheringRefService(store, reader)
 
-			command := gatheringRefPublicationCommand(
+			command := gatheringRefPublicationCommand(t,
 				testCase.state+"-reject",
 				"gathering_huanglong_walk",
 			)
@@ -174,7 +178,7 @@ func TestSubmitPostPublicationFailsClosedWhenParticipationReaderMissing(t *testi
 	store := testsupport.NewPostStore(nil)
 	service := newGatheringRefService(store, nil)
 
-	command := gatheringRefPublicationCommand("unwired", "gathering_huanglong_walk")
+	command := gatheringRefPublicationCommand(t, "unwired", "gathering_huanglong_walk")
 	_, err := service.SubmitPostPublication(
 		commandmeta.WithIdempotencyKey(context.Background(), command.PublishIntentID),
 		command,
@@ -197,7 +201,7 @@ func TestSubmitPostPublicationFailsClosedWhenCircleUnavailable(t *testing.T) {
 	}
 	service := newGatheringRefService(store, reader)
 
-	command := gatheringRefPublicationCommand("unavailable", "gathering_huanglong_walk")
+	command := gatheringRefPublicationCommand(t, "unavailable", "gathering_huanglong_walk")
 	_, err := service.SubmitPostPublication(
 		commandmeta.WithIdempotencyKey(context.Background(), command.PublishIntentID),
 		command,
@@ -218,7 +222,7 @@ func TestSubmitPostPublicationSkipsParticipationCheckWithoutGatheringRef(t *test
 	reader := &gatheringParticipationReaderDouble{}
 	service := newGatheringRefService(store, reader)
 
-	command := gatheringRefPublicationCommand("plain", "")
+	command := gatheringRefPublicationCommand(t, "plain", "")
 	receipt, err := service.SubmitPostPublication(
 		commandmeta.WithIdempotencyKey(context.Background(), command.PublishIntentID),
 		command,

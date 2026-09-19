@@ -227,7 +227,6 @@ var postBaseDtoFields = map[string]bool{
 }
 
 var postBaseDtoComputedGetters = map[string]bool{
-	"displayFormat": true,
-	"hasImages":     true,
-	"hasVideo":      true,
+	"hasImages": true,
+	"hasVideo":  true,
 }

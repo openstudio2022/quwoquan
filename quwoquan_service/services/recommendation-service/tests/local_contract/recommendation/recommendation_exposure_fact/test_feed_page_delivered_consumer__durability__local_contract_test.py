@@ -44,7 +44,7 @@ def _fields(*, valid_digest: bool = True) -> dict[bytes, bytes]:
             {
                 "ordinal": 0,
                 "contentId": "post-001",
-                "contentType": "post",
+                "contentType": "article",
                 "featureSnapshotDigest": feature_digest,
                 "itemFeatureSnapshot": item_snapshot,
             }

@@ -297,7 +297,6 @@ func feedCursorAAD(scope string) []byte {
 func feedCursorScope(
 	req ListFeedRequest,
 	route feedRoute,
-	requestedIdentity string,
 	requestedType string,
 ) string {
 	values := []string{
@@ -307,10 +306,12 @@ func feedCursorScope(
 		strings.TrimSpace(route.Surface),
 		strings.TrimSpace(route.ChannelID),
 		strings.TrimSpace(route.Vertical),
-		strings.TrimSpace(requestedIdentity),
 		strings.TrimSpace(requestedType),
 		normalizeFeedSort(req.Sort),
 		strconv.Itoa(NormalizeFeedLimit(req.Limit)),
+		// 有效能力摘要是 scope 的一部分：窗口续接游标与不可变交付页都按它隔离，
+		// 不同能力声明不得复用同一个窗口或已交付页。
+		strings.TrimSpace(req.ClientPresentationContract.ContractDigest),
 	}
 	// Length-prefix every field instead of joining with a sentinel. Request
 	// fields are independent strings; delimiter joining is not injective when a
@@ -375,10 +376,17 @@ func EncodePostReaderFeedCursorForRequest(
 	releaseBinding ...string,
 ) string {
 	req.UserID = identity.NormalizeAnonymousPersonaID(req.UserID)
-	requestedIdentity := normalizeRequestedIdentity(req.Identity)
+	// scope 必须用与 ListFeed 完全相同的有效能力摘要，否则同一请求编出的游标
+	// 无法在读路径上通过认证。
+	effectiveContract, contractErr := effectiveClientPresentationContract(
+		req.ClientPresentationContract,
+	)
+	if contractErr != nil {
+		return ""
+	}
+	req.ClientPresentationContract = effectiveContract
 	requestedType := normalizeRequestType(req.Type)
 	if strings.TrimSpace(req.ChannelID) != "" {
-		requestedIdentity = ""
 		requestedType = ""
 	}
 	route := resolveFeedRoute(req)
@@ -395,7 +403,7 @@ func EncodePostReaderFeedCursorForRequest(
 		ReleaseID:      releaseID,
 		ManifestDigest: manifestDigest,
 		Depth:          1,
-	}, feedCursorScope(req, route, requestedIdentity, requestedType))
+	}, feedCursorScope(req, route, requestedType))
 	if err != nil {
 		return ""
 	}

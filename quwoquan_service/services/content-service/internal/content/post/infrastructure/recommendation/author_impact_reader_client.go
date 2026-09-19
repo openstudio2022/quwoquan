@@ -192,9 +192,11 @@ func (client *AuthorImpactReaderClient) get(
 	return nil
 }
 
-func optionalString(value *string) string {
+// optionalString 归一契约里的可空文本字段。闭集枚举生成为具名 string 类型，
+// 与裸 string 字段共用同一段归一逻辑，不为枚举另开一条读侧分支。
+func optionalString[text ~string](value *text) string {
 	if value == nil {
 		return ""
 	}
-	return strings.TrimSpace(*value)
+	return strings.TrimSpace(string(*value))
 }

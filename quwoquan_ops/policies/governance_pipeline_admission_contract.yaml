@@ -68,12 +68,11 @@ schemas:
   evidence_bundle:
     required_fields: [schema_id, schema_version, subject_fingerprint, subject_fingerprint_receipt, assembled_at, receipts]
   evidence_bundle_receipts:
-    required_fields: [owner_manifest, local_scope_ready, local_release_ready, review_plan, named_evidence, review_consolidation, handoff, human_calibration, objective_inspect, hotl_inspect, hosted_authority_source, external]
+    required_fields: [candidate_evidence, local_scope_ready, local_release_ready, review_plan, named_evidence, review_consolidation, handoff, human_calibration, objective_inspect, hotl_inspect, hosted_authority_source, external]
   bundle_receipt:
     required_fields: [provider_id, receipt_ref, exact_bytes_base64]
 
 evidence_layers:
-  owner_manifest: {qualifying_result: pass, missing_blocker: OWNER_MANIFEST_MISSING, failed_blocker: OWNER_MANIFEST_INVALID, unqualified_blocker: OWNER_MANIFEST_NOT_CURRENT}
   local_scope_ready: {qualifying_result: scope_ready, missing_blocker: LOCAL_SCOPE_RECEIPT_MISSING, failed_blocker: LOCAL_SCOPE_RECEIPT_INVALID, unqualified_blocker: LOCAL_SCOPE_NOT_READY}
   local_release_ready: {qualifying_result: release_ready, missing_blocker: LOCAL_RELEASE_RECEIPT_MISSING, failed_blocker: LOCAL_RELEASE_RECEIPT_INVALID, unqualified_blocker: LOCAL_RELEASE_NOT_READY}
   review_terminal: {qualifying_result: pass, missing_blocker: REVIEW_CONSOLIDATION_MISSING, failed_blocker: REVIEW_CONSOLIDATION_INVALID, unqualified_blocker: REVIEW_NOT_PASS}
@@ -102,7 +101,6 @@ evidence_layers:
 
 
 layer_admission:
-  owner_manifest: {provider_id: feature_context_owner_identity_v4, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 1800, verifier_id: governance.owner_manifest.v1, interface: local}
   local_scope_ready: {provider_id: local_readiness_receipt_v1, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.local_readiness.read_only.v1, interface: local}
   local_release_ready: {provider_id: local_readiness_receipt_v1, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.local_readiness.read_only.v1, interface: local}
   review_terminal: {provider_id: review_consolidator_v1, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.review.v1, interface: local}
@@ -130,8 +128,6 @@ layer_admission:
   hotl_inspect: {provider_id: hotl_inspect_v1, provider_kinds: [local_runtime], release_evidence_eligible: false, max_age_seconds: 300, verifier_id: governance.hotl.v1, interface: local}
 
 current_repository_evidence:
-  owner_manifest_root: .qwq_output/env/repo/runs/feature-tree/by-fingerprint
-  owner_manifest_target: specs/feature-tree/runtime/development-workflow-governance/governance-pipeline-observe-only/spec.md
   local_readiness_mode: workspace
   local_readiness_paths:
     - quwoquan_ops/policies/governance_pipeline_admission_contract.yaml
@@ -163,14 +159,13 @@ current_repository_evidence:
     segment: POST
     deliverable: implementation
     scope: specs/feature-tree/runtime/development-workflow-governance/governance-pipeline-observe-only/spec.md
-    owner_manifest_target: specs/feature-tree/runtime/development-workflow-governance/governance-pipeline-observe-only/spec.md
     registry_ref: .agents/skills/review/references/registry.yaml
     subject: {subject_id: current-repository, candidate_id: working-tree, scope_id: governance-pipeline}
   named_evidence_layers:
     portal_test: {evidence_id: portal-test, qualifying_result: pass}
     portal_build: {evidence_id: portal-build, qualifying_result: pass}
   provider_adapters:
-    owner_manifest: {provider_id: feature_context_owner_identity_v4, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 1800, verifier_id: governance.owner_manifest.v1}
+    candidate_evidence: {provider_id: candidate_evidence_v4, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.candidate.v1}
     local_readiness: {provider_id: local_readiness_receipt_v1, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.local_readiness.read_only.v1}
     review_consolidation: {provider_id: review_consolidator_v1, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.review.v1}
     named_evidence: {provider_id: review_named_evidence_v1, provider_kind: local_runtime, release_evidence_eligible: false, max_age_seconds: 7200, verifier_id: governance.named_evidence.v1}
@@ -284,9 +279,6 @@ blocker_priority:
   - HUMAN_CALIBRATION_SELF_ASSERTED
   - OBJECTIVE_ADMISSION_BLOCKED
   - EVALUATION_IDENTITY_FAILED
-  - OWNER_MANIFEST_MISSING
-  - OWNER_MANIFEST_INVALID
-  - OWNER_MANIFEST_NOT_CURRENT
   - LOCAL_SCOPE_RECEIPT_MISSING
   - LOCAL_SCOPE_RECEIPT_INVALID
   - LOCAL_SCOPE_NOT_READY

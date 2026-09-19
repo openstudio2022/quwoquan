@@ -246,6 +246,9 @@ func loadSharedDefinitions(
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: enums: %w", path, err)
 	}
+	if err := attachRetiredEnumValues(top["retired_enum_values"], enums); err != nil {
+		return nil, nil, fmt.Errorf("%s: retired_enum_values: %w", path, err)
+	}
 	var types []ast.TypeDefinition
 	if node := top["types"]; node != nil && node.Kind == yaml.MappingNode {
 		mapping, mapErr := mappingFromNode(node)
@@ -637,6 +640,45 @@ func decodeEnumDefinitions(
 		return nil, fmt.Errorf("must be a mapping or sequence")
 	}
 	return result, nil
+}
+
+// attachRetiredEnumValues resolves each `retired_enum_values` record onto the
+// enum it names in the same document. A record carries exactly `enum` and
+// `retired_value`, so a retired member can never be spelled without the enum it
+// left, and it can never reach an enum owned somewhere else. Anything the loader
+// cannot resolve is an error rather than a dropped record: silently ignoring a
+// record would let a retired value claim canonical standing it does not have.
+func attachRetiredEnumValues(node *yaml.Node, enums []ast.EnumDefinition) error {
+	if node == nil {
+		return nil
+	}
+	if node.Kind != yaml.SequenceNode {
+		return fmt.Errorf("must be a sequence of {enum, retired_value} records")
+	}
+	byName := make(map[string]*ast.EnumDefinition, len(enums))
+	for index := range enums {
+		byName[enums[index].Name] = &enums[index]
+	}
+	for _, item := range node.Content {
+		mapping, err := mappingFromNode(item)
+		if err != nil {
+			return err
+		}
+		if len(mapping) != 2 || mapping["enum"] == nil || mapping["retired_value"] == nil {
+			return fmt.Errorf("record must declare exactly enum and retired_value")
+		}
+		name := scalarString(mapping["enum"])
+		value := scalarString(mapping["retired_value"])
+		if name == "" || value == "" {
+			return fmt.Errorf("enum and retired_value must be non-blank scalars")
+		}
+		definition, declared := byName[name]
+		if !declared {
+			return fmt.Errorf("enum %q is not declared in this document", name)
+		}
+		definition.RetiredValues = append(definition.RetiredValues, value)
+	}
+	return nil
 }
 
 func enumValues(node *yaml.Node) []string {

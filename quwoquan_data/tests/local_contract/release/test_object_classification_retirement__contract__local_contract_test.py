@@ -56,7 +56,7 @@ def test_new_pool_writer_omits_retired_dimensions_and_keeps_rights_authority(tmp
     review = tmp_path / "content_review.json"
     review.write_text('{}\n', encoding="utf-8")
     fields = build_content_pool_fields(
-        source_manifest={"contentId": "content-a", "version": 1, "contentIdentity": "work", "sourceAttribution": _attribution()},
+        source_manifest={"contentId": "content-a", "version": 1, "sourceAttribution": _attribution()},
         canonical_ref="article/guide/a/1", source_task_id="task-1", content_review_path=review,
         rights_authority={"ref": "posts/article/guide/a/1/content_review.json", "digest": "sha256:" + "9" * 64},
         publish_root=tmp_path / "publish", rights_rows=[],
@@ -79,7 +79,7 @@ def test_new_pool_writer_omits_retired_dimensions_and_keeps_rights_authority(tmp
 def test_compatible_dict_writer_rejects_retired_fields(tmp_path: Path, patch: dict[str, object], expected: str) -> None:
     review = tmp_path / "content_review.json"
     review.write_text('{}\n', encoding="utf-8")
-    manifest = {"contentId": "content-a", "version": 1, "contentIdentity": "work", "sourceAttribution": _attribution(), **patch}
+    manifest = {"contentId": "content-a", "version": 1, "sourceAttribution": _attribution(), **patch}
     with pytest.raises(ObjectTransactionError, match=expected):
         build_content_pool_fields(
             source_manifest=manifest, canonical_ref="article/guide/a/1", source_task_id="task-1",

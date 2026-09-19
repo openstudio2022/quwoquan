@@ -153,7 +153,6 @@ class CreateDraft {
       'id': id,
       'type': storageType,
       'updatedAt': updatedAtMs,
-      'identity': identity.value,
       'editorKind': state.editorKind.name,
       'draftFlowKind': state.draftFlowKind.name,
       'mediaKind': state.mediaKind.name,
@@ -209,18 +208,6 @@ class CreateDraft {
       return sourceType!;
     }
     return storageType;
-  }
-
-  CreateContentIdentity get identity {
-    switch (tabKey) {
-      case 'media':
-      case 'photo':
-      case 'video':
-      case 'article':
-        return CreateContentIdentity.work;
-      default:
-        return CreateContentIdentity.moment;
-    }
   }
 
   Map<String, dynamic> get data {

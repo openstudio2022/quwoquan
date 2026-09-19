@@ -5,7 +5,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 
 ContentPostViewData _post({
   required String id,
-  required String contentType,
+  required ContentType contentType,
   required String authorId,
   required String displayName,
   String? title,
@@ -17,7 +17,6 @@ ContentPostViewData _post({
   ContentPostProjection(
     postId: id,
     contentType: contentType,
-    contentIdentity: contentType == 'micro' ? 'moment' : 'work',
     authorId: authorId,
     authorDisplayName: displayName,
     authorAvatarUrl: '',
@@ -26,9 +25,9 @@ ContentPostViewData _post({
     summary: summary,
     articleTemplate: articleTemplate,
     articleFontPreset: articleFontPreset,
-    likeCount: contentType == 'micro' ? 1 : 0,
-    commentCount: contentType == 'micro' ? 2 : 0,
-    shareCount: contentType == 'micro' ? 3 : 0,
+    likeCount: 1,
+    commentCount: 2,
+    shareCount: 3,
     createdAt: DateTime.utc(2026),
   ),
 );
@@ -38,7 +37,7 @@ void main() {
     test('personaId 与 authorId 保持同一真相源', () {
       final post = _post(
         id: 'p_canonical',
-        contentType: 'micro',
+        contentType: ContentType.article,
         authorId: 'current_author',
         displayName: 'User',
         body: 'hello',
@@ -51,7 +50,7 @@ void main() {
     test('canonical fields carry feed-card facts without a second DTO', () {
       final post = _post(
         id: 'p1',
-        contentType: 'micro',
+        contentType: ContentType.article,
         authorId: 'a1',
         displayName: 'User',
         body: 'hello',
@@ -67,7 +66,7 @@ void main() {
     test('article presentation fields come from canonical projection', () {
       final post = _post(
         id: 'a1',
-        contentType: 'article',
+        contentType: ContentType.article,
         authorId: 'u',
         displayName: 'U',
         title: 'T',
@@ -85,7 +84,7 @@ void main() {
     test('article preview stays empty when canonical summary is absent', () {
       final post = _post(
         id: 'a_body_only',
-        contentType: 'article',
+        contentType: ContentType.article,
         authorId: 'u',
         displayName: 'U',
         body: '正文承担无摘要文章的预览内容。',
@@ -97,7 +96,7 @@ void main() {
     test('article preview uses canonical summary instead of distinct body', () {
       final post = _post(
         id: 'a_summary',
-        contentType: 'article',
+        contentType: ContentType.article,
         authorId: 'u',
         displayName: 'U',
         body: '# 详情正文',

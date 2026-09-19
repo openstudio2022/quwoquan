@@ -51,7 +51,7 @@ void main() {
     final command = SubmitContentPostPublicationCommand(
       publishIntentId: 'intent-recovery',
       localDraftId: 'draft-recovery',
-      contentType: ContentType.micro,
+      contentType: ContentType.article,
       body: '只点击一次也能安全发布',
     );
 
@@ -151,7 +151,7 @@ void main() {
     final command = SubmitContentPostPublicationCommand(
       publishIntentId: 'intent-weak-net',
       localDraftId: 'draft-weak-net',
-      contentType: ContentType.micro,
+      contentType: ContentType.article,
       body: '弱网下也不丢失的发布',
     );
 
@@ -228,7 +228,7 @@ void main() {
     final command = SubmitContentPostPublicationCommand(
       publishIntentId: 'intent-visible-recovery',
       localDraftId: 'draft-visible-recovery',
-      contentType: ContentType.micro,
+      contentType: ContentType.article,
       body: '可见的待恢复发布任务',
     );
     await expectLater(

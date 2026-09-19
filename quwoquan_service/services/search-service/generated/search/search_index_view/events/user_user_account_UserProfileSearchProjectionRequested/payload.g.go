@@ -5,16 +5,57 @@ package eventpayload
 
 import "time"
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
+type UserProfileSearchProjectionOperation string
+
+const (
+	UserProfileSearchProjectionOperationUpsert UserProfileSearchProjectionOperation = "upsert"
+	UserProfileSearchProjectionOperationDelete UserProfileSearchProjectionOperation = "delete"
+)
+
+func (v UserProfileSearchProjectionOperation) Validate() error {
+	switch v {
+	case "upsert", "delete":
+		return nil
+	}
+	return fmt.Errorf("invalid UserProfileSearchProjectionOperation")
+}
+func (v UserProfileSearchProjectionOperation) MarshalJSON() ([]byte, error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(v))
+}
+func (v *UserProfileSearchProjectionOperation) UnmarshalJSON(data []byte) error {
+	var wire *string
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire == nil {
+		return fmt.Errorf("invalid UserProfileSearchProjectionOperation")
+	}
+	next := UserProfileSearchProjectionOperation(*wire)
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	*v = next
+	return nil
+}
+
 type UserProfileSearchProjectionEvent struct {
-	EventId        string    `json:"eventId"`
-	UserId         string    `json:"userId"`
-	ProfileVersion int64     `json:"profileVersion"`
-	Operation      string    `json:"operation"`
-	Nickname       *string   `json:"nickname"`
-	AvatarUrl      *string   `json:"avatarUrl"`
-	Bio            *string   `json:"bio"`
-	IdentityTags   *[]string `json:"identityTags"`
-	FollowerCount  int64     `json:"followerCount"`
-	PostCount      int64     `json:"postCount"`
-	UpdatedAt      time.Time `json:"updatedAt"`
+	EventId        string                               `json:"eventId"`
+	UserId         string                               `json:"userId"`
+	ProfileVersion int64                                `json:"profileVersion"`
+	Operation      UserProfileSearchProjectionOperation `json:"operation"`
+	Nickname       *string                              `json:"nickname"`
+	AvatarUrl      *string                              `json:"avatarUrl"`
+	Bio            *string                              `json:"bio"`
+	IdentityTags   *[]string                            `json:"identityTags"`
+	FollowerCount  int64                                `json:"followerCount"`
+	PostCount      int64                                `json:"postCount"`
+	UpdatedAt      time.Time                            `json:"updatedAt"`
 }

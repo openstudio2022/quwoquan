@@ -5,6 +5,48 @@ package generated
 
 import "time"
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
+type ContentType string
+
+const (
+	ContentTypeImage   ContentType = "image"
+	ContentTypeVideo   ContentType = "video"
+	ContentTypeArticle ContentType = "article"
+)
+
+func (v ContentType) Validate() error {
+	switch v {
+	case "image", "video", "article":
+		return nil
+	}
+	return fmt.Errorf("invalid ContentType")
+}
+func (v ContentType) MarshalJSON() ([]byte, error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(v))
+}
+func (v *ContentType) UnmarshalJSON(data []byte) error {
+	var wire *string
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire == nil {
+		return fmt.Errorf("invalid ContentType")
+	}
+	next := ContentType(*wire)
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	*v = next
+	return nil
+}
+
 const ListRecommendationSubjectIntersectionsPath = "/internal/recommendation/subjects/{subjectId}/intersections"
 const ListRecommendationSubjectIntersectionsMethod = "GET"
 const ListRecommendationObjectIntersectionsPath = "/internal/recommendation/subjects/{subjectId}/objects/{objectType}/{objectId}/intersections"
@@ -20,6 +62,29 @@ const GetRecommendationFlywheelFunnelMethod = "GET"
 const GetRecommendationGatheringSocialProofPath = "/internal/recommendation/social-proof/{anchorKind}/{objectId}"
 const GetRecommendationGatheringSocialProofMethod = "GET"
 
+type GetRecommendationAuthorImpactQuery struct {
+	AuthorId string `json:"authorId"`
+	Limit    *int   `json:"limit,omitempty"`
+}
+
+type GetRecommendationFlywheelFunnelQuery struct {
+	WindowFrom       time.Time `json:"windowFrom"`
+	WindowTo         time.Time `json:"windowTo"`
+	SourceObjectKind *string   `json:"sourceObjectKind,omitempty"`
+	SourceObjectId   *string   `json:"sourceObjectId,omitempty"`
+	CapacityTier     *string   `json:"capacityTier,omitempty"`
+	TagRef           *string   `json:"tagRef,omitempty"`
+}
+
+type GetRecommendationGatheringSocialProofQuery struct {
+	AnchorKind string `json:"anchorKind"`
+	ObjectId   string `json:"objectId"`
+}
+
+type GetRecommendationIntersectionSupplyQuery struct {
+	SupplyKey string `json:"supplyKey"`
+}
+
 type IntersectionTarget struct {
 	ObjectType string `json:"objectType"`
 	ObjectId   string `json:"objectId"`
@@ -27,59 +92,15 @@ type IntersectionTarget struct {
 	RouteId    string `json:"routeId"`
 }
 
-type IntersectionVisual struct {
-	AssetKind   string              `json:"assetKind"`
-	ImageUrl    string              `json:"imageUrl"`
-	DisplayName string              `json:"displayName"`
-	Target      *IntersectionTarget `json:"target,omitempty"`
-}
-
-type IntersectionTextSpan struct {
-	Text   string              `json:"text"`
-	Role   string              `json:"role"`
-	Target *IntersectionTarget `json:"target,omitempty"`
-	Visual *IntersectionVisual `json:"visual,omitempty"`
-}
-
-type IntersectionPoint struct {
-	PointId          string               `json:"pointId"`
-	PointClass       string               `json:"pointClass"`
-	Dimension        string               `json:"dimension"`
-	Label            string               `json:"label"`
-	DisplayText      string               `json:"displayText"`
-	SourceRef        string               `json:"sourceRef"`
-	Visibility       string               `json:"visibility"`
-	Count            int                  `json:"count"`
-	SampleText       string               `json:"sampleText"`
-	SampleAvatarUrls []string             `json:"sampleAvatarUrls"`
-	SampleVisuals    []IntersectionVisual `json:"sampleVisuals"`
-}
-
-type IntersectionDimensionTally struct {
-	Dimension         string                 `json:"dimension"`
-	Label             string                 `json:"label"`
-	Count             int                    `json:"count"`
-	NewCount          int                    `json:"newCount"`
-	BriefText         string                 `json:"briefText"`
-	SubtitleText      string                 `json:"subtitleText"`
-	BriefSpans        []IntersectionTextSpan `json:"briefSpans"`
-	SampleVisuals     []IntersectionVisual   `json:"sampleVisuals"`
-	SourceRef         string                 `json:"sourceRef"`
-	CountObjectKind   string                 `json:"countObjectKind"`
-	StrengthenedCount int                    `json:"strengthenedCount"`
-	ReactivatedCount  int                    `json:"reactivatedCount"`
-	IconKey           string                 `json:"iconKey"`
-}
-
-type IntersectionRepresentativeActor struct {
-	ActorId         string              `json:"actorId"`
-	DisplayName     string              `json:"displayName"`
-	AvatarUrl       string              `json:"avatarUrl"`
-	RelationLabel   string              `json:"relationLabel"`
-	PrivacyState    string              `json:"privacyState"`
-	Target          *IntersectionTarget `json:"target,omitempty"`
-	EvidenceRank    int                 `json:"evidenceRank"`
-	SnapshotVersion string              `json:"snapshotVersion"`
+type IntersectionActionHint struct {
+	ActionKey     string              `json:"actionKey"`
+	Label         string              `json:"label"`
+	Target        *IntersectionTarget `json:"target,omitempty"`
+	IsPrimary     bool                `json:"isPrimary"`
+	Priority      int                 `json:"priority"`
+	ActionTier    string              `json:"actionTier"`
+	RequiredGates []string            `json:"requiredGates"`
+	Dispatch      string              `json:"dispatch"`
 }
 
 type IntersectionActorEvidence struct {
@@ -103,20 +124,62 @@ type IntersectionActorEvidence struct {
 	SortKey            int                 `json:"sortKey"`
 }
 
-type IntersectionActionHint struct {
-	ActionKey     string              `json:"actionKey"`
-	Label         string              `json:"label"`
-	Target        *IntersectionTarget `json:"target,omitempty"`
-	IsPrimary     bool                `json:"isPrimary"`
-	Priority      int                 `json:"priority"`
-	ActionTier    string              `json:"actionTier"`
-	RequiredGates []string            `json:"requiredGates"`
-	Dispatch      string              `json:"dispatch"`
+type IntersectionVisual struct {
+	AssetKind   string              `json:"assetKind"`
+	ImageUrl    string              `json:"imageUrl"`
+	DisplayName string              `json:"displayName"`
+	Target      *IntersectionTarget `json:"target,omitempty"`
+}
+
+type IntersectionTextSpan struct {
+	Text   string              `json:"text"`
+	Role   string              `json:"role"`
+	Target *IntersectionTarget `json:"target,omitempty"`
+	Visual *IntersectionVisual `json:"visual,omitempty"`
+}
+
+type IntersectionDimensionTally struct {
+	Dimension         string                 `json:"dimension"`
+	Label             string                 `json:"label"`
+	Count             int                    `json:"count"`
+	NewCount          int                    `json:"newCount"`
+	BriefText         string                 `json:"briefText"`
+	SubtitleText      string                 `json:"subtitleText"`
+	BriefSpans        []IntersectionTextSpan `json:"briefSpans"`
+	SampleVisuals     []IntersectionVisual   `json:"sampleVisuals"`
+	SourceRef         string                 `json:"sourceRef"`
+	CountObjectKind   string                 `json:"countObjectKind"`
+	StrengthenedCount int                    `json:"strengthenedCount"`
+	ReactivatedCount  int                    `json:"reactivatedCount"`
+	IconKey           string                 `json:"iconKey"`
 }
 
 type IntersectionEvidenceRow struct {
 	Text   string `json:"text"`
 	Source string `json:"source"`
+}
+
+type IntersectionInboxSummary struct {
+	TotalCount             int                          `json:"totalCount"`
+	TotalNewCount          int                          `json:"totalNewCount"`
+	Dimensions             []IntersectionDimensionTally `json:"dimensions"`
+	GeneratedAt            string                       `json:"generatedAt"`
+	TotalStrengthenedCount int                          `json:"totalStrengthenedCount"`
+	TotalReactivatedCount  int                          `json:"totalReactivatedCount"`
+}
+
+type IntersectionPoint struct {
+	PointId          string               `json:"pointId"`
+	PointClass       string               `json:"pointClass"`
+	Dimension        string               `json:"dimension"`
+	Label            string               `json:"label"`
+	DisplayText      string               `json:"displayText"`
+	SourceRef        string               `json:"sourceRef"`
+	Visibility       string               `json:"visibility"`
+	Count            int                  `json:"count"`
+	SampleText       string               `json:"sampleText"`
+	SampleAvatarUrls []string             `json:"sampleAvatarUrls"`
+	SampleVisuals    []IntersectionVisual `json:"sampleVisuals"`
 }
 
 type IntersectionPropagationPath struct {
@@ -126,6 +189,17 @@ type IntersectionPropagationPath struct {
 	SummaryText          string               `json:"summaryText"`
 	SummaryTarget        *IntersectionTarget  `json:"summaryTarget,omitempty"`
 	Nodes                []IntersectionVisual `json:"nodes"`
+}
+
+type IntersectionRepresentativeActor struct {
+	ActorId         string              `json:"actorId"`
+	DisplayName     string              `json:"displayName"`
+	AvatarUrl       string              `json:"avatarUrl"`
+	RelationLabel   string              `json:"relationLabel"`
+	PrivacyState    string              `json:"privacyState"`
+	Target          *IntersectionTarget `json:"target,omitempty"`
+	EvidenceRank    int                 `json:"evidenceRank"`
+	SnapshotVersion string              `json:"snapshotVersion"`
 }
 
 type IntersectionReason struct {
@@ -190,19 +264,11 @@ type IntersectionReason struct {
 	SubjectContext            string                           `json:"subjectContext"`
 }
 
-type IntersectionInboxSummary struct {
-	TotalCount             int                          `json:"totalCount"`
-	TotalNewCount          int                          `json:"totalNewCount"`
-	Dimensions             []IntersectionDimensionTally `json:"dimensions"`
-	GeneratedAt            string                       `json:"generatedAt"`
-	TotalStrengthenedCount int                          `json:"totalStrengthenedCount"`
-	TotalReactivatedCount  int                          `json:"totalReactivatedCount"`
-}
-
-type ListRecommendationSubjectIntersectionsQuery struct {
-	SubjectId         string  `json:"subjectId"`
-	IntersectionClass string  `json:"intersectionClass"`
-	Channel           *string `json:"channel,omitempty"`
+type ListRecommendationAuthorImpactEvidenceQuery struct {
+	AuthorId string  `json:"authorId"`
+	ImpactId string  `json:"impactId"`
+	Cursor   *string `json:"cursor,omitempty"`
+	Limit    *int    `json:"limit,omitempty"`
 }
 
 type ListRecommendationObjectIntersectionsQuery struct {
@@ -211,42 +277,29 @@ type ListRecommendationObjectIntersectionsQuery struct {
 	ObjectId   string `json:"objectId"`
 }
 
-type GetRecommendationIntersectionSupplyQuery struct {
-	SupplyKey string `json:"supplyKey"`
+type ListRecommendationSubjectIntersectionsQuery struct {
+	SubjectId         string  `json:"subjectId"`
+	IntersectionClass string  `json:"intersectionClass"`
+	Channel           *string `json:"channel,omitempty"`
 }
 
-type RecommendationIntersectionReasonSlice struct {
-	SubjectId         string               `json:"subjectId"`
-	IntersectionClass string               `json:"intersectionClass"`
-	Channel           *string              `json:"channel,omitempty"`
-	Reasons           []IntersectionReason `json:"reasons"`
-	GeneratedAt       time.Time            `json:"generatedAt"`
+type RecommendationAuthorImpactEvidence struct {
+	EvidenceId            string       `json:"evidenceId"`
+	ImpactId              string       `json:"impactId"`
+	ContentId             string       `json:"contentId"`
+	ContentType           *ContentType `json:"contentType,omitempty"`
+	HelpType              string       `json:"helpType"`
+	Action                string       `json:"action"`
+	IntersectionDimension *string      `json:"intersectionDimension,omitempty"`
+	OccurredAt            time.Time    `json:"occurredAt"`
 }
 
-type RecommendationObjectIntersectionReasonSlice struct {
-	SubjectId   string               `json:"subjectId"`
-	ObjectType  string               `json:"objectType"`
-	ObjectId    string               `json:"objectId"`
-	Reasons     []IntersectionReason `json:"reasons"`
-	GeneratedAt time.Time            `json:"generatedAt"`
-}
-
-type RecommendationIntersectionSupply struct {
-	SupplyKey           string    `json:"supplyKey"`
-	DistinctObjectCount int       `json:"distinctObjectCount"`
-	ComputedAt          time.Time `json:"computedAt"`
-}
-
-type GetRecommendationAuthorImpactQuery struct {
-	AuthorId string `json:"authorId"`
-	Limit    *int   `json:"limit,omitempty"`
-}
-
-type ListRecommendationAuthorImpactEvidenceQuery struct {
-	AuthorId string  `json:"authorId"`
-	ImpactId string  `json:"impactId"`
-	Cursor   *string `json:"cursor,omitempty"`
-	Limit    *int    `json:"limit,omitempty"`
+type RecommendationAuthorImpactEvidencePage struct {
+	ImpactId   string                               `json:"impactId"`
+	TotalCount int64                                `json:"totalCount"`
+	Items      []RecommendationAuthorImpactEvidence `json:"items"`
+	NextCursor *string                              `json:"nextCursor,omitempty"`
+	HasMore    bool                                 `json:"hasMore"`
 }
 
 type RecommendationAuthorImpactItem struct {
@@ -267,47 +320,6 @@ type RecommendationAuthorImpactSummary struct {
 	Items    []RecommendationAuthorImpactItem `json:"items"`
 }
 
-type RecommendationAuthorImpactEvidence struct {
-	EvidenceId            string    `json:"evidenceId"`
-	ImpactId              string    `json:"impactId"`
-	ContentId             string    `json:"contentId"`
-	ContentType           *string   `json:"contentType,omitempty"`
-	HelpType              string    `json:"helpType"`
-	Action                string    `json:"action"`
-	IntersectionDimension *string   `json:"intersectionDimension,omitempty"`
-	OccurredAt            time.Time `json:"occurredAt"`
-}
-
-type RecommendationAuthorImpactEvidencePage struct {
-	ImpactId   string                               `json:"impactId"`
-	TotalCount int64                                `json:"totalCount"`
-	Items      []RecommendationAuthorImpactEvidence `json:"items"`
-	NextCursor *string                              `json:"nextCursor,omitempty"`
-	HasMore    bool                                 `json:"hasMore"`
-}
-
-type GetRecommendationGatheringSocialProofQuery struct {
-	AnchorKind string `json:"anchorKind"`
-	ObjectId   string `json:"objectId"`
-}
-
-type RecommendationGatheringSocialProofSummary struct {
-	AnchorKind       string `json:"anchorKind"`
-	ObjectId         string `json:"objectId"`
-	PublishedCount   int64  `json:"publishedCount"`
-	FormedCount      int64  `json:"formedCount"`
-	ExperiencedCount int64  `json:"experiencedCount"`
-}
-
-type GetRecommendationFlywheelFunnelQuery struct {
-	WindowFrom       time.Time `json:"windowFrom"`
-	WindowTo         time.Time `json:"windowTo"`
-	SourceObjectKind *string   `json:"sourceObjectKind,omitempty"`
-	SourceObjectId   *string   `json:"sourceObjectId,omitempty"`
-	CapacityTier     *string   `json:"capacityTier,omitempty"`
-	TagRef           *string   `json:"tagRef,omitempty"`
-}
-
 type RecommendationFlywheelFunnelSnapshot struct {
 	WindowFrom                time.Time `json:"windowFrom"`
 	WindowTo                  time.Time `json:"windowTo"`
@@ -319,4 +331,34 @@ type RecommendationFlywheelFunnelSnapshot struct {
 	FacilitationNotifiedCount int64     `json:"facilitationNotifiedCount"`
 	CreatorRepublishedCount   int64     `json:"creatorRepublishedCount"`
 	Truncated                 bool      `json:"truncated"`
+}
+
+type RecommendationGatheringSocialProofSummary struct {
+	AnchorKind       string `json:"anchorKind"`
+	ObjectId         string `json:"objectId"`
+	PublishedCount   int64  `json:"publishedCount"`
+	FormedCount      int64  `json:"formedCount"`
+	ExperiencedCount int64  `json:"experiencedCount"`
+}
+
+type RecommendationIntersectionReasonSlice struct {
+	SubjectId         string               `json:"subjectId"`
+	IntersectionClass string               `json:"intersectionClass"`
+	Channel           *string              `json:"channel,omitempty"`
+	Reasons           []IntersectionReason `json:"reasons"`
+	GeneratedAt       time.Time            `json:"generatedAt"`
+}
+
+type RecommendationIntersectionSupply struct {
+	SupplyKey           string    `json:"supplyKey"`
+	DistinctObjectCount int       `json:"distinctObjectCount"`
+	ComputedAt          time.Time `json:"computedAt"`
+}
+
+type RecommendationObjectIntersectionReasonSlice struct {
+	SubjectId   string               `json:"subjectId"`
+	ObjectType  string               `json:"objectType"`
+	ObjectId    string               `json:"objectId"`
+	Reasons     []IntersectionReason `json:"reasons"`
+	GeneratedAt time.Time            `json:"generatedAt"`
 }

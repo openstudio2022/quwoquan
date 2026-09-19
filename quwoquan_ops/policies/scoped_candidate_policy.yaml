@@ -28,7 +28,7 @@ private_index:
   mutate_head_or_ref: false
 candidate_request:
   schema: quwoquan_ops.exact_integration_candidate.v1
-  required_identities: [claimDigest, ownerIdentityRef, expectedParent, commit, tree, pathsDigest, impactPlanDigest]
+  required_identities: [claimDigest, expectedParent, commit, tree, pathsDigest, impactPlanDigest]
 publisher:
   writer_kind: trusted_integration_publisher
   target_ref: refs/heads/dev1.0

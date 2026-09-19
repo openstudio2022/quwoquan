@@ -1,6 +1,6 @@
 {
   "generator": "tools/codegen_event_constants",
-  "sourceDigest": "ab37e0144e04013232ba1b5236c9a93e805b5924ed99ab65a12c5e95aab4baeb",
+  "sourceDigest": "0aaf2090d1ca6fdfb41e27b14ea3f4c5eccd9468db65e5fcb98d4e03040e0c6b",
   "excludedObjects": null,
   "outputs": [
     {
@@ -8,8 +8,8 @@
       "language": "python",
       "owner": "cross-service.event-wire-identity",
       "emitter": "tools/codegen_event_constants",
-      "sha256": "4a3e1c616ebd82ba7a00291addc3137bbe9a72fbbd12cb5fce2918e07d418fde",
-      "bytes": 20414
+      "sha256": "42936ae5b50b48fdadda8277929eee1fd003e2e54059de0a84a48d49acfa97d7",
+      "bytes": 20284
     },
     {
       "path": "services/assistant-service/generated/assistant/assistant_run/contract/event/events.go",
@@ -136,8 +136,8 @@
       "language": "go",
       "owner": "content.post",
       "emitter": "internal/metadata/codegen.DomainGenerator",
-      "sha256": "dadaba73990c9f1adf51b8251ac1bef7044f13972c7161848f2f202f986a564c",
-      "bytes": 953
+      "sha256": "a397840fa3322bac9826fa7d3434c25b0e6fd62aa40be8cc52807ec6b5253c6d",
+      "bytes": 900
     },
     {
       "path": "services/content-service/generated/content/profile_interaction_read_fact/contract/event/events.go",

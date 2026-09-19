@@ -422,9 +422,11 @@ api_routes:
         - name: circleId
           field: circleId
       query:
-        - name: identity
-          field: identity
+        - name: clientPresentationContract
+          field: clientPresentationContract
           required: false
+          encoding: json
+          max_bytes: 8192
         - name: type
           field: type
           required: false

@@ -44,12 +44,14 @@ build_products:
     build_mode: release
     artifact_format: apk
     distribution_class: dev_direct
+    android_runtime: aosp_no_gms
   android-prod-apk:
     platform: android
     build_profile: prod
     build_mode: release
     artifact_format: apk
     distribution_class: store
+    android_runtime: aosp_no_gms
   ios-nonprod-app:
     platform: ios
     build_profile: nonprod
@@ -68,6 +70,16 @@ build_products:
     build_mode: release
     artifact_format: web
     distribution_class: hosted_web
+
+# Android 用户制品运行依赖策略。Google Maven 仍可作为 AndroidX/Gradle 构建坐标源，
+# 但两个 Android build product 的源码、lock、Gradle runtime graph、merged manifest
+# 与 APK 均禁止 Firebase、Google Play Services、Google ML Kit 及 Play 专属 API。
+android_runtime_profiles:
+  aosp_no_gms:
+    compatible_system: AOSP
+    forbidden_maven_group_prefixes: [com.google.android.gms, com.google.firebase, com.google.mlkit, com.android.billingclient, com.google.android.play]
+    forbidden_gradle_plugins: [com.google.gms.google-services, com.google.firebase.crashlytics]
+    forbidden_android_components: [google_app_id, com.google.android.gms, com.google.firebase]
 
 # distributionClass 与 BuildMode 的合法组合。Debug 签名制品仅限开发者本机、
 # Simulator/Emulator 与登记设备；TestFlight、市场与官网只接受 Release。

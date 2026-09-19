@@ -46,7 +46,7 @@ def _candidate(root: Path, *, suffix: str = "a") -> dict[str, str]:
         "schema": "quwoquan_ops.exact_integration_candidate.v1",
         "claimRef": f"claims/{suffix}.json",
         "claimDigest": "sha256:" + "1" * 64,
-        "ownerIdentityRef": "evidence-fingerprint-v1:sha256:" + "2" * 64,
+        "contextRef": "evidence-fingerprint-v1:sha256:" + "2" * 64,
         "expectedParent": suffix * 40,
         "commit": suffix * 40,
         "tree": ("b" if suffix != "b" else "c") * 40,

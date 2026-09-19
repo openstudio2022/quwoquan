@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
     show ReferralSource;
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
@@ -13,6 +14,7 @@ import 'package:quwoquan_app/design_system/layout/app_scaffold.dart';
 import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
     show workBrowserContentPostDetailReaderProvider;
 import 'package:quwoquan_app/runtime/di/media_viewer_interaction_state_bridge.dart';
+import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/runtime/di/presentation/content_viewer_composition.dart';
@@ -29,7 +31,6 @@ class WorkBrowserEntryPage extends ConsumerStatefulWidget {
   const WorkBrowserEntryPage({
     super.key,
     required this.workId,
-    this.source = 'workBrowser',
     this.referralSource = ReferralSource.deepLink,
     this.feedRequestId,
     this.sourceAppearanceMode = UiErrorAppearanceMode.inherit,
@@ -37,7 +38,6 @@ class WorkBrowserEntryPage extends ConsumerStatefulWidget {
   });
 
   final String workId;
-  final String source;
   final ReferralSource referralSource;
   final String? feedRequestId;
   final UiErrorAppearanceMode sourceAppearanceMode;
@@ -101,7 +101,6 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
       final extra = ContentViewerComposition.singlePostExtra(
         ref,
         detail: detail,
-        source: widget.source,
         referralSource: widget.referralSource,
         feedRequestId: feedRequestId,
         commentContext: widget.commentContext,
@@ -132,11 +131,18 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
     setState(() {
       _error = semantic.withSurfaceContext(
         appearanceMode: widget.sourceAppearanceMode,
-        sourceRouteId: 'workBrowser',
-        sourceSurfaceId: widget.source,
+        sourceRouteId: AppUiSurfaces.workBrowser.routeId,
+        sourceSurfaceId: AppUiSurfaces.workBrowser.id,
       );
       _loading = false;
     });
+  }
+
+  /// 深链目标超出本端展示能力闭集：用生成错误常量判定，不匹配文案或 HTTP 码。
+  static bool _isPresentationTerminal(UiErrorSemantic semantic) {
+    final code = semantic.sourceCode;
+    return code == ContentErrorCode.presentationUnsupported.code ||
+        code == ContentErrorCode.presentationContractChanged.code;
   }
 
   void _back() {
@@ -174,7 +180,10 @@ class _WorkBrowserEntryPageState extends ConsumerState<WorkBrowserEntryPage> {
                       children: <Widget>[
                         AppPageErrorState(
                           key: const ValueKey('work-browser-entry-error'),
-                          semantic: ensureRetryUiErrorSemantic(_error!),
+                          // 需升级 / 能力已变化是终态：只保留返回，不补重试。
+                          semantic: _isPresentationTerminal(_error!)
+                              ? _error!
+                              : ensureRetryUiErrorSemantic(_error!),
                           onRecovery: (action) async {
                             if (action.type == UiErrorActionType.retry ||
                                 action.type == UiErrorActionType.resubmit) {

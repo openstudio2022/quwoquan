@@ -151,6 +151,7 @@ def build_transaction_delta(
             relative = source.relative_to(object_root)
             if relative.parts[0] == "media":
                 _own_media_body(source, sha256=file_sha256(source))
+                continue
             _register_source(
                 sources,
                 destination=object_prefix / relative,

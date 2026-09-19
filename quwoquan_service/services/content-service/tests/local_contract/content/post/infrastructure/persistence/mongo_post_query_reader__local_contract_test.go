@@ -137,7 +137,6 @@ func TestAuthorPostFilterSeparatesPublicAndOwnerVisibility(t *testing.T) {
 		postports.AuthorPostAccessPublic,
 		"",
 		"",
-		"",
 		postports.AuthorPostCursor{},
 		10,
 	))
@@ -157,7 +156,6 @@ func TestAuthorPostFilterSeparatesPublicAndOwnerVisibility(t *testing.T) {
 	ownerFilter, err := AuthorPostFilter(postports.NewAuthorPostReadRequest(
 		authorID,
 		postports.AuthorPostAccessOwner,
-		"",
 		"",
 		postports.PostVisibility("private"),
 		postports.AuthorPostCursor{},
@@ -286,16 +284,16 @@ func TestPublicReleaseFenceHidesDataOwnedPostsWithoutCompleteIdentity(t *testing
 
 func TestReleaseBoundCursorScopesIncludeExactActiveIdentity(t *testing.T) {
 	base := postports.NewAuthorPostReadRequest(
-		"persona", postports.AuthorPostAccessPublic, "", "", "",
+		"persona", postports.AuthorPostAccessPublic, "", "",
 		postports.AuthorPostCursor{}, 20,
 	)
 	active := postports.NewAuthorPostReadRequest(
-		"persona", postports.AuthorPostAccessPublic, "", "", "",
+		"persona", postports.AuthorPostAccessPublic, "", "",
 		postports.AuthorPostCursor{}, 20,
 		"rel-active", "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 	)
 	changed := postports.NewAuthorPostReadRequest(
-		"persona", postports.AuthorPostAccessPublic, "", "", "",
+		"persona", postports.AuthorPostAccessPublic, "", "",
 		postports.AuthorPostCursor{}, 20,
 		"rel-active", "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
 	)

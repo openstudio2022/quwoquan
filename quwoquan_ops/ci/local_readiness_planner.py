@@ -53,6 +53,7 @@ STATIC_COMMANDS: dict[str, tuple[list[str], str, list[str]]] = {
     "app_generated_manifest": (["make", "verify-app-generated-manifest"], ".", ["app-codegen"]),
     "app_contract_handoff": (["make", "verify-app-contract-handoff"], ".", ["app-codegen"]),
     "metadata_contract": (["bash", "quwoquan_service/scripts/verify/contract_graph/verify_contract_metadata.sh"], ".", ["contract-graph"]),
+    "contract_closure": (["python3", "-B", "quwoquan_data/scripts/cli.py", "verify", "contract-closure"], ".", ["contract-graph"]),
     "commercial_contract": (["make", "verify-commercial-contract-generation"], ".", ["contract-graph"]),
     "data_verify": (["python3", "-B", "quwoquan_data/scripts/cli.py", "verify", "all", "--scope", "source"], ".", ["data-verify"]),
     "pageflip_backward_mainline": (["make", "verify-app-pageflip-back-mainline"], ".", ["app-static"]),

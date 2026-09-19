@@ -117,7 +117,7 @@ extension _WorksImmersiveViewerIntersectionActions
           target.objectId,
           contentType: target.objectKind.trim().isNotEmpty
               ? target.objectKind
-              : post.type,
+              : post.type.wireName,
           authorId: target.objectKind == 'user' ? target.objectId : null,
           referralSource: widget.referralSource,
           tags: attribution.tagRefs,

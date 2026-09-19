@@ -152,8 +152,6 @@ pages:
 
   - { page_name: add_contact_search, route_id: addContactSearch, collect_page_access: true }
 
-  - { page_name: add_contact_scan, route_id: addContactScan, collect_page_access: true }
-
   - { page_name: add_contact_phone, route_id: addContactPhone, collect_page_access: true }
 
   - { page_name: add_contact_confirm, route_id: addContactConfirm, collect_page_access: true }
@@ -205,8 +203,6 @@ internal_pages:
   - { page_name: comment_media_camera, internal_id: commentMediaPickerCamera, location: page_internal_comment_media_camera, collect_page_access: true }
 
   - { page_name: comment_media_gallery, internal_id: commentMediaPickerGallery, location: page_internal_comment_media_gallery, collect_page_access: true }
-
-  - { page_name: add_contact_scan_gallery, internal_id: addContactScanGallery, location: page_internal_add_contact_scan_gallery, collect_page_access: true }
 
   - { page_name: circle_edit_create, internal_id: globalSurfaceCircleEditCreate, location: page_internal_global_circle_edit_create, collect_page_access: true }
 

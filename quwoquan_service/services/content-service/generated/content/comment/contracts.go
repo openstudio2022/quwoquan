@@ -27,3 +27,7 @@ const (
 )
 
 var AllowedContentTypes = map[string]struct{}{}
+
+// AllowedListObjectKinds 是混排列表信封 objectKind 的 canonical 闭集。读侧按它
+// 判定一项是什么对象；未登记的成员必须 fail-closed，不得回落成 post。
+var AllowedListObjectKinds = map[string]struct{}{}

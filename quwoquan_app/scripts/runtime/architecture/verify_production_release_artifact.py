@@ -34,6 +34,20 @@ from quwoquan_ops.cli.lib.environment_topology import (
     load_environment_topology,
 )
 
+ANDROID_GOOGLE_SERVICE_MARKERS = (
+    b"com/google/android/gms",
+    b"com.google.android.gms",
+    b"com/google/firebase",
+    b"com.google.firebase",
+    b"io/flutter/plugins/firebase",
+    b"google_app_id",
+    b"google-services.json",
+    b"com/google/mlkit",
+    b"com.google.mlkit",
+    b"com/android/billingclient",
+    b"com.google.android.play",
+)
+
 FORBIDDEN_MARKERS = (
     b"quwoquan_cloud_mock",
     b"MockContentRepository",
@@ -132,39 +146,46 @@ def missing_ios_rpath_dependencies(app_path: Path) -> list[str]:
     return sorted(findings)
 
 
-def _scan_stream(name: str, stream) -> tuple[dict[str, object], set[bytes]]:
+def _scan_stream(
+    name: str,
+    stream,
+    markers: tuple[bytes, ...],
+) -> tuple[dict[str, object], set[bytes]]:
     """Debug kernel 可大于归档上限；流式检查不丢跨块 marker，不放宽 ZIP bomb 门。"""
     digest = hashlib.sha256()
     size = 0
-    overlap = max(map(len, FORBIDDEN_MARKERS)) - 1
+    overlap = max(map(len, markers)) - 1
     previous = name.encode("utf-8") + b"\n"
-    found = {marker for marker in FORBIDDEN_MARKERS if marker in previous}
+    found = {marker for marker in markers if marker in previous}
     for chunk in iter(lambda: stream.read(1024 * 1024), b""):
         digest.update(chunk)
         size += len(chunk)
         searchable = previous + chunk
-        found.update(marker for marker in FORBIDDEN_MARKERS if marker in searchable)
+        found.update(marker for marker in markers if marker in searchable)
         previous = searchable[-overlap:]
     return {"path": name, "sha256": digest.hexdigest(), "sizeBytes": size}, found
 
 
-def _scanned_entries(path: Path):
+def _scanned_entries(path: Path, markers: tuple[bytes, ...]):
     if path.is_dir():
         for file_path in sorted(item for item in path.rglob("*") if item.is_file()):
             if file_path.is_symlink():
                 raise ValueError("artifact symlink is forbidden")
             with file_path.open("rb") as stream:
-                yield _scan_stream(file_path.relative_to(path).as_posix(), stream)
+                yield _scan_stream(file_path.relative_to(path).as_posix(), stream, markers)
     else:
         import io
         for name, payload in iter_artifact_entries(path):
-            yield _scan_stream(name.replace("\\", "/"), io.BytesIO(payload))
+            yield _scan_stream(name.replace("\\", "/"), io.BytesIO(payload), markers)
 
 
 def scan_artifact(path: Path, platform: str) -> tuple[list[str], dict[str, object]]:
     findings: list[str] = []
     scanned_entries: list[dict[str, object]] = []
-    for entry, markers in _scanned_entries(path):
+    forbidden_markers = FORBIDDEN_MARKERS + (
+        ANDROID_GOOGLE_SERVICE_MARKERS if platform == "android" else ()
+    )
+    for entry, markers in _scanned_entries(path, forbidden_markers):
         normalized_name = str(entry["path"])
         scanned_entries.append(entry)
         if "integration_test" in normalized_name:

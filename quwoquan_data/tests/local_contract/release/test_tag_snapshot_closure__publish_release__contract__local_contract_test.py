@@ -5,6 +5,7 @@ from pathlib import Path
 
 from content.release.canonical.object_transaction_audit import validate_publish_invariants
 from content.release.canonical.object_transaction_contract import refresh_canonical_tag_snapshots
+from support.publish_repository_fixture import make_publish_repository
 
 
 TAG_REF = "Topic/旅行"
@@ -29,9 +30,9 @@ def test_tag_snapshot_closure__publish_release__contract__local_contract(
     monkeypatch,
 ) -> None:
     taxonomy = tmp_path / "taxonomy"
-    canonical = tmp_path / "publish"
+    canonical = make_publish_repository(tmp_path / "publish")
     _write(taxonomy / TAG_REF / "_definition.json", _definition("旅行"))
-    _write(canonical / "entities/地点/景区/甲/manifest.json", {"tagRefs": [TAG_REF]})
+    _write(canonical / "entities/travel/test/entity-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff/1/manifest.json", {"schema": "quwoquan_data.entity_object", "entityRef": "/entity/travel/test/entity-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "version": 1, "tagRefs": [TAG_REF]})
     monkeypatch.setenv("QWQ_TAGS_ROOT", str(taxonomy))
 
     assert refresh_canonical_tag_snapshots(canonical) == [TAG_REF]
@@ -51,8 +52,8 @@ def test_tag_snapshot_closure__publish_release__contract__local_contract(
 def test_tag_snapshot_closure_rejects_unmaterialized_consumer_ref(
     tmp_path: Path,
 ) -> None:
-    canonical = tmp_path / "publish"
-    _write(canonical / "entities/地点/景区/甲/manifest.json", {"tagRefs": [TAG_REF]})
+    canonical = make_publish_repository(tmp_path / "publish")
+    _write(canonical / "entities/travel/test/entity-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff/1/manifest.json", {"schema": "quwoquan_data.entity_object", "entityRef": "/entity/travel/test/entity-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "version": 1, "tagRefs": [TAG_REF]})
 
     report = validate_publish_invariants(canonical)
 
@@ -63,10 +64,9 @@ def test_tag_snapshot_closure_rejects_unmaterialized_consumer_ref(
 def test_entity_creator_profile_must_belong_to_creator_reference_closure(
     tmp_path: Path,
 ) -> None:
-    canonical = tmp_path / "publish"
-    entity = canonical / "entities/地点/景区/甲"
-    _write(entity / "_entity.json", {"creatorProfileId": "creator_a"})
-    _write(entity / "manifest.json", {"tagRefs": [], "assets": []})
+    canonical = make_publish_repository(tmp_path / "publish")
+    entity = canonical / "entities/travel/test/entity-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff/1"
+    _write(entity / "manifest.json", {"schema": "quwoquan_data.entity_object", "entityRef": "/entity/travel/test/entity-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "version": 1, "creatorProfileId": "creator_missing", "tagRefs": [], "assets": []})
     _write(
         canonical / "creators/creator_a/_creator.json",
         {"creatorId": "creator_a"},
@@ -75,10 +75,7 @@ def test_entity_creator_profile_must_belong_to_creator_reference_closure(
     report = validate_publish_invariants(canonical)
 
     assert report["status"] == "failed"
-    assert any(
-        issue["code"] == "entity_creator_closure_missing"
-        for issue in report["issues"]
-    )
+    assert any(issue["code"] in {"entity_creator_closure_missing", "dangling_creator_ref"} for issue in report["issues"])
 
-    _write(entity / "manifest.json", {"creatorProfileId": "creator_a", "tagRefs": [], "assets": []})
+    _write(entity / "manifest.json", {"schema": "quwoquan_data.entity_object", "entityRef": "/entity/travel/test/entity-ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff", "version": 1, "creatorProfileId": "creator_a", "tagRefs": [], "assets": []})
     assert validate_publish_invariants(canonical)["status"] == "passed"

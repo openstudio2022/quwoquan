@@ -10,12 +10,15 @@ import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/post_interaction_state.dart';
 import 'package:quwoquan_app/runtime/di/feed_session_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_feed_object_card.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         AssistantUsePolicy,
         CloudOperationCancellationSignal,
         ContentPostProjection,
-        FeedObjectCard;
+        ContentType;
+
+import '../../../../../support/service/content_service/content/feed_delivery_page/content_feed_object_card_test_builder.dart';
 
 const String _policyA =
     'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -473,16 +476,10 @@ final class _PagedDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
         (index) => _post(pageIndex, index),
       ),
       objectCards: pageIndex == 1
-          ? <FeedObjectCard>[
-              FeedObjectCard(
-                objectKind: 'homepage',
-                objectId: 'object_before_page_1',
-                title: 'Object before page 1',
-                tagRefs: const <String>[],
-                anchorIndex: 0,
-              ),
+          ? <ContentFeedObjectCard>[
+              buildContentFeedObjectCard(homepageId: 'object_before_page_1', title: 'Object before page 1', anchorIndex: 0),
             ]
-          : const <FeedObjectCard>[],
+          : const <ContentFeedObjectCard>[],
       nextCursor: 'cursor_${pageIndex + 1}',
       previousCursor: pageIndex == 0 ? null : 'previous_${pageIndex - 1}',
       paginationExpiresAt: DateTime.now().toUtc().add(
@@ -570,8 +567,7 @@ ContentPostViewData _post(int pageIndex, int itemIndex) {
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: 'page_${pageIndex}_post_$itemIndex',
-      contentType: 'micro',
-      contentIdentity: 'moment',
+      contentType: ContentType.article,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author_$pageIndex',
       authorDisplayName: 'Window Author',

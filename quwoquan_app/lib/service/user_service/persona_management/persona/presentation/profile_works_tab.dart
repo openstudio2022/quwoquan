@@ -1,11 +1,16 @@
+import 'dart:math' show max;
+
 import 'package:flutter/cupertino.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/generated/surface_layout_policy.g.dart';
 import 'package:quwoquan_app/runtime/di/media_delivery_cover_slot.dart';
 import 'package:quwoquan_app/runtime/di/content_post_media_binding.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:go_router/go_router.dart';
+import 'package:quwoquan_app/runtime/di/navigation/content_open_surface_navigation.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/content_presentation_terminal.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/runtime/di/feed_session_provider.dart';
@@ -62,7 +67,22 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
       UserProfileUIConfig.creationSubTabs;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      // 页面壳已反映在约束中，再扣网格两侧留白；单位为 logical pixels。
+      final availableWidth = max(
+        0.0,
+        constraints.maxWidth - AppSpacing.feedContentHorizontal(context) * 2,
+      );
+      return _buildWorks(
+        context,
+        SurfaceLayoutPolicy.forSurface(ContentUiSurface.profileWorks)
+            .columnsForWidth(availableWidth),
+      );
+    },
+  );
+
+  Widget _buildWorks(BuildContext context, int columns) {
     final notifier = ref.read(profileNotifierProvider(widget.userId).notifier);
     final state = ref.watch(profileNotifierProvider(widget.userId));
     final fgSecondary = AppColors.iosSecondaryLabel(context);
@@ -140,7 +160,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                       shrinkWrap: true,
                       padding: EdgeInsets.zero,
                       physics: const NeverScrollableScrollPhysics(),
-                      crossAxisCount: AppSpacing.responsiveGridColumns(context),
+                      crossAxisCount: columns,
                       mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
                       crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
                       itemCount: filtered.length,
@@ -202,9 +222,7 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
                         AppSpacing.interGroupLg,
                       ),
                       sliver: SliverMasonryGrid.count(
-                        crossAxisCount: AppSpacing.responsiveGridColumns(
-                          context,
-                        ),
+                        crossAxisCount: columns,
                         mainAxisSpacing: AppSpacing.postPreviewGridSpacing,
                         crossAxisSpacing: AppSpacing.postPreviewGridSpacing,
                         childCount: filtered.length,
@@ -350,11 +368,11 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
   bool _matchesCreationFilter(ContentPostViewData post, CreationSubTab tab) {
     switch (tab) {
       case CreationSubTab.image:
-        return post.displayFormat == 'image';
+        return post.type == ContentType.image;
       case CreationSubTab.video:
-        return post.displayFormat == 'video';
+        return post.type == ContentType.video;
       case CreationSubTab.article:
-        return post.displayFormat == 'note';
+        return post.type == ContentType.article;
       case CreationSubTab.all:
         return true;
     }
@@ -407,6 +425,24 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
     final initialIndex = filtered
         .indexWhere((p) => p.id == post.id)
         .clamp(0, filtered.length - 1);
+    // 目的地只来自云物化的 openSurface；内容类型只在目的面内选媒体槽。
+    final openSurface = post.openSurface;
+    final destination = ContentOpenSurfaceNavigation.canOpen(openSurface)
+        ? ContentOpenSurfaceNavigation.pathFor(
+            openSurface: openSurface!,
+            objectId: post.id,
+            source: ReferralSource.authorProfile.value,
+            index: '$initialIndex',
+          )
+        : null;
+    if (destination == null) {
+      await showContentPresentationUnsupportedTerminal(
+        context,
+        objectId: post.id,
+        openSurface: openSurface,
+      );
+      return;
+    }
     final postViews = filtered.map(ContentSurfaceViewMapper.fromDto).toList();
     final interactionSnapshot = buildMediaViewerInteractionSnapshot(
       ref: ref,
@@ -418,22 +454,12 @@ class _ProfileWorksTabState extends ConsumerState<ProfileWorksTab> {
         .newFeedRequestId();
 
     final result = await context.push<Object?>(
-      AppRoutePaths.workBrowser(
-        workId: post.id,
-        filter: post.isVideoLike
-            ? 'video'
-            : (post.isArticleLike ? 'article' : 'image'),
-        // SIT-001：主页创作链路仅 文章/图片/视频 三类，无 moment 概念分支；
-        // 'profile_moment' source 无任何下游消费者，属已退役概念残留。
-        source: 'profile',
-        index: '$initialIndex',
-      ),
+      destination,
       extra: MediaViewerExtra(
         posts: postViews,
         dtoPosts: filtered,
         initialIndex: initialIndex,
         initialImageIndex: 0,
-        source: 'profile',
         interactionSnapshot: interactionSnapshot,
         referralSource: ReferralSource.authorProfile,
         feedRequestId: navFeedRequestId,
@@ -467,7 +493,7 @@ class _WorksPostCard extends ConsumerWidget {
     if (ratio != null && ratio > 0) {
       return ratio.clamp(9.0 / 16.0, 16.0 / 9.0);
     }
-    if (post.isVideoLike) {
+    if (post.type == ContentType.video) {
       return 9 / 16;
     }
     if (post.hasVisualMedia) {
@@ -524,7 +550,7 @@ class _WorksPostCard extends ConsumerWidget {
         placeholderColor: fgSecondary.withValues(alpha: 0.12),
       ),
       mediaAspectRatio: _imageAspectRatio,
-      showVideoBadge: post.isVideoLike,
+      showVideoBadge: post.type == ContentType.video,
       onTap: onTap,
       onHorizontalDragEnd: onHorizontalDragEnd,
       header: buildIntersectionReason(

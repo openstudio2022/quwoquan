@@ -206,7 +206,7 @@ def main() -> int:
         else:
             changed_files = git_changed_files(args.base_sha, args.head_sha)
         classified = classify_impacts(changed_files, fail_closed_empty=True)
-        impacted = dict(classified["scopes"])
+        impacted = dict(classified["local_scopes"])
         if not classified["paths"]:
             print(
                 "No diff range available; defaulting all scopes to impacted for safety.",

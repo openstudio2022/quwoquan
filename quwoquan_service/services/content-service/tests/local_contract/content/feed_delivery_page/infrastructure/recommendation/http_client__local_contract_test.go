@@ -55,16 +55,17 @@ func TestHTTPClientCreateUsesGeneratedBodyAndRetriesTransientStatus(t *testing.T
 		t.Fatalf("new client: %v", err)
 	}
 	page, err := client.Create(context.Background(), transport.CreateRankedRecommendationWindowCommand{
-		IdempotencyKey: "feed-request-1",
-		SubjectId:      "subject-1",
-		Scenario:       "content_feed",
-		Limit:          20,
+		IdempotencyKey:             "feed-request-1",
+		SubjectId:                  "subject-1",
+		Scenario:                   "content_feed",
+		ClientPresentationContract: transport.MissingDeclarationContentPresentationContract(),
+		Limit:                      20,
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
 	if attempts.Load() != 2 || page.WindowId != "window-1" || len(page.Items) != 1 ||
-		len(page.ObjectCards) != 1 || page.ObjectCards[0].ObjectId != "homepage-dali" {
+		page.Items[0].Envelope.Post == nil || page.Items[0].Envelope.Post.PostId != "post-1" || page.Items[0].Ordinal != 1 {
 		t.Fatalf("attempts=%d page=%+v", attempts.Load(), page)
 	}
 }
@@ -106,10 +107,11 @@ func TestHTTPClientGetPageBindsGeneratedPathAndQuery(t *testing.T) {
 	fromOrdinal := 20
 	limit := 10
 	page, err := client.GetPage(context.Background(), transport.GetRankedRecommendationPageQuery{
-		SubjectId:   "subject identity",
-		WindowId:    "window identity",
-		FromOrdinal: &fromOrdinal,
-		Limit:       &limit,
+		SubjectId:                  "subject identity",
+		WindowId:                   "window identity",
+		ClientPresentationContract: transport.MissingDeclarationContentPresentationContract(),
+		FromOrdinal:                &fromOrdinal,
+		Limit:                      &limit,
 	})
 	if err != nil {
 		t.Fatalf("get page: %v", err)
@@ -119,21 +121,16 @@ func TestHTTPClientGetPageBindsGeneratedPathAndQuery(t *testing.T) {
 	}
 }
 
-func TestHTTPClientRejectsMalformedRankedObjectCard(t *testing.T) {
+func TestHTTPClientRejectsRetiredRankedObjectCardsSidecar(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, _ *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(writer).Encode(rankedPageWire(
-			"window-invalid-card",
-			0,
-			[]map[string]any{{
-				"objectKind": "entity_homepage",
-				"objectId":   "homepage-dali",
-				"title":      "大理古城",
-				"tagRefs":    []string{"travel.photography.landmark"},
-				"reasonKey":  "",
-				"recallPath": "candidate_index",
-			}},
-		)); err != nil {
+		payload := rankedPageWire("window-retired-sidecar", 0)
+		payload["objectCards"] = []map[string]any{{
+			"objectKind": "entity_homepage", "objectId": "homepage-dali",
+			"title": "大理古城", "tagRefs": []string{"travel.photography.landmark"},
+			"reasonKey": "shared_interest", "recallPath": "candidate_index",
+		}}
+		if err := json.NewEncoder(writer).Encode(payload); err != nil {
 			t.Fatalf("encode response: %v", err)
 		}
 	}))
@@ -144,30 +141,20 @@ func TestHTTPClientRejectsMalformedRankedObjectCard(t *testing.T) {
 		t.Fatalf("new client: %v", err)
 	}
 	if _, err := client.Create(context.Background(), transport.CreateRankedRecommendationWindowCommand{
-		IdempotencyKey: "feed-request-invalid-card",
-		SubjectId:      "subject-invalid-card",
-		Scenario:       "content_feed",
-		Limit:          20,
-	}); err == nil {
-		t.Fatal("malformed ranked object card must fail closed")
+		IdempotencyKey:             "feed-request-invalid-card",
+		SubjectId:                  "subject-invalid-card",
+		Scenario:                   "content_feed",
+		ClientPresentationContract: transport.MissingDeclarationContentPresentationContract(),
+		Limit:                      20,
+	}); err == nil || !strings.Contains(err.Error(), `unknown field "objectCards"`) {
+		t.Fatalf("retired sidecar must be rejected even when formerly valid: %v", err)
 	}
 }
 
 func writeRankedPage(t *testing.T, writer http.ResponseWriter, windowID string, ordinal int) {
 	t.Helper()
 	writer.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(writer).Encode(rankedPageWire(
-		windowID,
-		ordinal,
-		[]map[string]any{{
-			"objectKind": "entity_homepage",
-			"objectId":   "homepage-dali",
-			"title":      "大理古城",
-			"tagRefs":    []string{"travel.photography.landmark"},
-			"reasonKey":  "shared_interest",
-			"recallPath": "candidate_index",
-		}},
-	)); err != nil {
+	if err := json.NewEncoder(writer).Encode(rankedPageWire(windowID, ordinal)); err != nil {
 		t.Fatalf("encode response: %v", err)
 	}
 }
@@ -175,7 +162,6 @@ func writeRankedPage(t *testing.T, writer http.ResponseWriter, windowID string, 
 func rankedPageWire(
 	windowID string,
 	ordinal int,
-	objectCards []map[string]any,
 ) map[string]any {
 	return map[string]any{
 		"windowId":              windowID,
@@ -185,14 +171,18 @@ func rankedPageWire(
 		"rankingSnapshotDigest": strings.Repeat("a", 64),
 		"featureSnapshotAt":     time.Now().UTC().Add(-time.Second),
 		"userFeatureSnapshot":   map[string]any{},
+		// 窗口必须回显建窗能力：digest 由读侧重算，这里直接用生成的固定基线。
+		"clientPresentationContract": transport.MissingDeclarationContentPresentationContract(),
 		"items": []map[string]any{{
-			"ordinal":               ordinal,
-			"contentId":             "post-1",
+			"ordinal": ordinal,
+			"envelope": map[string]any{
+				"objectKind": "post", "contentType": "article", "openSurface": "article_reader",
+				"post": map[string]any{"postId": "post-1"},
+			},
 			"score":                 1.0,
 			"featureSnapshotDigest": strings.Repeat("b", 64),
 			"itemFeatureSnapshot":   map[string]any{"qualityScore": 1.0},
 		}},
-		"objectCards": objectCards,
-		"expiresAt":   time.Now().UTC().Add(time.Minute),
+		"expiresAt": time.Now().UTC().Add(time.Minute),
 	}
 }

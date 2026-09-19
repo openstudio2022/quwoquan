@@ -4,7 +4,7 @@
 
 /// user_acceptance Patrol：写文字发布单条无断点旅程。
 ///
-/// 守护：底栏「+」→ 发布内容 → 写文字 → 输入 → 发布确认页（显式形态行）→
+/// 守护：底栏「+」→ 发布内容 → 写文字 → 文章编辑器 → 发布去向确认 →
 /// 发布 → 结果页（真实去向摘要）→ Remote 回读 canonical Post → workBrowser
 /// 可加载。与 draft 深链版文字 UAT 互补：本条覆盖真实入口段，证明旅程从
 /// 全局创作入口到消费回读无断点。
@@ -14,6 +14,10 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentType;
+import 'package:quwoquan_app/service/content_service/content/post/presentation/article_editor.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/works_viewer_article.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart'
     show CreationText;
 import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
@@ -32,7 +36,7 @@ import '../../../../../support/runtime/patrol/patrol_test_support.dart';
 
 void main() {
   patrolTest(
-    'text publication entry journey — 底栏加号→写文字→显式确认→发布→回读无断点',
+    'text publication entry journey — 底栏加号→文章编辑→去向确认→发布→回读无断点',
     tags: const <String>[
       'user-acceptance',
       'content',
@@ -53,17 +57,19 @@ void main() {
       container.read(postPublicationIntentQueueProvider);
 
       final nonce = DateTime.now().microsecondsSinceEpoch;
-      final marker = 'entry journey micro publication $nonce';
+      final marker = 'entry journey article publication $nonce';
       String? postId;
       String? acceptedState;
+      ContentType? submittedType;
       // 入口旅程不预置 draftId，用正文 marker 归属本次发布意图。
       final subscription = container.listen<PostPublicationIntentQueueState>(
         postPublicationIntentQueueProvider,
         (_, next) {
           for (final intent in next.intents) {
-            if (intent.command.body?.trim() != marker) {
+            if (!(intent.command.articleMarkdown?.contains(marker) ?? false)) {
               continue;
             }
+            submittedType = intent.command.contentType;
             final observedPostId = intent.postId?.trim() ?? '';
             if (observedPostId.isNotEmpty) {
               postId = observedPostId;
@@ -83,33 +89,43 @@ void main() {
         expect($(TestKeys.createActionPublishContent).visible, isTrue);
         await $(TestKeys.createActionPublishContent).tap();
         await $(TestKeys.createActionWrite).tap();
-        await $(
-          TestKeys.createPage,
-        ).waitUntilVisible(timeout: const Duration(seconds: 15));
+        await $(TestKeys.createPage)
+            .waitUntilVisible(timeout: const Duration(seconds: 15));
 
+        expect(find.byType(ArticleEditor), findsOneWidget);
         await $(TestKeys.createMomentInput).enterText(marker);
+        expect(
+          $.tester
+              .widget<ArticleEditor>(find.byType(ArticleEditor))
+              .state
+              .articleDocument
+              .body,
+          marker,
+          reason: '短纯文字必须由文章文档承载，不能进入另一种内容身份。',
+        );
         await $(TestKeys.createPublishButton).tap();
-        await $(
-          TestKeys.createPublishConfirmSheet,
-        ).waitUntilVisible(timeout: const Duration(seconds: 15));
+        await $(TestKeys.createPublishConfirmSheet)
+            .waitUntilVisible(timeout: const Duration(seconds: 15));
 
-        // GWT-001：确认页显示可修改的最终形态（短文本建议 micro）。
-        expect(
-          find.byKey(const ValueKey<String>('publish-confirm-form-row')),
-          findsOneWidget,
-          reason: '文字发布确认页必须显示可修改的发布形态行。',
-        );
-        expect(
-          find.text(CreationText.publishFormMicro),
-          findsWidgets,
-          reason: '短文本的建议形态必须以短文字呈现在确认页。',
-        );
+        // GWT-001：类型由文章编辑流程确定，确认面只设置公开范围和去向。
+        final confirmSheet = find.byKey(TestKeys.createPublishConfirmSheet);
+        for (final label in <String>[
+          CreationText.whoCanSeeLabel,
+          CreationText.visibilityPublic,
+          CreationText.attachHomepageTitle,
+          CreationText.selectPublishCirclesLabel,
+        ]) {
+          expect(
+            find.descendant(of: confirmSheet, matching: find.text(label)),
+            findsOneWidget,
+            reason: '文章确认页必须保留真实发布设置：$label。',
+          );
+        }
         await $(TestKeys.createPublishConfirmButton).tap();
 
         // 结果页：真实分发去向摘要（公开发布）。
-        await $(
-          TestKeys.createPublishResultSheet,
-        ).waitUntilVisible(timeout: const Duration(seconds: 90));
+        await $(TestKeys.createPublishResultSheet)
+            .waitUntilVisible(timeout: const Duration(seconds: 90));
         expect(
           find.byKey(TestKeys.createPublishResultDestinationSummary),
           findsOneWidget,
@@ -136,7 +152,9 @@ void main() {
         final detail = await container
             .read(workBrowserContentPostDetailReaderProvider)
             .getPost(postId: postId!);
-        expect(detail.post.type, 'micro');
+        expect(submittedType, ContentType.article);
+        expect(detail.post.id, postId);
+        expect(detail.post.type, ContentType.article);
         expect(
           detail.post.normalizedBody,
           contains(marker),
@@ -148,13 +166,19 @@ void main() {
           await _waitFor(
             $,
             () => find
-                .byKey(const ValueKey<String>('works-top-rail'))
+                .byWidgetPredicate(
+                  (widget) =>
+                      widget is PostWorksViewerArticle &&
+                      widget.post.id == postId &&
+                      widget.post.type == ContentType.article &&
+                      widget.article.document.body.contains(marker),
+                )
                 .evaluate()
                 .isNotEmpty,
             timeout: const Duration(seconds: 30),
           ),
           isTrue,
-          reason: '入口旅程发布结果必须能进入 canonical workBrowser。',
+          reason: '入口旅程必须以同一 Post 的文章阅读面展示刚发布的正文。',
         );
         expect(
           find.byKey(const ValueKey<String>('work-browser-entry-error')),

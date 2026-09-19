@@ -260,7 +260,6 @@ def validate_readiness_closure(
         row = post_rows.get(post_id)
         if (
             row is None
-            or manifest.get("contentIdentity") != "work"
             or manifest.get("contentType") != content_type
             or row.get("contentType") != content_type
             or manifest_creator_ref not in creator_author_ids

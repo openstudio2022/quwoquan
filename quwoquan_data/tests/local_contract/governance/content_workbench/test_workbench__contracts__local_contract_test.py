@@ -142,6 +142,46 @@ def test_stale_read_review_correction_candidate_chain_and_isolation(tmp_path):
     assert error.value.code == "CONTENT_WORKBENCH.ROOT_OVERLAP"
 
 
+def test_nested_runtime_schemas_are_enforced_at_live_boundaries(tmp_path, monkeypatch):
+    """嵌套 schema_name 由真实启动、读取与写盘边界调用。"""
+    import governance.content_workbench.http_server as http_module
+    import governance.content_workbench.service as service_module
+
+    calls = []
+    real_http = http_module.assert_valid
+    real_service = service_module.assert_valid
+
+    def observe_http(instance, command, schema_name, **kwargs):
+        calls.append(("http", command, schema_name))
+        return real_http(instance, command, schema_name, **kwargs)
+
+    def observe_service(instance, command, schema_name, **kwargs):
+        calls.append(("service", command, schema_name))
+        return real_service(instance, command, schema_name, **kwargs)
+
+    monkeypatch.setattr(http_module, "assert_valid", observe_http)
+    monkeypatch.setattr(service_module, "assert_valid", observe_service)
+    service = WorkbenchService(make_publish(tmp_path), tmp_path / "ledger")
+    service.query({"page": 1, "pageSize": 20})
+    item = service.detail("a", "R0")["item"]
+    service.save_review({"objectId": "a", "versionId": "R0", "businessDigest": item["businessDigest"], "decision": "qualified"})
+    static = tmp_path / "static"
+    static.mkdir()
+    server = http_module.serve(service, static)
+    server.server_close()
+
+    assert ("service", "governance", "content_workbench/workbench_filter") in calls
+    assert ("service", "governance", "content_workbench/offline_review") in calls
+    assert ("http", "governance", "content_workbench/local_api") in calls
+
+
+def test_nested_runtime_schemas_reject_invalid_values(tmp_path):
+    service = WorkbenchService(make_publish(tmp_path), tmp_path / "ledger")
+    with pytest.raises(WorkbenchError) as error:
+        service.query({"unknownFilter": ["x"]})
+    assert error.value.code == "CONTENT_WORKBENCH.REQUEST_INVALID"
+
+
 def test_contracts_and_operations_are_single_track():
     """spec_ref: GWT-001 GWT-005"""
     directory = ROOT / "quwoquan_data/schema/governance/content_workbench"

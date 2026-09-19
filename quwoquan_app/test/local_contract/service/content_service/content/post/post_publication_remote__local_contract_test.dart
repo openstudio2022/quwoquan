@@ -39,7 +39,6 @@ void main() {
             publishIntentId: 'publish-draft-1',
             localDraftId: 'draft-1',
             contentType: ContentType.article,
-            contentIdentity: ContentIdentity.work,
             title: '对象闭环',
             articleMarkdown: '# 对象闭环',
             mediaAssetIds: const <String>['asset-1'],

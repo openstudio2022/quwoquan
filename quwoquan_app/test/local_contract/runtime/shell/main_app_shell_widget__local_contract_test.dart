@@ -319,7 +319,6 @@ final class _NoopIncomingCallCoordinator extends IncomingCallCoordinator {
         readRouter: () => throw UnimplementedError(
           'incoming-call routing is outside the shell widget contract',
         ),
-        firebaseRuntime: ref.read(firebaseIncomingCallRuntimeProvider),
         nativeBridge: ref.read(incomingCallNativeBridgeProvider),
       );
 
@@ -1312,7 +1311,7 @@ void main() {
       addTearDown(engagementTracker.dispose);
       final post = contentPostViewDataBuilder(
         postId: 'video-book-lifecycle-post',
-        contentType: 'micro',
+        contentType: 'article',
         authorAvatarUrl: '',
         authorBackgroundUrl: null,
         body: '生命周期测试正文',

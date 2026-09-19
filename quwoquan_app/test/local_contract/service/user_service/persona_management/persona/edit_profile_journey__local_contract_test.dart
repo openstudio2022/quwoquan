@@ -29,13 +29,13 @@ import 'package:quwoquan_app/service/user_service/persona_management/persona/pre
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         ProfileCommandWriter,
-        ProfileQrResolveWire,
         ProfileUpdateProposalListQuery,
         ProfileUpdateProposalQuery,
         ProfileUpdateProposalSlice,
         ProfileUpdateProposalView,
         ProfileUpdateSnapshot,
         UpdateUserProfileCommand;
+
 import '../../../../../support/service/tag_service/tag/tag_node_view/tag_catalog_typed_double.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 
@@ -175,19 +175,6 @@ class _EditProfileMockRepository implements ProfileQuery, ProfileEditQuery {
       displayName: '测试用户',
       region: '',
       shareText: '测试用户',
-    );
-  }
-
-  @override
-  Future<ProfileQrResolveWire> resolveProfileQrToken({
-    required String token,
-    String handle = '',
-  }) async {
-    return ProfileQrResolveWire(
-      personaId: 'user_001',
-      userHandle: handle.isEmpty ? 'test_user' : handle,
-      publicProfileUrl: 'https://app.quwoquan.test/u/test_user',
-      scanStatus: 'accepted',
     );
   }
 }

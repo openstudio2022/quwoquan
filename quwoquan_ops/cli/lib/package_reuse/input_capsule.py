@@ -304,21 +304,22 @@ def _canonical_json_bytes(value: Mapping[str, object]) -> bytes:
 
 def _dependency_manifest_payloads(bundle: AppDependencyBundle) -> dict[str, object]:
     manifests = dict(bundle.component_manifests)
+    result: dict[str, object] = {
+        "dependency:dart-pub-cache-v2": manifests["productionPub"],
+        "dependency:patrol-host-dart-pub-cache-v1": manifests["patrolPub"],
+    }
+    if "androidGradle" not in manifests:
+        result.update({
+            IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PRODUCTION_HOST]: manifests["productionIosPods"],
+            IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PATROL_HOST]: manifests["patrolIosPods"],
+        })
+        return result
     android_wrapper = manifests["androidGradle"]
     android = android_wrapper.get("dependency")
     if not isinstance(android, Mapping):
         android = android_wrapper
-    return {
-        "dependency:dart-pub-cache-v2": manifests["productionPub"],
-        "dependency:patrol-host-dart-pub-cache-v1": manifests["patrolPub"],
-        IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PRODUCTION_HOST]: manifests[
-            "productionIosPods"
-        ],
-        IOS_POD_DEPENDENCY_LOGICAL_PATHS[IOS_POD_PATROL_HOST]: manifests[
-            "patrolIosPods"
-        ],
-        "dependency:android-gradle-v1": dict(android),
-    }
+    result["dependency:android-gradle-v1"] = dict(android)
+    return result
 
 
 def _current_cocoapods_manifest_identity() -> dict[str, object]:
@@ -591,6 +592,7 @@ def _run_capsule_managed_operation(
     source_capsule: Path | None = None,
     records: Sequence[Mapping[str, object]] = (),
     expected_snapshot: Mapping[str, object] | None = None,
+    platforms: tuple[str, ...] = ("android", "ios"),
 ) -> dict[str, object]:
     timeout = remaining_managed_deadline_seconds(timeout)
     control_root = _managed_control_root(staging, operation)
@@ -608,6 +610,7 @@ def _run_capsule_managed_operation(
         "expectedSnapshot": dict(expected_snapshot)
         if expected_snapshot is not None
         else None,
+        "platforms": list(platforms),
         "resultPath": str(result_path),
     }
     encoded_request = _canonical_json_bytes(request)
@@ -743,12 +746,15 @@ def _managed_child(request: Mapping[str, object]) -> int:
     print(f"[package-capsule-stage] {operation}: started", file=sys.stderr, flush=True)
     try:
         if operation == "load-active":
-            bundle = load_active_dependency_bundle(repo_root=repo_root)
+            platforms = tuple(str(item) for item in request.get("platforms", []))
+            bundle = load_active_dependency_bundle(repo_root=repo_root, required_platforms=platforms)
             manifests = _dependency_manifest_payloads(bundle)
-            _assert_current_cocoapods_identity(manifests)
+            if set(platforms) == {"ios"} or set(platforms) == {"android", "ios"}:
+                _assert_current_cocoapods_identity(manifests)
             payload = {"manifests": manifests}
         elif operation == "materialize-active":
-            snapshots = load_managed_dependency_snapshots(repo_root=repo_root)
+            platforms = tuple(str(item) for item in request.get("platforms", []))
+            snapshots = load_managed_dependency_snapshots(repo_root=repo_root, platforms=platforms)
             payload = {
                 "records": copy_dependency_bundle_to_capsule(
                     snapshots=snapshots, capsule_root=staging
@@ -830,6 +836,7 @@ def materialize_package_input_capsule(
     roots: Sequence[str],
     *,
     capsule_root: Path,
+    platforms: tuple[str, ...] = ("android", "ios"),
 ) -> dict[str, object]:
     """Copy one source closure into a read-only, content-addressed capsule."""
 
@@ -857,7 +864,7 @@ def materialize_package_input_capsule(
                 flush=True,
             )
             active_payload = _run_capsule_managed_operation(
-                "load-active", staging=staging, timeout=timeout
+                "load-active", staging=staging, timeout=timeout, platforms=platforms
             )
             raw_manifests = active_payload.get("manifests")
             if not isinstance(raw_manifests, dict):
@@ -938,7 +945,7 @@ def materialize_package_input_capsule(
                     flush=True,
                 )
                 payload = _run_capsule_managed_operation(
-                    "materialize-active", staging=staging, timeout=timeout
+                    "materialize-active", staging=staging, timeout=timeout, platforms=platforms
                 )
                 raw_records = payload.get("records")
                 if not isinstance(raw_records, list):

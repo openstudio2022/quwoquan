@@ -30,7 +30,7 @@ func writeImportFixtureFile(t *testing.T, path, content string) {
 	if strings.Contains(filepath.ToSlash(path), "/posts/") &&
 		strings.HasSuffix(path, "manifest.json") &&
 		strings.Contains(content, `"contentType"`) {
-		prefix := `{"contentId":"fixture-` + fmt.Sprintf("%x", len(path)) + `","version":1,"sourceType":"data","variantPurpose":"original","admission":{"processResult":"completed","qualityResult":"passed","usageScope":"research","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:` + strings.Repeat("a", 64) + `"},"status":"active","contentIdentity":"work",`
+		prefix := `{"contentId":"fixture-` + fmt.Sprintf("%x", len(path)) + `","version":1,"sourceType":"data","admission":{"processResult":"completed","qualityResult":"passed","rightsResult":"passed","rightsAuthorityRef":"content_review.json","rightsAuthorityDigest":"sha256:` + strings.Repeat("b", 64) + `","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:` + strings.Repeat("a", 64) + `"},"status":"active",`
 		content = strings.Replace(content, "{", prefix, 1)
 		content = semanticfixture.AddToManifestJSON(t, content)
 	}
@@ -95,7 +95,7 @@ func testDB(t *testing.T) (*mongo.Database, func()) {
 
 func samplePosts() []PostDoc {
 	return []PostDoc{
-		{PostRef: "posts/article/体验/甲居藏寨体验/1", ContentID: "content-jiaju-001", ContentVersion: 1, PoolSourceType: "data", VariantPurpose: "original", Admission: ContentAdmission{ProcessResult: "completed", QualityResult: "passed", UsageScope: "research", EvidenceRef: "audit/attestation.json", EvidenceDigest: "sha256:" + strings.Repeat("a", 64)}, PoolStatus: "active", ContentIdentity: "work", ContentType: "article", Title: "甲居藏寨体验", Angle: "体验", Seq: 1,
+		{PostRef: "posts/article/体验/甲居藏寨体验/1", ContentID: "content-jiaju-001", ContentVersion: 1, PoolSourceType: "data", Admission: ContentAdmission{ProcessResult: "completed", QualityResult: "passed", RightsResult: "passed", RightsAuthorityRef: "content_review.json", RightsAuthorityDigest: "sha256:" + strings.Repeat("b", 64), EvidenceRef: "audit/attestation.json", EvidenceDigest: "sha256:" + strings.Repeat("a", 64)}, PoolStatus: "active", ContentType: "article", Title: "甲居藏寨体验", Angle: "体验", Seq: 1,
 			EntityRefs: []string{"地点/景区/甲居藏寨"}, NormalizedEntityRefs: []string{"entity:景区:甲居藏寨"}, TagRefs: []string{"Topic/旅行"}, Template: "journal",
 			IntersectionHints: []IntersectionHintDoc{
 				{Dimension: "content", Source: "entityRef", ActionType: "view_object", ActionTargetID: "entity:景区:甲居藏寨"},
@@ -119,7 +119,7 @@ func samplePosts() []PostDoc {
 			CreatedAt:   time.Date(2026, 5, 1, 8, 0, 0, 0, time.UTC),
 			UpdatedAt:   time.Date(2026, 5, 3, 8, 0, 0, 0, time.UTC),
 			PublishedAt: time.Date(2026, 5, 4, 8, 0, 0, 0, time.UTC)},
-		{PostRef: "posts/article/攻略/色达攻略/1", ContentID: "content-seda-001", ContentVersion: 1, PoolSourceType: "data", VariantPurpose: "original", Admission: ContentAdmission{ProcessResult: "completed", QualityResult: "passed", UsageScope: "research", EvidenceRef: "audit/attestation.json", EvidenceDigest: "sha256:" + strings.Repeat("b", 64)}, PoolStatus: "active", ContentIdentity: "work", ContentType: "article", Title: "色达攻略", Angle: "攻略", Seq: 1,
+		{PostRef: "posts/article/攻略/色达攻略/1", ContentID: "content-seda-001", ContentVersion: 1, PoolSourceType: "data", Admission: ContentAdmission{ProcessResult: "completed", QualityResult: "passed", RightsResult: "passed", RightsAuthorityRef: "content_review.json", RightsAuthorityDigest: "sha256:" + strings.Repeat("b", 64), EvidenceRef: "audit/attestation.json", EvidenceDigest: "sha256:" + strings.Repeat("b", 64)}, PoolStatus: "active", ContentType: "article", Title: "色达攻略", Angle: "攻略", Seq: 1,
 			EntityRefs: []string{"地点/景区/色达"}, NormalizedEntityRefs: []string{"entity:景区:色达"}, ArticleMarkdown: "# 色达攻略\n", ArticleDigest: "sha256:4444444444444444444444444444444444444444444444444444444444444444",
 			CreatedAt:   time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
 			UpdatedAt:   time.Date(2026, 4, 1, 8, 0, 0, 0, time.UTC),
@@ -175,7 +175,7 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 		ID                   string                   `bson:"_id"`
 		PostID               string                   `bson:"postId"`
 		PostRef              string                   `bson:"postRef"`
-		ContentIdentity      string                   `bson:"contentIdentity"`
+		ContentType          string                   `bson:"contentType"`
 		Title                string                   `bson:"title"`
 		Angle                string                   `bson:"angle"`
 		EntityRefs           []string                 `bson:"entityRefs"`
@@ -206,8 +206,11 @@ func TestMongoUpsertPostsInsertAndFields(t *testing.T) {
 	if got.ID != RuntimePostID("content-jiaju-001") || got.PostID != got.ID || got.PostRef != "posts/article/体验/甲居藏寨体验/1" {
 		t.Fatalf("post identity must use route-safe runtime id and preserve postRef, got %+v", got)
 	}
-	if got.ContentIdentity != "work" {
-		t.Fatalf("canonical imported post must persist contentIdentity=work, got %+v", got)
+	if got.ContentType != "article" {
+		t.Fatalf("canonical imported post must persist contentType=article, got %+v", got)
+	}
+	if count, err := coll.CountDocuments(ctx, bson.M{"contentIdentity": bson.M{"$exists": true}}); err != nil || count != 0 {
+		t.Fatalf("retired contentIdentity must not be persisted: count=%d err=%v", count, err)
 	}
 	if strings.Contains(got.ID, "/") {
 		t.Fatalf("runtime post id must be path-segment safe, got %q", got.ID)
@@ -596,7 +599,7 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	var item struct {
 		PostId                   string                `bson:"postId"`
 		PostRef                  string                `bson:"postRef"`
-		ContentIdentity          string                `bson:"contentIdentity"`
+		ContentType              string                `bson:"contentType"`
 		Status                   string                `bson:"status"`
 		Visibility               string                `bson:"visibility"`
 		TagRefs                  []string              `bson:"tagRefs"`
@@ -621,8 +624,11 @@ func TestMongoUpsertDiscoveryFeed(t *testing.T) {
 	if item.PostRef != "posts/article/体验/甲居藏寨体验/1" || strings.Contains(item.PostId, "/") {
 		t.Fatalf("feed identity must be route-safe and preserve postRef: %+v", item)
 	}
-	if item.ContentIdentity != "work" {
-		t.Fatalf("feed projection must preserve canonical contentIdentity=work: %+v", item)
+	if item.ContentType != "article" {
+		t.Fatalf("feed projection must preserve canonical contentType=article: %+v", item)
+	}
+	if count, err := feed.CountDocuments(ctx, bson.M{"contentIdentity": bson.M{"$exists": true}}); err != nil || count != 0 {
+		t.Fatalf("feed must omit retired contentIdentity: count=%d err=%v", count, err)
 	}
 	if item.Status != "published" || item.Visibility != "public" {
 		t.Fatalf("feed item must be discoverable (published/public): %+v", item)

@@ -34,8 +34,6 @@ def _article_candidate() -> PoolCandidate:
         version=1,
         content_type="article",
         author_id="author-1",
-        variant_purpose="original",
-        usage_scope="production",
         selection_identity_digest="sha256:" + "1" * 64,
         canonical_object_digest="sha256:" + "2" * 64,
         content_library_binding_digest="sha256:" + "3" * 64,

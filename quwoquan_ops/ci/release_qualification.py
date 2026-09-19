@@ -52,6 +52,26 @@ def delivery_targets(value: object) -> list[str]:
     return list(value)
 
 
+def validate_impact_plan_projection(
+    delivery_target_scope: object, candidate_products: object
+) -> list[str]:
+    """Delivery authorization may add work, but cannot omit ImpactPlan products."""
+    targets = delivery_targets(delivery_target_scope)
+    if (
+        not isinstance(candidate_products, list)
+        or any(not isinstance(item, str) for item in candidate_products)
+        or candidate_products != sorted(set(candidate_products))
+    ):
+        raise ReleaseQualificationError("ImpactPlan candidate_products are invalid")
+    required = set(candidate_products) & {"service", "app"}
+    missing = required - set(targets)
+    if missing:
+        raise ReleaseQualificationError(
+            f"deliveryTargets shrink ImpactPlan candidate products: {sorted(missing)}"
+        )
+    return targets
+
+
 def required_platforms(targets: object) -> set[str]:
     selected = delivery_targets(targets)
     # 现役服务部署实际消费 Web 静态包；来源于 App 工厂不等于移动分发资格。

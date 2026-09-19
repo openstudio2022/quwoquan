@@ -1,7 +1,18 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: 706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31
 
 part of '../../../circle/circle_operation_contracts.g.dart';
+
+String _encodeGeneratedJSONQuery(Object? value, int maxBytes) {
+  if (value is! Map<String, Object?>) {
+    throw const FormatException('JSON query must be an object');
+  }
+  final encoded = jsonEncode(value);
+  if (maxBytes <= 0 || utf8.encode(encoded).length > maxBytes) {
+    throw const FormatException('JSON query exceeds byte limit');
+  }
+  return encoded;
+}
 
 String? _normalizeGeneratedOptionalText(String? value) {
   final normalized = value?.trim();
@@ -22,6 +33,19 @@ List<String> _normalizeGeneratedTextList(
   }
   return List<String>.unmodifiable(result);
 }
+
+int _generatedRequestUTF8Length(String value) => value.runes.fold(
+  0,
+  (length, rune) =>
+      length +
+      (rune <= 0x7f
+          ? 1
+          : rune <= 0x7ff
+          ? 2
+          : rune <= 0xffff
+          ? 3
+          : 4),
+);
 
 Map<String, Object?> _generatedRequestObject(Object? value, String path) {
   if (value is Map<String, Object?>) return value;
@@ -533,21 +557,21 @@ final class CircleDiscoveryFeedQuery {
 
 final class CircleFeedQuery {
   const CircleFeedQuery({
+    ClientContentPresentationContract? clientPresentationContract,
     required String circleId,
-    String? identity,
     String? type,
     String? cursor,
     int limit = 20,
     String sort = 'latest',
-  }) : circleId = circleId,
-       identity = identity,
+  }) : clientPresentationContract = clientPresentationContract,
+       circleId = circleId,
        type = type,
        cursor = cursor,
        limit = limit,
        sort = sort;
 
+  final ClientContentPresentationContract? clientPresentationContract;
   final String circleId;
-  final String? identity;
   final String? type;
   final String? cursor;
   final int limit;
@@ -558,18 +582,24 @@ final class CircleFeedQuery {
     String path = "CircleFeedQuery",
   ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{
+      "clientPresentationContract",
       "circleId",
-      "identity",
       "type",
       "cursor",
       "limit",
       "sort",
     }, path);
     return CircleFeedQuery(
-      circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
-      identity: map["identity"] == null
+      clientPresentationContract: map["clientPresentationContract"] == null
           ? null
-          : _generatedRequestString(map["identity"], '$path.identity'),
+          : ClientContentPresentationContract.fromWire(
+              _generatedRequestObject(
+                map["clientPresentationContract"],
+                '$path.clientPresentationContract',
+              ),
+              '$path.clientPresentationContract',
+            ),
+      circleId: _generatedRequestString(map["circleId"], '$path.circleId'),
       type: map["type"] == null
           ? null
           : _generatedRequestString(map["type"], '$path.type'),
@@ -586,8 +616,9 @@ final class CircleFeedQuery {
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
+    if (this.clientPresentationContract != null)
+      "clientPresentationContract": this.clientPresentationContract!.toWire(),
     "circleId": this.circleId,
-    if (this.identity != null) "identity": this.identity!,
     if (this.type != null) "type": this.type!,
     if (this.cursor != null) "cursor": this.cursor!,
     "limit": this.limit,
@@ -1822,6 +1853,12 @@ final class DeclareGatheringAttendanceCommand {
         'must not be blank',
       );
     }
+    if (this.evidenceRefs.length > 16)
+      throw ArgumentError.value(
+        this.evidenceRefs,
+        "evidenceRefs",
+        'exceeds canonical bound',
+      );
   }
 
   final String gatheringId;
@@ -1979,6 +2016,19 @@ final class GatheringApplicationAnswer {
         'must not be blank',
       );
     }
+    if (this.answerText != null &&
+        _generatedRequestUTF8Length(this.answerText!) > 480)
+      throw ArgumentError.value(
+        this.answerText,
+        "answerText",
+        'exceeds canonical bound',
+      );
+    if (this.selectedOptionIds.length > 10)
+      throw ArgumentError.value(
+        this.selectedOptionIds,
+        "selectedOptionIds",
+        'exceeds canonical bound',
+      );
   }
 
   final String questionId;
@@ -2457,6 +2507,12 @@ final class GatheringReasonCommand {
         'must not be blank',
       );
     }
+    if (this.evidenceRefs.length > 16)
+      throw ArgumentError.value(
+        this.evidenceRefs,
+        "evidenceRefs",
+        'exceeds canonical bound',
+      );
   }
 
   final String gatheringId;
@@ -3996,7 +4052,11 @@ CloudOperationRequestPayload encodeCircleCircleGetCircleFeedGeneratedRequest(
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{"circleId": request.circleId},
     queryParameters: <String, String>{
-      if (request.identity != null) "identity": request.identity!,
+      if (request.clientPresentationContract != null)
+        "clientPresentationContract": _encodeGeneratedJSONQuery(
+          request.clientPresentationContract!.toWire(),
+          8192,
+        ),
       if (request.type != null) "type": request.type!,
       if (request.cursor != null) "cursor": request.cursor!,
       "limit": (request.limit).toString(),

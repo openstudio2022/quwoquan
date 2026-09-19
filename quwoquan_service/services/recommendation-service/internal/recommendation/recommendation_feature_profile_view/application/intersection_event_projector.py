@@ -207,7 +207,6 @@ class IntersectionEventProjector:
             "PostPublished",
             "PostUpdated",
             "PostSettingsUpdated",
-            "PostPromotedToWork",
         } and visited
         self._store.apply_declared_visit_evidence(
             event_id=event_id,
@@ -253,7 +252,6 @@ class IntersectionEventProjector:
             "PostPublished",
             "PostUpdated",
             "PostSettingsUpdated",
-            "PostPromotedToWork",
         }
         if author_id:
             self._store.apply_post_author_evidence(

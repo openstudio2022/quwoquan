@@ -58,7 +58,12 @@ def _read_required(root: Path, failures: list[str]) -> dict[str, dict[str, Any]]
             value = read_json(path)
             if not isinstance(value, dict):
                 raise TypeError("must contain one object")
-            assert_valid(value, domain, schema, label=f"task-init {ref}")
+            if ref == "execution_manifest.json":
+                assert_valid(value, "execution", "content_execution_manifest", label=f"task-init {ref}")
+            elif ref == "0.plan/request.json":
+                assert_valid(value, "execution", "task_init_request", label=f"task-init {ref}")
+            else:
+                assert_valid(value, "execution", "target_set", label=f"task-init {ref}")
         except (OSError, TypeError, ValueError) as exc:
             failures.append(f"{ref} is invalid: {exc}")
             continue

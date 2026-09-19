@@ -135,19 +135,6 @@ final class RemoteUserProfileQueryFacet
   }
 
   @override
-  Future<ProfileQrResolveWire> resolveProfileQrToken(
-    ResolveProfileQrTokenQuery query,
-  ) {
-    return client.userUserAccountResolveProfileQrToken(
-      query,
-      context: invocationContext(
-        UserRequestPageIds.resolveProfileQrToken,
-        AppCloudOperationIds.userUserAccountResolveProfileQrToken,
-      ),
-    );
-  }
-
-  @override
   Future<SearchSocialRelationsResult> searchSocialRelations(
     SearchSocialRelationsQuery query,
   ) {

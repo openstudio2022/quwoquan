@@ -39,9 +39,11 @@ def dependency_failure_cause(exc: BaseException) -> str:
     elif isinstance(exc, subprocess.TimeoutExpired):
         output = str(exc.output or exc.stderr or "")
     lowered = output.casefold()
-    if isinstance(exc, subprocess.TimeoutExpired) or any(
+    if isinstance(exc, subprocess.TimeoutExpired):
+        return "process_timeout"
+    if any(
         marker in lowered
-        for marker in ("timed out", "timeout", "process exceeded")
+        for marker in ("connect timed out", "connection timed out", "read timed out")
     ):
         return "network_timeout"
     if any(

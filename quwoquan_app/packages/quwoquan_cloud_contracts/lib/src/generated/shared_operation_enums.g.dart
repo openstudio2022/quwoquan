@@ -1,5 +1,5 @@
 // Code generated from canonical cross-domain enums. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: 706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31
 
 library;
 
@@ -89,6 +89,67 @@ enum BehaviorEventType {
   }
 }
 
+enum ContentType {
+  image("image"),
+  video("video"),
+  article("article");
+
+  const ContentType(this.wireName);
+
+  final String wireName;
+
+  static ContentType fromWire(Object? value, String path) {
+    return switch (value) {
+      "image" => ContentType.image,
+      "video" => ContentType.video,
+      "article" => ContentType.article,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum ContentUiSurface {
+  homeFeed("home_feed"),
+  profileWorks("profile_works"),
+  mediaImmersive("media_immersive"),
+  articleReader("article_reader"),
+  homepageDetail("homepage_detail");
+
+  const ContentUiSurface(this.wireName);
+
+  final String wireName;
+
+  static ContentUiSurface fromWire(Object? value, String path) {
+    return switch (value) {
+      "home_feed" => ContentUiSurface.homeFeed,
+      "profile_works" => ContentUiSurface.profileWorks,
+      "media_immersive" => ContentUiSurface.mediaImmersive,
+      "article_reader" => ContentUiSurface.articleReader,
+      "homepage_detail" => ContentUiSurface.homepageDetail,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum FeedPresentationRecipe {
+  coverMediaCard("cover_media_card"),
+  articleExcerptCard("article_excerpt_card"),
+  homepageSummaryCard("homepage_summary_card");
+
+  const FeedPresentationRecipe(this.wireName);
+
+  final String wireName;
+
+  static FeedPresentationRecipe fromWire(Object? value, String path) {
+    return switch (value) {
+      "cover_media_card" => FeedPresentationRecipe.coverMediaCard,
+      "article_excerpt_card" => FeedPresentationRecipe.articleExcerptCard,
+      "homepage_summary_card" => FeedPresentationRecipe.homepageSummaryCard,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
 enum HomepageType {
   vehicle("vehicle"),
   hotel("hotel"),
@@ -139,6 +200,23 @@ enum HomepageType {
       "route" => HomepageType.route,
       "photo_spot" => HomepageType.photoSpot,
       "gear" => HomepageType.gear,
+      _ => throw FormatException('$path has an invalid enum value'),
+    };
+  }
+}
+
+enum ListObjectKind {
+  post("post"),
+  entityHomepage("entity_homepage");
+
+  const ListObjectKind(this.wireName);
+
+  final String wireName;
+
+  static ListObjectKind fromWire(Object? value, String path) {
+    return switch (value) {
+      "post" => ListObjectKind.post,
+      "entity_homepage" => ListObjectKind.entityHomepage,
       _ => throw FormatException('$path has an invalid enum value'),
     };
   }

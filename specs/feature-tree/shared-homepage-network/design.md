@@ -27,7 +27,7 @@
 - [`homepage-claim-maintain-and-offline`](./homepage-claim-maintain-and-offline/spec.md)：提供主页从候选、发布、认领维护到现实对象消亡后软下线并保留记录的完整治理链路。
 - [`homepage-discovery-and-attach`](./homepage-discovery-and-attach/spec.md)：让用户发现具体事物的主页，并在发布内容时以单一引用把内容挂接到该主页。
 - [`homepage-review-and-content`](./homepage-review-and-content/spec.md)：让用户围绕共享主页完成理解、比较、浏览内容、查看评价与继续贡献内容。
-- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
+- Feature 层表达业务与设计边界；工程影响由 current actual diff 与 dependency closure 推导。
 
 ## 5. 关键决策
 

@@ -63,7 +63,7 @@ class RecordPostCard extends ConsumerWidget {
     if (ratio != null && ratio > 0) {
       return ratio.clamp(9.0 / 16.0, 16.0 / 9.0);
     }
-    if (post.isVideoLike) {
+    if (post.type == ContentType.video) {
       return 9 / 16;
     }
     if (post.hasVisualMedia) {
@@ -117,7 +117,7 @@ class RecordPostCard extends ConsumerWidget {
         placeholderColor: fgSecondary.withValues(alpha: 0.12),
       ),
       mediaAspectRatio: _imageAspectRatio,
-      showVideoBadge: post.isVideoLike,
+      showVideoBadge: post.type == ContentType.video,
       onTap: onTap,
       header: buildIntersectionReason(
         post.intersectionReasons,

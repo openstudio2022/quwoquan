@@ -16,8 +16,7 @@ from internal.recommendation.recommendation_candidate_index_view.adapters.inboun
 
 def _fields() -> dict[bytes, bytes]:
     payload = {
-        "sourceOwner": None, "environment": None, "releaseId": None, "manifestDigest": None, "releaseDigest": None, "sourceVersion": 4, "safetyRevision": 1,
-        "contentIdentity": "work", "title": "旅行", "body": "正文", "summary": "摘要", "authorDisplayNameSnapshot": "作者", "authorAvatarUrlSnapshot": "",
+        "sourceOwner": None, "environment": None, "releaseId": None, "manifestDigest": None, "releaseDigest": None, "sourceVersion": 4, "safetyRevision": 1, "title": "旅行", "body": "正文", "summary": "摘要", "authorDisplayNameSnapshot": "作者", "authorAvatarUrlSnapshot": "",
         "coverUrl": "", "thumbnailUrl": "", "videoUrl": "", "width": 0, "height": 0, "durationMs": 0, "contentVertical": "travel", "createdAt": "2026-07-31T10:00:00Z", "visitedAt": None,
         "postId": "post-001",
         "authorId": "persona-001",

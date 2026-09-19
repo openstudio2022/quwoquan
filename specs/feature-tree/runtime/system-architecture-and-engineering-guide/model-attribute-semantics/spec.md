@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：不直接拥有用户 Journey，但本能力的判否会收缩用户可见路径，因此 `REQ-005` 承载被收缩路径的终态与恢复动作要求
 >
-> 设计归属：[L2 DEC-030](../design.md#dec-030)
+> 设计引用：[L2 DEC-030](../design.md#dec-030)
 
 ## 1. 用户价值
 

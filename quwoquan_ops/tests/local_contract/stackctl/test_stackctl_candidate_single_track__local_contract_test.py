@@ -173,7 +173,7 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                 ) as reuse_package,
                 mock.patch.object(
                     stackctl,
-                    "validate_release_attestations",
+                    "resolve_package_release_binding",
                     return_value=release_bindings,
                 ),
                 mock.patch.object(
@@ -316,7 +316,7 @@ class StackctlCandidateSingleTrackTest(unittest.TestCase):
                 ),
                 mock.patch.object(
                     stackctl,
-                    "validate_release_attestations",
+                    "resolve_package_release_binding",
                     return_value=release_bindings,
                 ),
                 mock.patch.object(

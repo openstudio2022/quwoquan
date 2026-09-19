@@ -17,10 +17,8 @@ fields:
   type: ObjectId
 - name: contentType
   type: enum
+  enum_ref: ContentType
   description: 固定为 video
-- name: contentIdentity
-  type: enum
-  description: 内容身份层。视频作品固定为 work
 - name: authorId
   type: string
 - name: authorDisplayName

@@ -1,19 +1,19 @@
 {
   "generator": "tools/codegen_app_metadata",
   "responsibility": "shell-navigation-metadata-only",
-  "metadataSha256": "3cf5058b2a667cb6504ad0844c55e173eec480104a66390d8fbb7a98502bcac3",
+  "metadataSha256": "0317a8d70b0001f5c1ede30709d4aaadac88d22eaca61350eed79ad2a3c47be7",
   "inputs": [
     {
       "path": "_shared/app_routes.yaml",
-      "sha256": "39005fa4f8d0499fad20c5c5595564d784bdbda8e3f59afaf1992f31a9bf25a8"
+      "sha256": "7bf6ad8f67277921990229d7a648b199b1379d36fc8ac816164678add33c10d9"
     },
     {
       "path": "_shared/app_pages.yaml",
-      "sha256": "25a79ee8ca85705c32efa6a93dcc333158216ab1793c2636fad262c34aec0939"
+      "sha256": "b78e79718475b91258af474326a99896c2b9032faea28cf672299a7896448cbe"
     },
     {
       "path": "_shared/ui_surfaces.yaml",
-      "sha256": "13a888e6ae035bbb2c36038ef58c2477796870fba55facde52d7b7614d3179bd"
+      "sha256": "b440af8395d302922a6d31694f111fac44699dbf6ec5fa8e5aa9a3704782e112"
     },
     {
       "path": "_shared/link_templates.yaml",
@@ -25,22 +25,22 @@
       "path": "lib/runtime/shell/navigation/generated/app_pages.g.dart",
       "owner": "app-shell-navigation-emitter",
       "generator": "tools/codegen_app_metadata",
-      "sha256": "3378f98b545752f8cf8d4949adc6298611b02f3a1d726d9c98b5ee2f5034382d",
-      "bytes": 21006
+      "sha256": "a0017206d10c18e2eec5525cb86065732c9f1d43fe67455ab4c68c3a7c0708e5",
+      "bytes": 20659
     },
     {
       "path": "lib/runtime/shell/navigation/generated/app_route_paths.g.dart",
       "owner": "app-shell-navigation-emitter",
       "generator": "tools/codegen_app_metadata",
-      "sha256": "0c54292728c04c50b20676fddcdca4e295fe7e25b33a261b359a86fd05bae32e",
-      "bytes": 18637
+      "sha256": "dd5efd03a80726842a07d69fd0a48b8e89f2a196dea5185851f5b0c95742017f",
+      "bytes": 18522
     },
     {
       "path": "lib/runtime/shell/navigation/generated/app_ui_surfaces.g.dart",
       "owner": "app-shell-navigation-emitter",
       "generator": "tools/codegen_app_metadata",
-      "sha256": "bcc07e6927163f2e6318cb9b529f6aecc0f7b34af8e9251b57fc828635e523d3",
-      "bytes": 43608
+      "sha256": "0eef35eaef8810b88f7c54572c7dca28eddce1afcb9f196c7e3ca6090defa970",
+      "bytes": 43176
     },
     {
       "path": "lib/runtime/shell/navigation/generated/link_templates.g.dart",
@@ -53,8 +53,8 @@
       "path": "lib/runtime/shell/navigation/generated/page_access_internal_routes.g.dart",
       "owner": "app-shell-navigation-emitter",
       "generator": "tools/codegen_app_metadata",
-      "sha256": "0754b3c840167fbe4753076ea4d5c7593aa0a77a043b2c53342f457369f044f4",
-      "bytes": 2670
+      "sha256": "2db7159252ed25cd6a18b327ff9c03a46ee177ae3e83cf1c39b10a89878eef02",
+      "bytes": 2582
     }
   ]
 }

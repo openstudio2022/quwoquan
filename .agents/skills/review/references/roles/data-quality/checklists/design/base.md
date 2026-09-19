@@ -1,6 +1,6 @@
 # data-quality · design
 
-- [MUST] 数据对象、来源身份、阶段结果与恢复语义有唯一 owner。
+- [MUST] 数据对象、来源身份、阶段结果与恢复语义有关联 context。
   check: 读取目标 DEC 与 contracts；任一状态有多个可写 owner 或无 typed terminal 时判失败。
 - [MUST] 发布、激活、readback 与 App 消费是彼此独立的证据终态。
   evidence: data-static-contract

@@ -93,6 +93,28 @@ class pytest_http_error:
         return True
 
 
+def test_http_filter_schema_rejects_duplicate_values(tmp_path):
+    publish = tmp_path / "publish"
+    publish.mkdir()
+    (publish / "repository.json").write_text("{}")
+    static = tmp_path / "static"
+    static.mkdir()
+    server = serve(WorkbenchService(publish, tmp_path / "ledger"), static)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        with pytest_http_error(400) as error:
+            urllib.request.urlopen(
+                f"http://127.0.0.1:{server.server_port}/api/items?versions=R0&versions=R0"
+            )
+        payload = json.load(error.value)
+        assert payload["error"]["code"] == "CONTENT_WORKBENCH.REQUEST_INVALID"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
 def test_non_loopback_is_rejected(tmp_path):
     """spec_ref: GWT-005"""
     publish = tmp_path / "p"

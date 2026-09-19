@@ -66,7 +66,7 @@ def pool_payload_digest(object_root: Path) -> str:
     rows = []
     for path in _files(object_root):
         relative = path.relative_to(object_root)
-        if relative.parts and relative.parts[0] == "records":
+        if relative.parts and relative.parts[0] in {"records", "_pool", "media"}:
             continue
         rows.append(
             {

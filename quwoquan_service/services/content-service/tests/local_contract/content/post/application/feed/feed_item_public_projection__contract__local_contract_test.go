@@ -47,12 +47,8 @@ func TestPremiumHealthyEmptyMarshalsCanonicalArrayEnvelope(t *testing.T) {
 	if !present || len(items) != 0 {
 		t.Fatalf("premium empty items = %#v, want required empty list", envelope["items"])
 	}
-	objectCards, present := envelope["objectCards"].([]any)
-	if !present || len(objectCards) != 0 {
-		t.Fatalf(
-			"premium empty objectCards = %#v, want required empty list",
-			envelope["objectCards"],
-		)
+	if _, present := envelope["objectCards"]; present {
+		t.Fatalf("retired objectCards must not accompany canonical items: %s", wire)
 	}
 }
 
@@ -118,7 +114,6 @@ func TestFeedItemPublicProjectionHasExactCanonicalJSONKeys(t *testing.T) {
 			post := test.post
 			post.ID = postID
 			post.ContentType = test.contentType
-			post.ContentIdentity = "work"
 			post.AuthorId = "author-public"
 			post.Status = "published"
 			post.Visibility = "public"
@@ -157,7 +152,7 @@ func TestFeedItemPublicProjectionHasExactCanonicalJSONKeys(t *testing.T) {
 
 			response, err := svc.ListFeed(context.Background(), ListFeedRequest{
 				UserID: "viewer-public-projection", SessionID: "session-public-projection",
-				Identity: "work", Type: test.contentType, Limit: 1,
+				Type: test.contentType, Limit: 1,
 			})
 			if err != nil {
 				t.Fatalf("ListFeed: %v", err)
@@ -180,7 +175,7 @@ func TestFeedItemPublicProjectionHasExactCanonicalJSONKeys(t *testing.T) {
 			}
 			sort.Strings(gotKeys)
 			wantKeys := append([]string{
-				"postId", "contentType", "contentIdentity", "authorId", "title", "body",
+				"postId", "contentType", "authorId", "title", "body",
 				"likeCount", "commentCount", "shareCount", "createdAt", "updatedAt",
 				"publishedAt", "recallPath", "contentVertical", "supplySource",
 			}, test.wantKeys...)
@@ -189,7 +184,7 @@ func TestFeedItemPublicProjectionHasExactCanonicalJSONKeys(t *testing.T) {
 				t.Fatalf("JSON keys = %v, want %v; payload=%s", gotKeys, wantKeys, encoded)
 			}
 			for _, forbidden := range []string{
-				"qualityScore", "sourceTaskId", "tagRefs", "visibility",
+				"contentIdentity", "qualityScore", "sourceTaskId", "tagRefs", "visibility",
 				"coverStrategy", "coverFrameTimeMs",
 			} {
 				if _, exists := decoded[forbidden]; exists {

@@ -25,7 +25,6 @@ abstract interface class ContentEntityWishlistStateReader {
 abstract interface class ContentAuthorPostsReader {
   Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
-    String? identity,
     String? type,
     String? visibility,
     String? cursor,

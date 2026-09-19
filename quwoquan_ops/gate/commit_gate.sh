@@ -194,6 +194,7 @@ run_static_check() {
       make verify-app-assistant-search-weak-typing-ratchet
       ;;
     metadata_contract) bash quwoquan_service/scripts/verify/contract_graph/verify_contract_metadata.sh ;;
+    contract_closure) python3 -B quwoquan_data/scripts/cli.py verify contract-closure ;;
     commercial_contract) make verify-commercial-contract-generation ;;
     pageflip_backward_mainline) make verify-app-pageflip-back-mainline ;;
     app_uat_widget_key_references) make verify-app-uat-widget-key-references ;;

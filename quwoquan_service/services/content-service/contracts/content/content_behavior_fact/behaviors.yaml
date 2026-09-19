@@ -726,7 +726,7 @@ recommend_features:
     source_field: contentType
     type: categorical
     python_type: str
-    description: 内容类型（image/video/micro/article）
+    description: 内容类型（image/video/article）
   - name: tag_count
     source: tag_count
     source_field: tagRefs

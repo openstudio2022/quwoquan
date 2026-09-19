@@ -26,7 +26,7 @@ func validatePostPublicationLimits(post *postmodel.Post) error {
 		limit int
 	}{
 		{"title", post.Title, contentgenerated.PostPublicationTitleMaxRunes},
-		{"body", post.Body, contentgenerated.PostPublicationMicroBodyMaxRunes},
+		{"body", post.Body, contentgenerated.PostPublicationArticleBodyMaxRunes},
 		{
 			"articleMarkdown",
 			post.ArticleMarkdown,

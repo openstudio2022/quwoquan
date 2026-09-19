@@ -59,7 +59,6 @@ final class BundledContentPostReader
   @override
   Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
-    String? identity,
     String? type,
     String? visibility,
     String? cursor,
@@ -87,8 +86,7 @@ final class BundledContentPostReader
         .where(
           (post) =>
               post.authorId == userId.trim() &&
-              (identity == null || post.contentIdentity == identity) &&
-              (type == null || post.contentType == type),
+              (type == null || post.contentType.wireName == type),
         )
         .toList(growable: false);
     final queryDigest = sha256
@@ -98,7 +96,6 @@ final class BundledContentPostReader
               bundle.digest,
               'author_posts',
               userId.trim(),
-              identity,
               type,
               visibility,
               limit,

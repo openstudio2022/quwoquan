@@ -96,7 +96,7 @@ func TestPost_Unauthorized_Returns401(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/content/posts:publish", strings.NewReader(`{
 		"publishIntentId":"unauthorized-publication",
 		"localDraftId":"unauthorized-draft",
-		"contentType":"micro",
+		"contentType":"article",
 		"body":"auth test"
 	}`))
 	req.Header.Set("Content-Type", "application/json")

@@ -369,7 +369,7 @@ func (s *MongoPostStore) Commit(ctx context.Context, commit postports.Commit) (p
 		// 同事务最终确定来源/版本/安全revision，不能用旧Post版本或外部caller字段。
 		for index, event := range commit.Events {
 			switch event.EventType {
-			case "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostPromotedToWork", "PostModerationRejected", "PostDeleted":
+			case "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostModerationRejected", "PostDeleted":
 				var payload map[string]any
 				if err := json.Unmarshal(event.Payload, &payload); err != nil {
 					return nil, err

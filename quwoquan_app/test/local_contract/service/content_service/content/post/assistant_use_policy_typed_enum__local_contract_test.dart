@@ -30,8 +30,7 @@ const List<String> _retiredIllegalPolicies = <String>[
 ContentPostProjection _projection(String? assistantUsePolicy) =>
     ContentPostProjection.fromWire(<String, Object?>{
       'postId': 'post-assistant-policy',
-      'contentType': 'micro',
-      'contentIdentity': 'moment',
+      'contentType': 'article',
       'assistantUsePolicy': ?assistantUsePolicy,
       'authorId': 'author-assistant-policy',
       'authorDisplayName': '策略作者',

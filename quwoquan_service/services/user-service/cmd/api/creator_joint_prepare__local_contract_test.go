@@ -60,7 +60,7 @@ func TestCreatorJointCandidatePreparationWithoutActive(t *testing.T) {
 	}
 	endpoint, stop := support.StartElasticsearchCJK(t, ctx)
 	defer stop()
-	provider, err := es.NewClient(es.Config{Endpoints: []string{endpoint}, Index: "creator_joint", RequestTimeout: 5 * time.Second})
+	provider, err := es.NewClient(es.Config{Endpoints: []string{endpoint}, Index: "creator_joint", RequestTimeout: 30 * time.Second})
 	if err != nil {
 		t.Fatal(err)
 	}

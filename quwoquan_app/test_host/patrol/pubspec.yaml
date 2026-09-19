@@ -35,6 +35,8 @@ dev_dependencies:
 # 这些版本（app 侧一直走 path，从没下载过），于是 --offline 直接求解失败。
 # 因此这里必须逐条镜像 app 的 override，路径按 host 位置补 ../.. 前缀。
 dependency_overrides:
+  geolocator_android:
+    path: ../../vendor/plugins/geolocator_android
   patrol:
     path: ../../vendor/plugins/patrol
   audio_session:
@@ -51,8 +53,6 @@ dependency_overrides:
     path: ../../vendor/plugins/image_picker_android
   livekit_client:
     path: ../../vendor/plugins/livekit_client
-  mobile_scanner:
-    path: ../../vendor/plugins/mobile_scanner
   package_info_plus:
     path: ../../vendor/plugins/package_info_plus
   photo_manager:

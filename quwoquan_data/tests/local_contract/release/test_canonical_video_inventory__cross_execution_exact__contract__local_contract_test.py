@@ -6,6 +6,7 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from support.publish_repository_fixture import make_publish_repository
 from content.release.canonical import post_promotion
 from content.release.canonical.canonical_inventory import (
     apply_inventory_delta,
@@ -90,7 +91,7 @@ def _apply_manifest(
 def test_existing_canonical_video_rejects_exact_content_and_exact_poster(
     tmp_path: Path,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     existing_ref = "posts/video/体验/既有视频/1/manifest.json"
     existing = _manifest("execution-old", content="content-old", poster="poster-old")
     _write_manifest(publish, existing_ref, existing)
@@ -124,7 +125,7 @@ def test_post_promotion_gate_rejects_exact_video_before_transaction_apply(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     existing = _manifest("execution-old", content="same-video", poster="poster-old")
     _write_manifest(
@@ -151,7 +152,7 @@ def test_post_promotion_gate_rejects_exact_video_before_transaction_apply(
 def test_same_execution_target_is_idempotent_but_asset_alias_is_not(
     tmp_path: Path,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     relative = "posts/video/体验/幂等视频/1/manifest.json"
     manifest = _manifest("execution-idempotent", content="same", poster="same-poster")
     _write_manifest(publish, relative, manifest)
@@ -176,7 +177,7 @@ def test_same_execution_target_is_idempotent_but_asset_alias_is_not(
 @pytest.mark.parametrize("execution_id", ["execution-original", "execution-other"])
 def test_stable_video_and_poster_reference_reuse_is_independent_positive(tmp_path: Path, execution_id: str) -> None:
     # spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#req-009
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     manifest = _manifest("execution-original", content="same", poster="same-poster")
     _write_manifest(publish, "posts/video/体验/原对象/1/manifest.json", manifest)
     load_or_bootstrap_inventory(publish)
@@ -189,8 +190,7 @@ def test_stable_video_and_poster_reference_reuse_is_independent_positive(tmp_pat
 def test_duplicate_increment_rolls_back_inventory_and_both_indexes(
     tmp_path: Path,
 ) -> None:
-    publish = tmp_path / "publish"
-    publish.mkdir()
+    publish = make_publish_repository(tmp_path / "publish")
     inventory = load_or_bootstrap_inventory(publish)
     first = _manifest("execution-first", content="duplicate", poster="poster-first")
     first_ref = "posts/video/体验/原子视频一/1/manifest.json"
@@ -238,8 +238,7 @@ def test_duplicate_increment_rolls_back_inventory_and_both_indexes(
 def test_video_index_state_tamper_and_stale_inventory_fence_fail_closed(
     tmp_path: Path,
 ) -> None:
-    publish = tmp_path / "publish"
-    publish.mkdir()
+    publish = make_publish_repository(tmp_path / "publish")
     base = load_or_bootstrap_inventory(publish)
 
     stale_path = publish / "posts/video/体验/stale/1/note.md"
@@ -290,8 +289,7 @@ def test_video_index_state_tamper_and_stale_inventory_fence_fail_closed(
 
 
 def test_poster_binding_must_match_the_exact_manifest_asset(tmp_path: Path) -> None:
-    publish = tmp_path / "publish"
-    publish.mkdir()
+    publish = make_publish_repository(tmp_path / "publish")
     manifest = _manifest("execution-binding", content="binding", poster="poster")
     video = manifest["assets"][0]  # type: ignore[index]
     assert isinstance(video, dict)

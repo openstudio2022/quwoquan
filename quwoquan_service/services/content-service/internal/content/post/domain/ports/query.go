@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	presentation "quwoquan_service/services/content-service/generated/content/feed_delivery_page"
 	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 	"strings"
 	"time"
@@ -20,12 +21,11 @@ const (
 // PostID、PersonaID 与内容枚举是 canonical Post 查询面的窄值类型。
 // 查询面不会把聚合或动态 payload 作为跨层参数传递。
 type (
-	PostID          string
-	PersonaID       string
-	ContentIdentity string
-	ContentType     string
-	PostVisibility  string
-	PostStatus      string
+	PostID         string
+	PersonaID      string
+	ContentType    string
+	PostVisibility string
+	PostStatus     string
 )
 
 func NewPostID(raw string) PostID {
@@ -55,10 +55,9 @@ type PostRevisionSliceReader interface {
 }
 
 // PostFeedReadRequest 是首页/发现流读取已发布 Post 卡片的具名查询。
-// identity/type 在进入 Reader 前已由 Feed application 归一；cursor 只允许
+// contentType 在进入 Reader 前已由 Feed application 归一；cursor 只允许
 // 引用上一页最后一个 Post，不能承载任意 Mongo filter 或排序表达式。
 type PostFeedReadRequest struct {
-	identity        ContentIdentity
 	contentType     ContentType
 	cursorPostID    PostID
 	limit           int
@@ -67,7 +66,6 @@ type PostFeedReadRequest struct {
 }
 
 func NewPostFeedReadRequest(
-	identity ContentIdentity,
 	contentType ContentType,
 	cursorPostID PostID,
 	limit int,
@@ -82,7 +80,6 @@ func NewPostFeedReadRequest(
 		manifestDigest = strings.TrimSpace(activeReleaseBinding[1])
 	}
 	return PostFeedReadRequest{
-		identity:        ContentIdentity(strings.TrimSpace(string(identity))),
 		contentType:     ContentType(strings.TrimSpace(string(contentType))),
 		cursorPostID:    NewPostID(string(cursorPostID)),
 		limit:           limit,
@@ -91,12 +88,11 @@ func NewPostFeedReadRequest(
 	}
 }
 
-func (q PostFeedReadRequest) Identity() ContentIdentity { return q.identity }
-func (q PostFeedReadRequest) ContentType() ContentType  { return q.contentType }
-func (q PostFeedReadRequest) CursorPostID() PostID      { return q.cursorPostID }
-func (q PostFeedReadRequest) Limit() int                { return q.limit }
-func (q PostFeedReadRequest) ActiveReleaseID() string   { return q.activeReleaseID }
-func (q PostFeedReadRequest) ManifestDigest() string    { return q.manifestDigest }
+func (q PostFeedReadRequest) ContentType() ContentType { return q.contentType }
+func (q PostFeedReadRequest) CursorPostID() PostID     { return q.cursorPostID }
+func (q PostFeedReadRequest) Limit() int               { return q.limit }
+func (q PostFeedReadRequest) ActiveReleaseID() string  { return q.activeReleaseID }
+func (q PostFeedReadRequest) ManifestDigest() string   { return q.manifestDigest }
 
 // PostFeedHydrationRequest binds recommendation candidates to the canonical
 // release selected before recall. Production readers must exclude qwq_data
@@ -164,6 +160,11 @@ func (v ViewerContext) IsOwner(author PersonaID) bool {
 type PostDetailQuery struct {
 	postID PostID
 	viewer ViewerContext
+	// clientPresentationContract 客户端本次声明的展示能力（canonical 生成类型，
+	// 不在读面另建第二份能力模型）。nil 表示这条读路径不面向客户端渲染
+	// （内部 persisted query、SSR 等），与「客户端未声明」不是同一件事：
+	// 面向客户端的入口必须显式携带一份有效声明。
+	clientPresentationContract *presentation.ClientContentPresentationContract
 }
 
 func NewPostDetailQuery(
@@ -176,6 +177,15 @@ func NewPostDetailQuery(
 	}
 }
 
+// WithClientPresentationContract 绑定客户端展示能力声明。调用方必须传入已由
+// 服务端重算过 digest 的有效声明。
+func (q PostDetailQuery) WithClientPresentationContract(
+	contract presentation.ClientContentPresentationContract,
+) PostDetailQuery {
+	q.clientPresentationContract = &contract
+	return q
+}
+
 func (q PostDetailQuery) PostID() PostID {
 	return q.postID
 }
@@ -184,22 +194,26 @@ func (q PostDetailQuery) Viewer() ViewerContext {
 	return q.viewer
 }
 
+func (q PostDetailQuery) ClientPresentationContract() *presentation.ClientContentPresentationContract {
+	return q.clientPresentationContract
+}
+
 // AuthorPostPageQuery 是 ListUserPosts 的 transport-neutral 输入。cursor 保留
 // wire 值，进入 reader 前必须由 application 解析为 AuthorPostCursor。
 type AuthorPostPageQuery struct {
 	authorPersonaID PersonaID
 	viewer          ViewerContext
-	identity        ContentIdentity
 	contentType     ContentType
 	visibility      PostVisibility
 	cursor          string
 	limit           int
+	// clientPresentationContract 语义与 PostDetailQuery 同名字段一致。
+	clientPresentationContract *presentation.ClientContentPresentationContract
 }
 
 func NewAuthorPostPageQuery(
 	authorPersonaID PersonaID,
 	viewer ViewerContext,
-	identity ContentIdentity,
 	contentType ContentType,
 	visibility PostVisibility,
 	cursor string,
@@ -208,12 +222,24 @@ func NewAuthorPostPageQuery(
 	return AuthorPostPageQuery{
 		authorPersonaID: NewPersonaID(string(authorPersonaID)),
 		viewer:          viewer,
-		identity:        ContentIdentity(strings.TrimSpace(string(identity))),
 		contentType:     ContentType(strings.TrimSpace(string(contentType))),
 		visibility:      PostVisibility(strings.TrimSpace(string(visibility))),
 		cursor:          strings.TrimSpace(cursor),
 		limit:           limit,
 	}
+}
+
+// WithClientPresentationContract 绑定客户端展示能力声明。调用方必须传入已由
+// 服务端重算过 digest 的有效声明。
+func (q AuthorPostPageQuery) WithClientPresentationContract(
+	contract presentation.ClientContentPresentationContract,
+) AuthorPostPageQuery {
+	q.clientPresentationContract = &contract
+	return q
+}
+
+func (q AuthorPostPageQuery) ClientPresentationContract() *presentation.ClientContentPresentationContract {
+	return q.clientPresentationContract
 }
 
 func (q AuthorPostPageQuery) AuthorPersonaID() PersonaID {
@@ -222,10 +248,6 @@ func (q AuthorPostPageQuery) AuthorPersonaID() PersonaID {
 
 func (q AuthorPostPageQuery) Viewer() ViewerContext {
 	return q.viewer
-}
-
-func (q AuthorPostPageQuery) Identity() ContentIdentity {
-	return q.identity
 }
 
 func (q AuthorPostPageQuery) ContentType() ContentType {
@@ -264,7 +286,6 @@ type PostSourceAttributionSlice struct {
 	AttributionText               string    `json:"attributionText,omitempty" bson:"attributionText,omitempty"`
 	RightsBasis                   string    `json:"rightsBasis,omitempty" bson:"rightsBasis,omitempty"`
 	CommercialAuthorizationStatus string    `json:"commercialAuthorizationStatus,omitempty" bson:"commercialAuthorizationStatus,omitempty"`
-	PublicationAdmission          string    `json:"publicationAdmission,omitempty" bson:"publicationAdmission,omitempty"`
 	AuthorizationProofURL         string    `json:"authorizationProofUrl,omitempty" bson:"authorizationProofUrl,omitempty"`
 	TermsURL                      string    `json:"termsUrl,omitempty" bson:"termsUrl,omitempty"`
 	DerivedModifications          []string  `json:"derivedModifications" bson:"derivedModifications"`
@@ -399,7 +420,6 @@ type PostDetailSlice struct {
 	AuthorAvatarAccessMode  string                         `json:"authorAvatarAccessMode,omitempty" bson:"authorAvatarAccessMode,omitempty"`
 	PersonaContextVersion   int64                          `json:"personaContextVersion,omitempty" bson:"personaContextVersion,omitempty"`
 	ContentType             ContentType                    `json:"contentType" bson:"contentType"`
-	ContentIdentity         ContentIdentity                `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
 	Title                   string                         `json:"title,omitempty" bson:"title,omitempty"`
 	Body                    string                         `json:"body,omitempty" bson:"body,omitempty"`
 	Summary                 string                         `json:"summary,omitempty" bson:"summary,omitempty"`
@@ -466,37 +486,36 @@ type PostDetailSlice struct {
 // decoder reject unknown fields）。Status/Visibility/ViewCount 等仅供
 // application 校验与排序使用的内部字段一律 `json:"-"`，不得进入 wire。
 type AuthorPostItemSlice struct {
-	PostID                PostID          `json:"postId" bson:"_id"`
-	AuthorPersonaID       PersonaID       `json:"authorId" bson:"authorId"`
-	ContentType           ContentType     `json:"contentType" bson:"contentType"`
-	ContentIdentity       ContentIdentity `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
-	Title                 string          `json:"title,omitempty" bson:"title,omitempty"`
-	Body                  string          `json:"body,omitempty" bson:"body,omitempty"`
-	Summary               string          `json:"summary,omitempty" bson:"summary,omitempty"`
-	CoverURL              string          `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
-	ThumbnailURL          string          `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
-	MediaURLs             []string        `json:"mediaUrls,omitempty" bson:"mediaUrls,omitempty"`
-	VideoURL              string          `json:"videoUrl,omitempty" bson:"videoUrl,omitempty"`
-	ArticleTemplate       string          `json:"articleTemplate,omitempty" bson:"articleTemplate,omitempty"`
-	ArticleFontPreset     string          `json:"articleFontPreset,omitempty" bson:"articleFontPreset,omitempty"`
-	ContentVertical       string          `json:"contentVertical,omitempty" bson:"contentVertical,omitempty"`
-	LocationName          string          `json:"-" bson:"locationName,omitempty"`
-	GeoTagRef             string          `json:"-" bson:"geoTagRef,omitempty"`
-	PrimaryHomepageID     string          `json:"primaryHomepageId,omitempty" bson:"primaryHomepageId,omitempty"`
-	CanonicalEntityID     string          `json:"-" bson:"canonicalEntityId,omitempty"`
-	Status                PostStatus      `json:"-" bson:"status"`
-	Visibility            PostVisibility  `json:"-" bson:"visibility"`
-	LikeCount             int64           `json:"likeCount" bson:"likeCount"`
-	CommentCount          int64           `json:"commentCount" bson:"commentCount"`
-	ShareCount            int64           `json:"shareCount" bson:"shareCount"`
-	ViewCount             int64           `json:"-" bson:"viewCount"`
-	CreatedAt             time.Time       `json:"createdAt" bson:"createdAt"`
-	UpdatedAt             time.Time       `json:"updatedAt" bson:"updatedAt"`
-	PublishedAt           time.Time       `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
-	LastActiveAt          time.Time       `json:"-" bson:"lastActiveAt,omitempty"`
-	AuthorDisplayName     string          `json:"authorDisplayName,omitempty" bson:"authorDisplayNameSnapshot,omitempty"`
-	AuthorAvatarURL       string          `json:"authorAvatarUrl,omitempty" bson:"authorAvatarUrlSnapshot,omitempty"`
-	PersonaContextVersion int64           `json:"-" bson:"personaContextVersion,omitempty"`
+	PostID                PostID         `json:"postId" bson:"_id"`
+	AuthorPersonaID       PersonaID      `json:"authorId" bson:"authorId"`
+	ContentType           ContentType    `json:"contentType" bson:"contentType"`
+	Title                 string         `json:"title,omitempty" bson:"title,omitempty"`
+	Body                  string         `json:"body,omitempty" bson:"body,omitempty"`
+	Summary               string         `json:"summary,omitempty" bson:"summary,omitempty"`
+	CoverURL              string         `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
+	ThumbnailURL          string         `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
+	MediaURLs             []string       `json:"mediaUrls,omitempty" bson:"mediaUrls,omitempty"`
+	VideoURL              string         `json:"videoUrl,omitempty" bson:"videoUrl,omitempty"`
+	ArticleTemplate       string         `json:"articleTemplate,omitempty" bson:"articleTemplate,omitempty"`
+	ArticleFontPreset     string         `json:"articleFontPreset,omitempty" bson:"articleFontPreset,omitempty"`
+	ContentVertical       string         `json:"contentVertical,omitempty" bson:"contentVertical,omitempty"`
+	LocationName          string         `json:"-" bson:"locationName,omitempty"`
+	GeoTagRef             string         `json:"-" bson:"geoTagRef,omitempty"`
+	PrimaryHomepageID     string         `json:"primaryHomepageId,omitempty" bson:"primaryHomepageId,omitempty"`
+	CanonicalEntityID     string         `json:"-" bson:"canonicalEntityId,omitempty"`
+	Status                PostStatus     `json:"-" bson:"status"`
+	Visibility            PostVisibility `json:"-" bson:"visibility"`
+	LikeCount             int64          `json:"likeCount" bson:"likeCount"`
+	CommentCount          int64          `json:"commentCount" bson:"commentCount"`
+	ShareCount            int64          `json:"shareCount" bson:"shareCount"`
+	ViewCount             int64          `json:"-" bson:"viewCount"`
+	CreatedAt             time.Time      `json:"createdAt" bson:"createdAt"`
+	UpdatedAt             time.Time      `json:"updatedAt" bson:"updatedAt"`
+	PublishedAt           time.Time      `json:"publishedAt,omitempty" bson:"publishedAt,omitempty"`
+	LastActiveAt          time.Time      `json:"-" bson:"lastActiveAt,omitempty"`
+	AuthorDisplayName     string         `json:"authorDisplayName,omitempty" bson:"authorDisplayNameSnapshot,omitempty"`
+	AuthorAvatarURL       string         `json:"authorAvatarUrl,omitempty" bson:"authorAvatarUrlSnapshot,omitempty"`
+	PersonaContextVersion int64          `json:"-" bson:"personaContextVersion,omitempty"`
 }
 
 type AuthorPostPageSlice struct {
@@ -519,7 +538,6 @@ type PostFeedItemSlice struct {
 	AuthorAvatarAssetID    string               `json:"authorAvatarAssetId,omitempty" bson:"authorAvatarAssetId,omitempty"`
 	AuthorAvatarAccessMode string               `json:"authorAvatarAccessMode,omitempty" bson:"authorAvatarAccessMode,omitempty"`
 	ContentType            ContentType          `json:"contentType" bson:"contentType"`
-	ContentIdentity        ContentIdentity      `json:"contentIdentity,omitempty" bson:"contentIdentity,omitempty"`
 	AssistantUsePolicy     string               `json:"assistantUsePolicy,omitempty" bson:"assistantUsePolicy,omitempty"`
 	Title                  string               `json:"title,omitempty" bson:"title,omitempty"`
 	Body                   string               `json:"body,omitempty" bson:"body,omitempty"`
@@ -639,7 +657,7 @@ type ViewerBlockReader interface {
 }
 
 // PostFeedReader 只读取公开且已发布的 Feed 卡片 Slice。生产实现必须在存储侧
-// 应用 identity/type/keyset 条件；禁止先扫 ListPublished 再在内存中过滤。
+// 应用 contentType/keyset 条件；禁止先扫 ListPublished 再在内存中过滤。
 type PostFeedReader interface {
 	FindPublishedFeedPost(ctx context.Context, postID PostID) (PostFeedItemSlice, bool, error)
 	// FindPublishedFeedPosts 按 ids 批量读取（N3-1 消除 feed 装配 N+1）：
@@ -741,19 +759,20 @@ func ParseAuthorPostCursor(raw string) (AuthorPostCursor, error) {
 type AuthorPostReadRequest struct {
 	authorPersonaID PersonaID
 	accessScope     AuthorPostAccessScope
-	identity        ContentIdentity
 	contentType     ContentType
 	visibility      PostVisibility
 	cursor          AuthorPostCursor
 	limit           int
 	activeReleaseID string
 	manifestDigest  string
+	// clientPresentationContractDigest 有效展示能力摘要。它进入 CursorScope，
+	// 使不同能力声明的续页无法互相复用同一条 keyset cursor。
+	clientPresentationContractDigest string
 }
 
 func NewAuthorPostReadRequest(
 	authorPersonaID PersonaID,
 	accessScope AuthorPostAccessScope,
-	identity ContentIdentity,
 	contentType ContentType,
 	visibility PostVisibility,
 	cursor AuthorPostCursor,
@@ -764,7 +783,6 @@ func NewAuthorPostReadRequest(
 	return AuthorPostReadRequest{
 		authorPersonaID: NewPersonaID(string(authorPersonaID)),
 		accessScope:     accessScope,
-		identity:        identity,
 		contentType:     contentType,
 		visibility:      visibility,
 		cursor:          cursor,
@@ -780,10 +798,6 @@ func (r AuthorPostReadRequest) AuthorPersonaID() PersonaID {
 
 func (r AuthorPostReadRequest) AccessScope() AuthorPostAccessScope {
 	return r.accessScope
-}
-
-func (r AuthorPostReadRequest) Identity() ContentIdentity {
-	return r.identity
 }
 
 func (r AuthorPostReadRequest) ContentType() ContentType {
@@ -817,12 +831,24 @@ func (r AuthorPostReadRequest) CursorScope() string {
 		"author-posts",
 		string(r.authorPersonaID),
 		string(r.accessScope),
-		string(r.identity),
 		string(r.contentType),
 		string(r.visibility),
 		r.activeReleaseID,
 		r.manifestDigest,
+		r.clientPresentationContractDigest,
 	)
+}
+
+// WithClientPresentationContractDigest 把有效能力摘要绑进 cursor scope。
+func (r AuthorPostReadRequest) WithClientPresentationContractDigest(
+	digest string,
+) AuthorPostReadRequest {
+	r.clientPresentationContractDigest = strings.TrimSpace(digest)
+	return r
+}
+
+func (r AuthorPostReadRequest) ClientPresentationContractDigest() string {
+	return r.clientPresentationContractDigest
 }
 
 func activeReleaseBindingValues(values []string) (string, string) {

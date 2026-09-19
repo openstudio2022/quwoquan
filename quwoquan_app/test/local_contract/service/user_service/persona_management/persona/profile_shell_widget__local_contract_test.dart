@@ -494,8 +494,7 @@ ContentPostViewData _profileBackgroundPost(String authorId) {
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: '${authorId}_cover_source',
-      contentType: 'image',
-      contentIdentity: 'work',
+      contentType: ContentType.image,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: authorId,
       authorDisplayName: '封面来源用户',

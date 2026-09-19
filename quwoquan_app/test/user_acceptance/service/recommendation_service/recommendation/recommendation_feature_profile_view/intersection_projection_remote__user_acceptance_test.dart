@@ -69,10 +69,11 @@ void main() {
               SubmitContentPostPublicationCommand(
                 publishIntentId: 'intersection-post-$suffix',
                 localDraftId: 'intersection-post-draft-$suffix',
-                contentType: ContentType.micro,
-                contentIdentity: ContentIdentity.moment,
+                contentType: ContentType.article,
                 title: title,
-                body: '$title 只经公开 Content command 写入',
+                articleMarkdown:
+                    '---\nmarkdownDialect: qwq-rich-md\n---\n\n'
+                    '$title 只经公开 Content command 写入',
                 visibility: Visibility.public,
               ),
             );
@@ -113,7 +114,7 @@ void main() {
                 contentId: postId,
                 action: BehaviorEventType.click,
                 state: 'click',
-                contentType: ContentType.micro,
+                contentType: ContentType.article,
                 objectId: postId,
                 objectKind: 'post',
                 displayName: title,

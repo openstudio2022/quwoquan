@@ -49,8 +49,7 @@ func TestImagePublicationLifecycleJourneyThroughHTTP(t *testing.T) {
 		t.Fatalf("publish receipt=%+v want published with postId", receipt)
 	}
 
-	// 第 3 步：另一 viewer 的作品浏览 feed 立即可见（图/视频默认
-	// contentIdentity=work，与 moment 时间线互斥）。
+	// 第 3 步：另一 viewer 通过 canonical image 类型查询立即可见。
 	feedItem := readMediaJourneyWorkFeedItem(t, viewer, receipt.PostID)
 	if got := asTestStringSlice(feedItem["mediaUrls"]); len(got) != 2 {
 		t.Fatalf("feed mediaUrls=%v want 2 media urls", feedItem["mediaUrls"])
@@ -174,7 +173,7 @@ func readMediaJourneyWorkFeedItem(
 	t.Helper()
 	request := httptest.NewRequest(
 		http.MethodGet,
-		"/content/feed?identity=work&limit=20",
+		"/content/feed?type=image&limit=20",
 		nil,
 	)
 	request.Header.Set("X-Client-User-Id", viewerID)

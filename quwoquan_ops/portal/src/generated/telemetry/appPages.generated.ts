@@ -134,12 +134,6 @@ export const appPages = {
     },
     {
       "collect_page_access": true,
-      "internal_id": "addContactScanGallery",
-      "location": "page_internal_add_contact_scan_gallery",
-      "page_name": "add_contact_scan_gallery"
-    },
-    {
-      "collect_page_access": true,
       "internal_id": "globalSurfaceCircleEditCreate",
       "location": "page_internal_global_circle_edit_create",
       "page_name": "circle_edit_create"
@@ -545,11 +539,6 @@ export const appPages = {
       "collect_page_access": true,
       "page_name": "add_contact_search",
       "route_id": "addContactSearch"
-    },
-    {
-      "collect_page_access": true,
-      "page_name": "add_contact_scan",
-      "route_id": "addContactScan"
     },
     {
       "collect_page_access": true,

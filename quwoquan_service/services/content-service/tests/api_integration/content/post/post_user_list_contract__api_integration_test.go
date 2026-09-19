@@ -22,7 +22,7 @@ import (
 // （ContentPostProjection.fromWire）reject unknown fields，因此服务端响应
 // item 出现任何白名单之外的键都会让作者主页整页解码失败。
 var contentPostProjectionWireFields = map[string]struct{}{
-	"postId": {}, "contentType": {}, "contentIdentity": {}, "assistantUsePolicy": {},
+	"postId": {}, "contentType": {}, "assistantUsePolicy": {},
 	"authorId": {}, "authorDisplayName": {}, "authorAvatarUrl": {}, "authorBackgroundUrl": {},
 	"authorRoleLabel": {}, "authorIdentityTags": {}, "authorVerified": {},
 	"title": {}, "body": {}, "summary": {}, "coverUrl": {},

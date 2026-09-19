@@ -48,7 +48,6 @@ ContentPostDetailPayload _canonicalDetailPayload() {
     ContentPostDetailSlice.fromWire(<String, Object?>{
       'postId': 'post-west-lake-story',
       'contentType': 'video',
-      'contentIdentity': 'work',
       'authorId': 'author-west-lake',
       'authorDisplayName': '西湖记录者',
       'title': '从共同想去到一起出发',

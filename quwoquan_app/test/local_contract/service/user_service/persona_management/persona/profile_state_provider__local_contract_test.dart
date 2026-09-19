@@ -342,8 +342,7 @@ void main() {
 ContentPostViewData _profilePostDto(String id) {
   return contentPostViewDataFromReadModelMap(<String, dynamic>{
     'postId': id,
-    'contentType': 'micro',
-    'contentIdentity': 'moment',
+    'contentType': 'article',
     'authorId': 'profile-1',
     'authorDisplayName': '展示名',
     'authorAvatarUrl': '',

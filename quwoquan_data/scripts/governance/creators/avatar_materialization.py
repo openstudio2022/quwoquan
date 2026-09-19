@@ -136,7 +136,7 @@ def _assert_replaceable_projection(target: Path) -> None:
         if not path.is_file():
             continue
         relative = path.relative_to(target)
-        if relative.parts[0] == "rights_snapshots" and path.suffix == ".json":
+        if relative.parts[0] in {"media", "sources", "records"}:
             continue
         if (
             len(relative.parts) == 3
@@ -151,10 +151,10 @@ def _assert_replaceable_projection(target: Path) -> None:
 def _preserve_pool_history(target: Path, staging: Path) -> None:
     """Carry append-only admission history through the projection swap unchanged."""
 
-    history = target / "_pool"
+    history = target / "records"
     if not history.is_dir():
         return
-    shutil.copytree(history, staging / "_pool")
+    shutil.copytree(history, staging / "records")
 
 
 def _project_creator(creator_ref: str, *, publish_root: Path) -> bool:

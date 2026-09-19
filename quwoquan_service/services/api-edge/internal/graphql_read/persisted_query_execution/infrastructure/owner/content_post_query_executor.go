@@ -40,12 +40,12 @@ type contentBundleBinding struct {
 
 var contentBundleBindings = map[string]contentBundleBinding{
 	"ContentPostDetailBase": newContentBundleBinding(
-		"ContentPostDetailBase", "content.post.GetPost", "7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7",
-		"contentPostDetailBase", []string{"article", "image", "micro", "video"}, baseResponseSpec(),
+		"ContentPostDetailBase", "content.post.GetPost", "6d1f340a4caedf270c46377b1b3a8ae48e3d669f3f7709ec81b3efcf2f6d9820",
+		"contentPostDetailBase", []string{"article", "image", "video"}, baseResponseSpec(),
 	),
 	"ContentPostDetailSemantic": newContentBundleBinding(
-		"ContentPostDetailSemantic", "content.post.GetPostSemantic", "b425b396c13494d91b0e970d0e9c2328d07d549c492bd76537dace26ea74aa04",
-		"contentPostDetailSemantic", []string{"article", "image", "micro", "video"}, semanticResponseSpec(),
+		"ContentPostDetailSemantic", "content.post.GetPostSemantic", "8f01162d0d879ffbdc5e96c93145b5c005b7b03582e52dfaa8c390424c62debd",
+		"contentPostDetailSemantic", []string{"article", "image", "video"}, semanticResponseSpec(),
 	),
 	"ContentPostDetailMedia": newContentBundleBinding(
 		"ContentPostDetailMedia", "content.post.GetPostMedia", "9d8916aa9564bd99f990ab00b32d79d70dc860d05108a5e6f30f07df43b2a25f",

@@ -62,9 +62,6 @@ func (s *MongoFeedStore) listPostsForCircleIDs(
 		"status":            "published",
 		"accountRestricted": bson.M{"$ne": true},
 	}
-	if identity := strings.TrimSpace(query.Identity); identity != "" {
-		postFilter["contentIdentity"] = identity
-	}
 	if contentType := strings.TrimSpace(query.Type); contentType != "" {
 		postFilter["contentType"] = contentType
 	}
@@ -145,7 +142,6 @@ type mongoCircleFeedPlacementDocument struct {
 type mongoCircleFeedPostDocument struct {
 	ID                        string                              `bson:"_id"`
 	ContentType               string                              `bson:"contentType"`
-	ContentIdentity           string                              `bson:"contentIdentity"`
 	AssistantUsePolicy        string                              `bson:"assistantUsePolicy"`
 	AuthorID                  string                              `bson:"authorId"`
 	AuthorDisplayName         string                              `bson:"authorDisplayName"`
@@ -206,8 +202,8 @@ func (doc mongoCircleFeedPostDocument) toProjection() application.CircleFeedPost
 	}
 	return application.CircleFeedPost{
 		CircleID: doc.CirclePlacement.CircleID, PlacementID: doc.CirclePlacement.ID,
-		PostID:      doc.ID,
-		ContentType: doc.ContentType, ContentIdentity: doc.ContentIdentity,
+		PostID:             doc.ID,
+		ContentType:        doc.ContentType,
 		AssistantUsePolicy: doc.AssistantUsePolicy,
 		AuthorID:           doc.AuthorID, AuthorDisplayName: displayName,
 		AuthorAvatarURL: avatarURL, AuthorBackgroundURL: doc.AuthorBackgroundURL,

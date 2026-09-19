@@ -81,7 +81,13 @@ func generateObjectHTTPScaffold(
 		}
 		if r.Operation == "GetFeed" {
 			data.GetFeedRouteFound = true
-			data.GetFeedQueryBindingNames = qp
+			data.GetFeedQueryBindingNames = nil
+			for _, binding := range r.RequestBindings.Query {
+				if binding.Encoding == "" {
+					data.GetFeedQueryBindingNames = append(data.GetFeedQueryBindingNames, binding.Name)
+				}
+			}
+			data.GetFeedJSONQueries = r.JSONQueries
 			data.GetFeedDefaultItems = r.Pagination.DefaultItems
 			data.GetFeedMaximumItems = r.Pagination.MaximumItems
 			for _, key := range qp {
@@ -178,8 +184,6 @@ func dispatchGeneratedOperation(h *ContentHandler, operation string, w http.Resp
 		h.handleResolveReport(w, r)
 		{{- else if eq . "UpdatePostSettings" }}
 		h.handleUpdatePostSettings(w, r)
-		{{- else if eq . "PromotePostToWork" }}
-		h.handlePromotePostToWork(w, r)
 		{{- else if eq . "DeletePost" }}
 		h.handleDeletePost(w, r)
 		{{- else if eq . "ReportBehaviors" }}
@@ -461,6 +465,9 @@ func generatedSplitPath(raw string) []string {
 
 {{- if .GetFeedRouteFound }}
 type GeneratedGetFeedParams struct {
+{{- range .GetFeedJSONQueries }}
+ {{ generatedGoField .Binding.Field }} *{{ .TypeName }}
+{{- end }}
 {{- range .GetFeedQueryBindingNames }}
 {{- if ne . "limit" }}
 	{{ generatedGoField . }} string
@@ -477,6 +484,11 @@ const (
 func BindGeneratedGetFeedParams(r *http.Request) (GeneratedGetFeedParams, error) {
 	out := GeneratedGetFeedParams{Limit: GeneratedGetFeedDefaultItems}
 	q := r.URL.Query()
+{{- range .GetFeedJSONQueries }}
+ value{{ generatedGoField .Binding.Field }}, err{{ generatedGoField .Binding.Field }} := {{ .Function }}(r)
+ if err{{ generatedGoField .Binding.Field }} != nil { return GeneratedGetFeedParams{}, err{{ generatedGoField .Binding.Field }} }
+ out.{{ generatedGoField .Binding.Field }} = value{{ generatedGoField .Binding.Field }}
+{{- end }}
 {{- range .GetFeedQueryBindingNames }}
 {{- if ne . "limit" }}
 	out.{{ generatedGoField . }} = strings.TrimSpace(q.Get("{{ . }}"))
@@ -579,6 +591,9 @@ import (
 	}
 	targetDir := filepath.Join(outputDir, "transport")
 	if err := os.MkdirAll(targetDir, 0o755); err != nil {
+		return err
+	}
+	if err := generateJSONQueryBindings(serviceRoutes, targetDir); err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(targetDir, "routes.g.go"), generated, 0o644)

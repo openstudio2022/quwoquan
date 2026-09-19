@@ -16,7 +16,7 @@
 - [`image-editing`](./image-editing/spec.md)：全仓无占位符号；工具确认路径全部经 ImageEditorExportEngine 烘焙。
 - [`post-create-update`](./post-create-update/spec.md)：从拍摄得到的图片可进入图片选择器底部缩略条或创作编辑器图片列表，并参与排序、编辑和发布。
 - [`reaction-state-counter`](./reaction-state-counter/spec.md)：定义“互动状态状态计数”的可观察主路径、失败语义及父能力交接。
-- [`text-post-commercial-publication`](./text-post-commercial-publication/spec.md)：micro 与 article 两种确认结果均有 widget 与 payload 合同证据。
+- [`text-post-commercial-publication`](./text-post-commercial-publication/spec.md)：纯文字与富文图文混排共用文章写入，保留安全准入、发布意图幂等恢复与真实结果回流；不再设置形态确认或退役身份提升分支。
 
 ## 3. 端云与数据流
 

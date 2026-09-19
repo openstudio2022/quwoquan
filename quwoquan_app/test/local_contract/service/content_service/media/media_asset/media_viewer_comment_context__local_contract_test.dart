@@ -1,10 +1,72 @@
+// spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/feedback-ingestion-sampling/spec.md#gwt-001
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
+import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/presentation/profile_interaction_comment_route.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/presentation/works_immersive_viewer_observability.dart';
 
 void main() {
+  test('所有归因通过同一契约传递，评论上下文复制不改变归因', () {
+    for (final source in ReferralSource.values) {
+      final extra = MediaViewerExtra(
+        posts: const [],
+        initialIndex: 0,
+        referralSource: source,
+      );
+      final copied = extra.copyWith(
+        commentContext: const MediaViewerCommentContext(openComments: true),
+      );
+      final query = Uri.parse(
+        AppRoutePaths.workBrowser(workId: 'post_1', source: source.value),
+      ).queryParameters;
+      expect(copied.referralSource, source);
+      expect(query['source'], copied.referralSource.value);
+      expect(copied.commentContext.shouldOpen, isTrue);
+    }
+  });
+
+  test('个人评论归因与评论落地模式正交', () {
+    final route = buildProfileInteractionCommentRoute(
+      workId: 'post_1',
+      referralSource: ReferralSource.authorProfile,
+      entrySource: MediaViewerCommentContext.entrySourceProfileInteraction,
+      commentId: 'reply_1',
+      parentCommentId: 'parent_1',
+    );
+    final query = Uri.parse(route!).queryParameters;
+    expect(query['source'], 'author_profile');
+    final context = MediaViewerCommentContext.fromQueryParameters(query);
+    expect(context.usesProfileInteractionMode, isTrue);
+    expect(context.targetReplyId, 'reply_1');
+  });
+
+  test('内部精品运行模式不使用 organic_feed 替换', () {
+    for (final source in [
+      'featured',
+      'premium',
+      'premium_stream',
+      'immersive',
+    ]) {
+      expect(
+        WorksImmersiveViewerObservability.immersiveChannelId(source),
+        'premium_stream',
+      );
+    }
+    expect(
+      WorksImmersiveViewerObservability.immersiveChannelId('browse'),
+      'browse',
+    );
+    expect(
+      WorksImmersiveViewerObservability.immersiveChannelId(
+        ReferralSource.organicFeed.value,
+      ),
+      'organic_feed',
+    );
+  });
   group('MediaViewerCommentContext 单一方言', () {
     Map<String, String> workBrowserQuery({
       required String entrySource,
@@ -47,29 +109,26 @@ void main() {
       expect(query.containsKey('targetKind'), isFalse);
     });
 
-    test(
-      'generated workBrowser route：二级回复目标产出 targetParentCommentId+targetReplyId',
-      () {
-        final query = workBrowserQuery(
-          entrySource: MediaViewerCommentContext.entrySourceProfileComments,
-          targetParentCommentId: 'parent_1',
-          targetReplyId: 'reply_9',
-          replyToCommentId: 'reply_9',
-        );
+    test('generated workBrowser route：二级回复目标产出 targetParentCommentId+targetReplyId', () {
+      final query = workBrowserQuery(
+        entrySource: MediaViewerCommentContext.entrySourceProfileComments,
+        targetParentCommentId: 'parent_1',
+        targetReplyId: 'reply_9',
+        replyToCommentId: 'reply_9',
+      );
 
-        expect(query, <String, String>{
-          MediaViewerCommentContext.queryOpenComments: 'true',
-          MediaViewerCommentContext.queryEntrySource: 'profile-comments',
-          MediaViewerCommentContext.queryTargetParentCommentId: 'parent_1',
-          MediaViewerCommentContext.queryTargetReplyId: 'reply_9',
-          MediaViewerCommentContext.queryReplyToCommentId: 'reply_9',
-        });
-        expect(
-          query.containsKey(MediaViewerCommentContext.queryTargetCommentId),
-          isFalse,
-        );
-      },
-    );
+      expect(query, <String, String>{
+        MediaViewerCommentContext.queryOpenComments: 'true',
+        MediaViewerCommentContext.queryEntrySource: 'profile-comments',
+        MediaViewerCommentContext.queryTargetParentCommentId: 'parent_1',
+        MediaViewerCommentContext.queryTargetReplyId: 'reply_9',
+        MediaViewerCommentContext.queryReplyToCommentId: 'reply_9',
+      });
+      expect(
+        query.containsKey(MediaViewerCommentContext.queryTargetCommentId),
+        isFalse,
+      );
+    });
 
     test('两个入口同方言：相同逻辑目标 → 相同 target* 键值（仅 entrySource 区分）', () {
       // 我的互动 tab：回复目标 = (parent_1, reply_9)
@@ -144,12 +203,13 @@ void main() {
     });
 
     test('非个人页 / 未知入口不落 profileInteraction mode', () {
-      final context =
-          MediaViewerCommentContext.fromQueryParameters(const <String, String>{
-            'openComments': 'true',
-            'commentEntrySource': 'feed-card',
-            'targetCommentId': 'comment_x',
-          });
+      final context = MediaViewerCommentContext.fromQueryParameters(
+        const <String, String>{
+          'openComments': 'true',
+          'commentEntrySource': 'feed-card',
+          'targetCommentId': 'comment_x',
+        },
+      );
       expect(context.usesProfileInteractionMode, isFalse);
     });
 
@@ -168,9 +228,8 @@ void main() {
     });
 
     test('Router 将 metadata 声明的 workBrowser query 交给 typed context', () {
-      final routerSource = File(
-        'lib/runtime/di/navigation/app_router.dart',
-      ).readAsStringSync();
+      final routerSource = File('lib/runtime/di/navigation/app_router.dart')
+          .readAsStringSync();
       expect(
         routerSource,
         contains('MediaViewerCommentContext.fromQueryParameters('),

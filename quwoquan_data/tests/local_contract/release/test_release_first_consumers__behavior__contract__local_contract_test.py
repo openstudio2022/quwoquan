@@ -88,7 +88,15 @@ def _fixture(
             "assetId": "asset-a",
             "sha256": f"sha256:{digest}",
             "rightsStatus": "unknown",
+            "rightsAuditStatus": "unknown",
+            "rightsAuditIssues": ["authorization unknown"],
             "authorizationRequired": True,
+            "sourceUrl": "https://example.com/source-a",
+            "license": "unknown",
+            "termsUrl": "https://example.com/terms",
+            "authorizationProof": "",
+            "creator": "Fixture Author",
+            "fetchedAt": "2026-09-09T00:00:00Z",
         }],
         "evidence": [{
             "path": "evidence.txt",
@@ -221,6 +229,7 @@ def test_full_aggregate_build_and_replay_preserve_logical_media_owners(
     post = canonical / "posts" / physical_ref
     document = json.loads((post / "manifest.json").read_bytes())
     document["assets"][0]["role"] = "cover"
+    document["publishMediaMode"] = "illustrated"
     _write(post / "manifest.json", document)
     source_path = post / "sources/s001/source.json"
     source = json.loads(source_path.read_bytes())
@@ -229,17 +238,35 @@ def test_full_aggregate_build_and_replay_preserve_logical_media_owners(
         fetchedAt=source["fetchedAt"], rightsIssues=["authorization unknown"],
     )
     _write(source_path, source)
-    _write(post / "content_review.json", {
-        "schema": "quwoquan_data.content_review", "decision": "approved",
-        "draft": {"digest": "sha256:" + "9" * 64},
-    })
+    from support.post_object_transaction_fixture import _fixture as post_fixture
+    fixture_execution, _, _, _ = post_fixture(tmp_path / "review-fixture")
+    review = json.loads((fixture_execution / "posts/image/西湖/光影/1/5.review/content_review.json").read_bytes())
+    review["objectRef"] = "posts/" + logical_ref
+    document["executionId"] = review["executionId"]
+    _write(post / "manifest.json", document)
+    review["assetRights"] = [{"assetRef": "sources/s001/assets/asset-a.png", "sourceUrl": "https://example.com/source-a", "license": "unknown", "termsUrl": "https://example.com/terms", "authorizationProof": None, "decision": "approved", "issues": []}]
+    for disposition in review["dispositions"]:
+        disposition["objectRef"] = "posts/" + logical_ref
+    review["semanticReport"] = {
+        "reviewedCarrier": "article", "carrierCompatible": True,
+        "articleIntent": {"independent": True, "intent": "fixture acceptance", "rationale": "fixture independent article"},
+        "sources": [{
+            "sourceRef": "sources/s001/source.md", "sourceDigest": source["evidence"][0]["sha256"],
+            "parseStatus": "complete", "dialect": "markdown", "dialectVersion": "1",
+            "capabilities": ["paragraph"],
+            "sourceCounts": {"title": 0, "heading": 0, "paragraph": 1, "list": 0, "tableLogicalCell": 0, "footnote": 0, "media": 1},
+            "draftCounts": {"title": 0, "heading": 0, "paragraph": 1, "list": 0, "tableLogicalCell": 0, "footnote": 0, "media": 1},
+            "sourceSequenceDigest": source["evidence"][0]["sha256"], "draftSequenceDigest": source["evidence"][0]["sha256"],
+        }], "issues": [],
+    }
+    _write(post / "content_review.json", review)
     _write(post / "records/0001.json", {"originalFact": "preserve exact bytes"})
     original = _tree_bytes(canonical)
     selection = ExplicitCohortSelection(
         candidates=(PoolCandidate(
             post_ref=logical_ref, content_id="post-a", version=1,
-            content_type="article", author_id="creator-a", variant_purpose="original",
-            usage_scope="production", selection_identity_digest="sha256:" + "1" * 64,
+            content_type="article", author_id="creator-a",
+            selection_identity_digest="sha256:" + "1" * 64,
             canonical_object_digest="sha256:" + "2" * 64,
             content_library_binding_digest="sha256:" + "3" * 64,
         ),),

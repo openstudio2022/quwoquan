@@ -664,7 +664,7 @@ class AppSpacing {
         expanded: intraGroupSm,
       );
 
-  /// 发现/圈子内容区左右边距（微趣、文章、图片宫格、圈子各 tab 页统一使用）
+  /// 发现/圈子内容区左右边距（文章、图片宫格、圈子各 tab 页统一使用）
   static double feedContentHorizontal(BuildContext context) => getSpacing(
     DesignSemanticConstants.container,
     DesignSemanticConstants.xs,

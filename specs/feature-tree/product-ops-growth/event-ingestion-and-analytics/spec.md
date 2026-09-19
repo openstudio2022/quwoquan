@@ -2,7 +2,7 @@
 
 > 所属领域：[`product-ops-growth`](../spec.md)
 >
-> 设计归属：[本层 design.md](./design.md)
+> 设计引用：[本层 design.md](./design.md)
 
 ## 1. 能力目标
 

@@ -20,7 +20,6 @@ UPSERT_EVENTS = {
     "PostPublished",
     "PostUpdated",
     "PostSettingsUpdated",
-    "PostPromotedToWork",
 }
 REMOVAL_EVENTS = {"PostDeleted", "PostPrivacyRedacted", "PostPurged"}
 

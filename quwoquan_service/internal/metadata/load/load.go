@@ -30,7 +30,7 @@ var objectTopLevelKeys = stringSet(
 var operationsTopLevelKeys = stringSet(
 	"api_routes", "graphql_queries", "runtime_entrypoints", "commercial_defaults", "consumers", "contract_test",
 	"delivery_slo", "description", "incoming_call_slo", "privacy_contract",
-	"readiness_cases", "response_list_key", "upstreams", "externalDependencies",
+	"readiness_cases", "response_list_key", "upstreams", "externalDependencies", "external_schema_imports",
 )
 
 // Option 配置 loader 的仓库级输入。metadata-dir 是 PPID 作用域的契约拷贝视图
@@ -196,6 +196,15 @@ func collectSourceDigests(catalog *ast.Catalog, metadataDir string, errs *[]erro
 		switch strings.ToLower(filepath.Ext(entry.Name())) {
 		case ".yaml", ".yml", ".json":
 			addSourceDocument(catalog, metadataDir, path, errs)
+		case ".graphql":
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			digest := sha256.Sum256(data)
+			catalog.Sources = append(catalog.Sources, ast.SourceDigest{
+				Path: relativePath(metadataDir, path), SHA256: hex.EncodeToString(digest[:]),
+			})
 		}
 		return nil
 	})

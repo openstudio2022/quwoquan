@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -14,6 +15,7 @@ PORT_PROFILE = ROOT / "quwoquan_ops" / "cli" / "print_local_port_profile.py"
 MAKEFILE = ROOT / "Makefile"
 TMP = ROOT / ".qwq_output" / "env" / "repo" / "local" / "stackctl-contract" / "process"
 DEPLOY_WORK_ROOT = tempfile.TemporaryDirectory(prefix="qwq-stackctl-contract-")
+STACKCTL_PYTHON = os.environ.get("QWQ_STACKCTL_PYTHON", sys.executable)
 
 
 def run(argv: list[str]) -> subprocess.CompletedProcess[str]:
@@ -32,7 +34,7 @@ def run(argv: list[str]) -> subprocess.CompletedProcess[str]:
 def main() -> int:
     issues: list[str] = []
 
-    help_result = run(["python3", str(STACKCTL), "--help"])
+    help_result = run([STACKCTL_PYTHON, str(STACKCTL), "--help"])
     required_commands = (
         "package",
         "content-readiness",
@@ -51,7 +53,7 @@ def main() -> int:
             "dev-session and provider-config commands"
         )
 
-    readiness_help = run(["python3", str(STACKCTL), "content-readiness", "--help"])
+    readiness_help = run([STACKCTL_PYTHON, str(STACKCTL), "content-readiness", "--help"])
     if (
         readiness_help.returncode != 0
         or "--target" in readiness_help.stdout
@@ -60,7 +62,7 @@ def main() -> int:
     ):
         issues.append("stackctl content-readiness must require env and forbid retired phase/target override")
 
-    verify_help = run(["python3", str(STACKCTL), "verify", "--help"])
+    verify_help = run([STACKCTL_PYTHON, str(STACKCTL), "verify", "--help"])
     if (
         verify_help.returncode != 0
         or "--kind" not in verify_help.stdout
@@ -72,7 +74,7 @@ def main() -> int:
             "stackctl verify --help must expose --kind/--profile and forbid --reuse-package/--tier"
         )
 
-    matrix_help = run(["python3", str(STACKCTL), "matrix", "--help"])
+    matrix_help = run([STACKCTL_PYTHON, str(STACKCTL), "matrix", "--help"])
     if (
         matrix_help.returncode != 0
         or "--profile" not in matrix_help.stdout
@@ -85,15 +87,15 @@ def main() -> int:
             "stackctl matrix must require canonical targets and forbid cache/auto-wipe shortcuts"
         )
 
-    health_help = run(["python3", str(STACKCTL), "health", "--help"])
+    health_help = run([STACKCTL_PYTHON, str(STACKCTL), "health", "--help"])
     if health_help.returncode != 0 or "--scope" not in health_help.stdout:
         issues.append("stackctl health --help must expose --scope")
 
-    inspect_help = run(["python3", str(STACKCTL), "inspect", "--help"])
+    inspect_help = run([STACKCTL_PYTHON, str(STACKCTL), "inspect", "--help"])
     if inspect_help.returncode != 0 or "--kind" not in inspect_help.stdout:
         issues.append("stackctl inspect --help must expose --kind alias")
 
-    up_help = run(["python3", str(STACKCTL), "up", "--help"])
+    up_help = run([STACKCTL_PYTHON, str(STACKCTL), "up", "--help"])
     if (
         up_help.returncode != 0
         or "--env" not in up_help.stdout
@@ -104,7 +106,7 @@ def main() -> int:
     if "--gateway-base-url" in up_help.stdout:
         issues.append("stackctl up user surface must not expose gateway override flags")
 
-    dev_session_help = run(["python3", str(STACKCTL), "dev-session", "--help"])
+    dev_session_help = run([STACKCTL_PYTHON, str(STACKCTL), "dev-session", "--help"])
     if (
         dev_session_help.returncode != 0
         or "--env" not in dev_session_help.stdout
@@ -141,7 +143,7 @@ def main() -> int:
         )
 
     provider_config_help = run(
-        ["python3", str(STACKCTL), "provider-config", "--help"]
+        [STACKCTL_PYTHON, str(STACKCTL), "provider-config", "--help"]
     )
     if (
         provider_config_help.returncode != 0
@@ -159,7 +161,7 @@ def main() -> int:
             "canonical env/target and no value override flags"
         )
 
-    filter_catalog_help = run(["python3", str(STACKCTL), "filter-catalog", "--help"])
+    filter_catalog_help = run([STACKCTL_PYTHON, str(STACKCTL), "filter-catalog", "--help"])
     if (
         filter_catalog_help.returncode != 0
         or "--target" not in filter_catalog_help.stdout
@@ -172,7 +174,7 @@ def main() -> int:
         )
 
     account_enforcement_help = run(
-        ["python3", str(STACKCTL), "account-enforcement-uat", "--help"]
+        [STACKCTL_PYTHON, str(STACKCTL), "account-enforcement-uat", "--help"]
     )
     if (
         account_enforcement_help.returncode != 0
@@ -189,11 +191,11 @@ def main() -> int:
             "Gamma action/evidence inputs and forbid topology URL overrides"
         )
 
-    roll_help = run(["python3", str(STACKCTL), "roll", "--help"])
+    roll_help = run([STACKCTL_PYTHON, str(STACKCTL), "roll", "--help"])
     if roll_help.returncode != 0 or "--mode" not in roll_help.stdout or "--target" not in roll_help.stdout:
         issues.append("stackctl roll --help must expose --mode/--target")
 
-    deploy_help = run(["python3", str(STACKCTL), "deploy", "--help"])
+    deploy_help = run([STACKCTL_PYTHON, str(STACKCTL), "deploy", "--help"])
     if (
         deploy_help.returncode != 0
         or "--mode" not in deploy_help.stdout
@@ -215,7 +217,7 @@ def main() -> int:
 
     package_help_pre_subcommand = run(
         [
-            "python3",
+            STACKCTL_PYTHON,
             str(STACKCTL),
             "--report-dir",
             str(TMP / "package-alpha"),
@@ -228,7 +230,7 @@ def main() -> int:
 
     package_help_post_subcommand = run(
         [
-            "python3",
+            STACKCTL_PYTHON,
             str(STACKCTL),
             "package",
             "--report-dir",

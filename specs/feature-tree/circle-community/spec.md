@@ -195,16 +195,7 @@
 - 可观察结果：并发准入不超员，Organizer 与 Participation 分离，重大变更逐人确认，取消/提前结束/安全终止/完成可区分，occurred 具有独立证据，退出与撤权最终收敛。
 - 禁止结果：不得用裸建群、ConversationMembership、Feed card、Assistant artifact、旅行 Trip 或 App cache 代替 Gathering 真相；不得因参与自动建立 mutual。
 
-## 7. 工程归属
-
-- App：`quwoquan_app/lib/service/circle_service`
-- Service：`quwoquan_service/services/circle-service`
-- 测试：
-  - `local_contract`：`quwoquan_service/services/circle-service/tests`
-  - `api_integration`：`quwoquan_service/services/circle-service/tests`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
-
-## 8. 开放事项
+## 7. 开放事项
 
 <a id="open-001"></a>
 ### OPEN-001 circle community 领域边界验收

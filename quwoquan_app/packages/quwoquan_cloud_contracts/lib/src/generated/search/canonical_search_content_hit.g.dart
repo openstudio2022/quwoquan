@@ -7,7 +7,6 @@ import '../shared_operation_enums.g.dart';
 class CanonicalSearchContentHit {
   final String postId;
   final ContentType contentType;
-  final ContentIdentity? contentIdentity;
   final String? title;
   final String? summary;
   final String? coverUrl;
@@ -24,7 +23,6 @@ class CanonicalSearchContentHit {
   CanonicalSearchContentHit({
     required this.postId,
     required this.contentType,
-    this.contentIdentity,
     this.title,
     this.summary,
     this.coverUrl,
@@ -47,12 +45,6 @@ class CanonicalSearchContentHit {
         m['contentType'],
         'CanonicalSearchContentHit.contentType',
       ),
-      contentIdentity: m['contentIdentity'] == null
-          ? null
-          : ContentIdentity.fromWire(
-              m['contentIdentity'],
-              'CanonicalSearchContentHit.contentIdentity',
-            ),
       title: m['title'] as String?,
       summary: m['summary'] as String?,
       coverUrl: m['coverUrl'] as String?,
@@ -79,7 +71,6 @@ class CanonicalSearchContentHit {
     return <String, dynamic>{
       'postId': postId,
       'contentType': contentType.wireName,
-      'contentIdentity': contentIdentity?.wireName,
       'title': title,
       'summary': summary,
       'coverUrl': coverUrl,
@@ -98,7 +89,6 @@ class CanonicalSearchContentHit {
   CanonicalSearchContentHit copyWith({
     String? postId,
     ContentType? contentType,
-    ContentIdentity? contentIdentity,
     String? title,
     String? summary,
     String? coverUrl,
@@ -115,7 +105,6 @@ class CanonicalSearchContentHit {
     return CanonicalSearchContentHit(
       postId: postId ?? this.postId,
       contentType: contentType ?? this.contentType,
-      contentIdentity: contentIdentity ?? this.contentIdentity,
       title: title ?? this.title,
       summary: summary ?? this.summary,
       coverUrl: coverUrl ?? this.coverUrl,
@@ -136,7 +125,6 @@ void _validateCanonicalSearchContentHitWire(Map<String, dynamic> m) {
   const allowed = <String>{
     'postId',
     'contentType',
-    'contentIdentity',
     'title',
     'summary',
     'coverUrl',
@@ -170,13 +158,6 @@ void _validateCanonicalSearchContentHitWire(Map<String, dynamic> m) {
       (m['contentType'] is! String)) {
     throw FormatException(
       'CanonicalSearchContentHit.contentType has an invalid wire value',
-    );
-  }
-  if (m.containsKey('contentIdentity') &&
-      m['contentIdentity'] != null &&
-      (m['contentIdentity'] is! String)) {
-    throw FormatException(
-      'CanonicalSearchContentHit.contentIdentity has an invalid wire value',
     );
   }
   if (m.containsKey('title') && m['title'] != null && (m['title'] is! String)) {

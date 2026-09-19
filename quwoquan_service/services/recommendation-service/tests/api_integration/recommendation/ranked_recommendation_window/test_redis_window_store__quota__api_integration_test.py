@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 import pytest
 from redis import Redis
+from tests.support.presentation import presentation_contract, post_envelope
 
 from internal.recommendation.ranked_recommendation_window.domain.model import (
     ReleasePinnedQueryFence,
@@ -27,6 +28,7 @@ def _window(window_id: str, subject_id: str) -> RankedRecommendationWindow:
     now = datetime.now(timezone.utc)
     return RankedRecommendationWindow.create(
         content_fence=ReleasePinnedQueryFence(release=None, revision=0),
+        client_presentation_contract=presentation_contract(),
         window_id=window_id,
         subject_id=subject_id,
         scenario="content_feed",
@@ -42,7 +44,7 @@ def _window(window_id: str, subject_id: str) -> RankedRecommendationWindow:
             user_feature_snapshot={},
             candidates=(
                 RankedCandidate(
-                    content_id=f"post-{window_id}",
+                    envelope=post_envelope(f"post-{window_id}", "image"),
                     score=1.0,
                     feature_snapshot_digest=f"feature-{window_id}",
                     item_feature_snapshot={"quality": 1.0},
@@ -72,11 +74,11 @@ def test_real_redis_lua_enforces_owner_and_shard_caps_without_sliding_ttl(
         for window in windows[1:]
     )
 
-    value_keys = sorted(real_redis.scan_iter("rec:ranked_feed_window:{rfw-0000}:*"))
+    value_keys = sorted(real_redis.scan_iter("rec:ranked_feed_window_v2:{rfw-0000}:*"))
     assert len(value_keys) == 8
     assert all(b"persona-primary" not in key for key in value_keys)
-    assert real_redis.zcard("rec:ranked_feed_window_index:{rfw-0000}") == 8
-    assert real_redis.hlen("rec:ranked_feed_window_metadata:{rfw-0000}") == 8
+    assert real_redis.zcard("rec:ranked_feed_window_v2_index:{rfw-0000}") == 8
+    assert real_redis.hlen("rec:ranked_feed_window_v2_metadata:{rfw-0000}") == 8
     ttl_before = real_redis.pttl(value_keys[0])
     assert 0 < ttl_before <= RedisWindowStore.TTL_SECONDS * 1000
     assert store.get("persona-primary", windows[-1].window_id) == windows[-1]
@@ -85,7 +87,7 @@ def test_real_redis_lua_enforces_owner_and_shard_caps_without_sliding_ttl(
 
     real_redis.delete(value_keys[0])
     real_redis.zadd(
-        "rec:ranked_feed_window_index:{rfw-0000}",
+        "rec:ranked_feed_window_v2_index:{rfw-0000}",
         {value_keys[1]: 0},
     )
     repaired_missing = store.create_or_get(
@@ -96,25 +98,25 @@ def test_real_redis_lua_enforces_owner_and_shard_caps_without_sliding_ttl(
     )
     assert store.get(repaired_missing.subject_id, repaired_missing.window_id) == repaired_missing
     assert store.get(repaired_expired.subject_id, repaired_expired.window_id) == repaired_expired
-    assert real_redis.zcard("rec:ranked_feed_window_index:{rfw-0000}") == 8
-    assert real_redis.hlen("rec:ranked_feed_window_metadata:{rfw-0000}") == 8
+    assert real_redis.zcard("rec:ranked_feed_window_v2_index:{rfw-0000}") == 8
+    assert real_redis.hlen("rec:ranked_feed_window_v2_metadata:{rfw-0000}") == 8
 
     with pytest.raises(WindowShardRecordQuotaError):
         store.create_or_get(_window("window-other", "persona-other"))
-    assert len(list(real_redis.scan_iter("rec:ranked_feed_window:{rfw-0000}:*"))) == 8
+    assert len(list(real_redis.scan_iter("rec:ranked_feed_window_v2:{rfw-0000}:*"))) == 8
 
     assert store.erase_subject("persona-primary") == 8
-    assert list(real_redis.scan_iter("rec:ranked_feed_window:{rfw-0000}:*")) == []
-    assert real_redis.zcard("rec:ranked_feed_window_index:{rfw-0000}") == 0
-    assert real_redis.hlen("rec:ranked_feed_window_metadata:{rfw-0000}") == 0
+    assert list(real_redis.scan_iter("rec:ranked_feed_window_v2:{rfw-0000}:*")) == []
+    assert real_redis.zcard("rec:ranked_feed_window_v2_index:{rfw-0000}") == 0
+    assert real_redis.hlen("rec:ranked_feed_window_v2_metadata:{rfw-0000}") == 0
 
     contender = _window("window-concurrent", "persona-concurrent")
     with ThreadPoolExecutor(max_workers=8) as pool:
         winners = list(pool.map(lambda _index: store.create_or_get(contender), range(8)))
     assert winners == [contender] * 8
     assert store.create_or_get(contender) == contender
-    assert real_redis.zcard("rec:ranked_feed_window_index:{rfw-0000}") == 1
-    assert real_redis.hlen("rec:ranked_feed_window_metadata:{rfw-0000}") == 1
+    assert real_redis.zcard("rec:ranked_feed_window_v2_index:{rfw-0000}") == 1
+    assert real_redis.hlen("rec:ranked_feed_window_v2_metadata:{rfw-0000}") == 1
 
 
 # spec_ref: specs/feature-tree/runtime/runtime-redis/spec.md#sit-001

@@ -141,8 +141,8 @@ func TestFeedDeliveryPageRoundTripsThroughMongoAndRealRedis(t *testing.T) {
 		createdAt := now.Add(-time.Duration(index) * time.Minute)
 		documents = append(documents, bson.M{
 			"_id": id, "authorId": "delivery-page-api-author-" + run,
-			"contentType": "image", "contentIdentity": "work",
-			"status": "published", "visibility": "public", "moderationStatus": "approved",
+			"contentType": "image",
+			"status":      "published", "visibility": "public", "moderationStatus": "approved",
 			"createdAt": createdAt, "publishedAt": createdAt,
 		})
 	}
@@ -152,7 +152,6 @@ func TestFeedDeliveryPageRoundTripsThroughMongoAndRealRedis(t *testing.T) {
 
 	request := feedapp.ListFeedRequest{
 		SessionID: "delivery-page-api-session-" + run,
-		Identity:  "work",
 		Type:      "image",
 		Limit:     1,
 	}
@@ -169,8 +168,8 @@ func TestFeedDeliveryPageRoundTripsThroughMongoAndRealRedis(t *testing.T) {
 
 	if _, err := collection.InsertOne(ctx, bson.M{
 		"_id": ids[3], "authorId": "delivery-page-api-replacement-author-" + run,
-		"contentType": "image", "contentIdentity": "work",
-		"status": "published", "visibility": "public", "moderationStatus": "approved",
+		"contentType": "image",
+		"status":      "published", "visibility": "public", "moderationStatus": "approved",
 		"createdAt": now.Add(time.Hour), "publishedAt": now.Add(time.Hour),
 	}); err != nil {
 		t.Fatalf("seed newer live replacement: %v", err)

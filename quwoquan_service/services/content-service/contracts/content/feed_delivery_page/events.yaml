@@ -1,6 +1,12 @@
 events:
 - name: FeedPageDelivered
-  description: Content 确认 FeedDeliveryPage 已持久化且完成当前权限 hydration 后发布；Recommendation 只据此形成曝光事实。
+  description: >-
+    Content 确认 FeedDeliveryPage 已持久化且完成当前权限 hydration 后发布；items 使用唯一
+    ListItemPresentationEnvelope 表达 Post 或 Homepage 的稳定身份与展示决策，ordinal 和
+    特征来自同一 Recommendation 稳定窗口，仅包含实际交付项。Recommendation 只据此形成
+    曝光事实，必须按 envelope 的对象种类及对应引用校验与去重，不得要求主页提供 Post 的
+    contentId/contentType 或伪造 Post 曝光。本事件 wire 变更必须与 Recommendation 曝光
+    consumer、事实存储、特征投影及训练归因同步迁移，禁止旧字段 dual-read 或单边上线。
   delivery_semantics: durable_stream
   topic: events.content.feed_page_delivered
   payload_entity: FeedPageDelivered

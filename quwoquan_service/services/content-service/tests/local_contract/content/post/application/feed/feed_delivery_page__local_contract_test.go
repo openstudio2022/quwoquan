@@ -33,7 +33,7 @@ func TestTerminalFeedResponseStillPersistsOneDeliveryPage(t *testing.T) {
 	now := time.Now().UTC()
 	posts := []postmodel.Post{{
 		ID: "terminal-delivery-1", AuthorId: "author-1", ContentType: "image",
-		ContentIdentity: "work", Status: "published", Visibility: "public",
+		Status: "published", Visibility: "public",
 		CreatedAt: now, PublishedAt: now,
 	}}
 	store := &recordingDeliveryPageStore{}
@@ -61,9 +61,9 @@ func TestTerminalFeedResponseStillPersistsOneDeliveryPage(t *testing.T) {
 func TestDeliveredPagePreviousCursorReplaysIdentityOrderWithoutRecall(t *testing.T) {
 	now := time.Now().UTC()
 	posts := []postmodel.Post{
-		{ID: "delivered-page-1", AuthorId: "author-1", ContentType: "image", ContentIdentity: "work", Status: "published", Visibility: "public", CreatedAt: now, PublishedAt: now},
-		{ID: "delivered-page-2", AuthorId: "author-2", ContentType: "image", ContentIdentity: "work", Status: "published", Visibility: "public", CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute)},
-		{ID: "delivered-page-3", AuthorId: "author-3", ContentType: "image", ContentIdentity: "work", Status: "published", Visibility: "public", CreatedAt: now.Add(-2 * time.Minute), PublishedAt: now.Add(-2 * time.Minute)},
+		{ID: "delivered-page-1", AuthorId: "author-1", ContentType: "image", Status: "published", Visibility: "public", CreatedAt: now, PublishedAt: now},
+		{ID: "delivered-page-2", AuthorId: "author-2", ContentType: "image", Status: "published", Visibility: "public", CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute)},
+		{ID: "delivered-page-3", AuthorId: "author-3", ContentType: "image", Status: "published", Visibility: "public", CreatedAt: now.Add(-2 * time.Minute), PublishedAt: now.Add(-2 * time.Minute)},
 	}
 	source := &countingDeliveryRecallSource{candidates: deliveryCandidates(posts)}
 	reader := &countingDeliveryPageReader{fixtureFeedReader: fixtureFeedReader{posts: posts}}
@@ -131,8 +131,8 @@ func TestDeliveredPagePreviousCursorReplaysIdentityOrderWithoutRecall(t *testing
 func TestFeedCursorBindsNormalizedPageSize(t *testing.T) {
 	now := time.Now().UTC()
 	posts := []postmodel.Post{
-		{ID: "page-size-1", AuthorId: "author-1", ContentType: "image", ContentIdentity: "work", Status: "published", Visibility: "public", CreatedAt: now, PublishedAt: now},
-		{ID: "page-size-2", AuthorId: "author-2", ContentType: "image", ContentIdentity: "work", Status: "published", Visibility: "public", CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute)},
+		{ID: "page-size-1", AuthorId: "author-1", ContentType: "image", Status: "published", Visibility: "public", CreatedAt: now, PublishedAt: now},
+		{ID: "page-size-2", AuthorId: "author-2", ContentType: "image", Status: "published", Visibility: "public", CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute)},
 	}
 	service := newTerminalFeedService(
 		newTerminalFeedEngine(deliveryCandidates(posts)),

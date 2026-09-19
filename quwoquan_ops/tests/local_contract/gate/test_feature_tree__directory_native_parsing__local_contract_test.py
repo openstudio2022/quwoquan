@@ -175,7 +175,7 @@ def test_change_report_keeps_release_open_visible_without_blocking_remediation(
     assert "RELEASE_GATES_BLOCKED" in capsys.readouterr().out
 
 
-def test_change_report_still_blocks_unowned_engineering_change(
+def test_change_report_uses_impact_plan_without_owner_resolution(
     tmp_path: Path, monkeypatch
 ) -> None:
     # spec_ref: specs/feature-tree/runtime/development-workflow-governance/directory-native-sdd/spec.md#gwt-001.t2
@@ -190,7 +190,7 @@ def test_change_report_still_blocks_unowned_engineering_change(
     )
     monkeypatch.setattr(ft_commands, "write_output", lambda name, _content: root / name)
 
-    assert feature_tree.command_change_report(argparse.Namespace()) == 2
+    assert feature_tree.command_change_report(argparse.Namespace()) == 0
 
 
 def test_journey_scenario_requires_exact_l1_handoff_reference(

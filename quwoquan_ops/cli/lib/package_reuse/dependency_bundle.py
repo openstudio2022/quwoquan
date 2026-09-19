@@ -22,8 +22,8 @@ from .dependency_fs import assert_real_directory, read_regular_nofollow
 from .native_dependency_inputs import native_resolution_input_identity
 from .pub_cache_capsule import _canonical_bytes, _digest_bytes
 
-APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA = "stackctl-app-dependency-bundle-active.v2"
-APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA = "stackctl-app-dependency-sync-receipt.v3"
+APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA = "stackctl-app-dependency-bundle-active.v3"
+APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA = "stackctl-app-dependency-sync-receipt.v4"
 
 # 与 canonical launch blocker 契约字面量对齐；contracts codegen 由并行任务落地，
 # 这里不 import generated 契约，只承诺同一字符串。
@@ -32,6 +32,7 @@ APP_DEPENDENCY_BUNDLE_MISSING_LOCATIONS = frozenset(
     {
         ("managedDependencyBundle", "root"),
         ("managedDependencyBundle", "activePointer"),
+        ("managedDependencyBundle", "platformCoverage"),
     }
 )
 APP_DEPENDENCY_BUNDLE_STALE_CODE = "APP.DEPENDENCY.bundle_stale"
@@ -78,13 +79,26 @@ class AppDependencyBundleStaleError(ValueError):
         self.code = APP_DEPENDENCY_BUNDLE_STALE_CODE
         self.field = field
 
-APP_DEPENDENCY_COMPONENTS = (
-    "productionPub",
-    "patrolPub",
-    "productionIosPods",
-    "patrolIosPods",
-    "androidGradle",
-)
+APP_DEPENDENCY_PLATFORM_COMPONENTS = {
+    "android": ("productionPub", "patrolPub", "androidGradle"),
+    "ios": ("productionPub", "patrolPub", "productionIosPods", "patrolIosPods"),
+}
+APP_DEPENDENCY_PLATFORMS = tuple(APP_DEPENDENCY_PLATFORM_COMPONENTS)
+APP_DEPENDENCY_COMPONENTS = tuple(dict.fromkeys(
+    component
+    for platform in APP_DEPENDENCY_PLATFORMS
+    for component in APP_DEPENDENCY_PLATFORM_COMPONENTS[platform]
+))
+
+def dependency_components_for_platforms(platforms: tuple[str, ...]) -> tuple[str, ...]:
+    if not platforms or len(set(platforms)) != len(platforms) or any(
+        platform not in APP_DEPENDENCY_PLATFORMS for platform in platforms
+    ):
+        raise ValueError("APP.DEPENDENCY.platform_selector_invalid")
+    return tuple(dict.fromkeys(
+        component for platform in platforms
+        for component in APP_DEPENDENCY_PLATFORM_COMPONENTS[platform]
+    ))
 
 _ACTIVE_FIELDS = {
     "schema",
@@ -94,6 +108,9 @@ _ACTIVE_FIELDS = {
     "productionPubResolutionInputDigest",
     "patrolPubResolutionInputDigest",
     "nativeResolutionInputDigest",
+    "platforms",
+    "platformInputs",
+    "nonPromotable",
     "components",
     "receiptRef",
     "receiptDigest",
@@ -109,6 +126,9 @@ _RECEIPT_FIELDS = {
     "schema",
     "claim",
     "attemptId",
+    "platforms",
+    "platformInputs",
+    "nonPromotable",
     "components",
     "activationEvidence",
 }
@@ -261,10 +281,13 @@ def _validate_receipt(
         receipt.get("schema") != APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA
         or receipt.get("claim") != "PREPARED_NOT_ACTIVE"
         or receipt.get("attemptId") != active.get("attemptId")
+        or receipt.get("platforms") != active.get("platforms")
+        or receipt.get("platformInputs") != active.get("platformInputs")
+        or receipt.get("nonPromotable") != active.get("nonPromotable")
         or receipt.get("components") != components
         or receipt.get("activationEvidence")
         != {
-            "requiredActiveRef": (root / "active.json")
+            "requiredActiveRef": (root / (f"active-{active['platforms'][0]}.json" if len(active["platforms"]) == 1 else "active.json"))
             .relative_to(output_root().expanduser().absolute())
             .as_posix(),
             "requiredAttemptId": active.get("attemptId"),
@@ -277,7 +300,7 @@ def _validate_receipt(
 
 
 def load_active_dependency_bundle(
-    *, repo_root: Path, require_current_source: bool = True
+    *, repo_root: Path, require_current_source: bool = True, required_platforms: tuple[str, ...] = ("android", "ios")
 ) -> AppDependencyBundle:
     """Read active once and verify receipt plus all component selectors.
 
@@ -295,7 +318,12 @@ def load_active_dependency_bundle(
                 "managedDependencyBundle", "root"
             ) from error
         raise
-    active_path = root / "active.json"
+    active_name = (
+        f"active-{required_platforms[0]}.json"
+        if len(required_platforms) == 1
+        else "active.json"
+    )
+    active_path = root / active_name
     try:
         _encoded, active = _read_json(active_path, label="bundle active pointer")
     except ValueError as error:
@@ -315,19 +343,36 @@ def load_active_dependency_bundle(
     attempt_id = str(active.get("attemptId") or "")
     if not attempt_id or any(character not in "0123456789abcdef" for character in attempt_id):
         raise ValueError("App dependency bundle attempt identity is invalid")
+    required = tuple(required_platforms)
+    expected_components = dependency_components_for_platforms(required)
+    covered = active.get("platforms")
+    if (
+        not isinstance(covered, list)
+        or not covered
+        or len(set(covered)) != len(covered)
+        or any(platform not in APP_DEPENDENCY_PLATFORMS for platform in covered)
+    ):
+        raise ValueError("App dependency bundle platform coverage is invalid")
+    missing = set(required) - set(covered)
+    if missing:
+        raise AppDependencyBundleMissingError("managedDependencyBundle", "platformCoverage")
+    platform_inputs = active.get("platformInputs")
+    if not isinstance(platform_inputs, Mapping) or set(platform_inputs) != set(covered):
+        raise ValueError("App dependency bundle platform input coverage mismatch")
     current = _current_source_identity(repository)
     if require_current_source:
-        for field, expected in current.items():
-            if active.get(field) != expected:
+        required_fields = {"flutterVersion", "flutterCommandResolutionDigest", "productionPubResolutionInputDigest", "patrolPubResolutionInputDigest"}
+        if "android" in required:
+            required_fields.add("nativeResolutionInputDigest")
+        for field in required_fields:
+            if active.get(field) != current[field]:
                 raise AppDependencyBundleStaleError(field)
     raw_components = active.get("components")
-    if not isinstance(raw_components, Mapping) or set(raw_components) != set(
-        APP_DEPENDENCY_COMPONENTS
-    ):
+    if not isinstance(raw_components, Mapping) or not set(expected_components).issubset(raw_components) or set(raw_components) != set(dependency_components_for_platforms(tuple(covered))):
         raise ValueError("App dependency bundle component set mismatch")
     component_roots: list[tuple[str, Path]] = []
     component_manifests: list[tuple[str, dict[str, Any]]] = []
-    for name in APP_DEPENDENCY_COMPONENTS:
+    for name in dependency_components_for_platforms(tuple(covered)):
         declaration = raw_components.get(name)
         if not isinstance(declaration, Mapping):
             raise TypeError(f"App dependency {name} declaration is invalid")

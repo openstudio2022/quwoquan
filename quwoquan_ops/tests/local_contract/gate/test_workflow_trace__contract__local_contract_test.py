@@ -85,7 +85,6 @@ def test_start_finish_readback_and_opaque_refs(tmp_path: Path) -> None:
         host="cursor",
         selected_skill="skill-00",
         capability_status="declared",
-        owner_identity_ref="opaque:owner-ref",
         started_at="2026-09-03T00:00:00Z",
     )
     assert started["status"] == "recorded"
@@ -103,7 +102,7 @@ def test_start_finish_readback_and_opaque_refs(tmp_path: Path) -> None:
     readback = workflow_trace.readback_trace(output_root=output, ref=finished["ref"])
     assert readback["status"] == "valid"
     assert readback["trace"]["start_ref"] == started["ref"]
-    assert readback["start"]["owner_identity_ref"] == "opaque:owner-ref"
+    assert "context_ref" not in readback["start"]
     assert readback["trace"]["candidate_evidence_ref"] == "opaque:candidate-ref"
 
 

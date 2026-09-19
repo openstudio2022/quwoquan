@@ -12,6 +12,7 @@ import (
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
 	moderationapp "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/application"
 	moderationmodel "quwoquan_service/services/content-service/internal/trust_safety/post_moderation_case/domain/model"
+	semanticfixture "quwoquan_service/services/content-service/tests/support/semanticfixture"
 )
 
 func TestPendingPublicationOpensCaseAndApprovalPublishesExactRevision(t *testing.T) {
@@ -30,9 +31,12 @@ func TestPendingPublicationOpensCaseAndApprovalPublishesExactRevision(t *testing
 		LocalDraftID:    "draft-prepublication-review",
 		AuthorID:        "persona-prepublication-review",
 		Content: postmodel.Post{
-			ContentType: "micro",
-			Body:        "这是一条必须先审核再公开的文字内容。",
-			Visibility:  "public",
+			ContentType:      "article",
+			MarkdownDialect:  "qwq-rich-md",
+			SemanticDocument: semanticfixture.Envelope(t),
+			Body:             "这是一条必须先审核再公开的文字内容。",
+			ArticleMarkdown:  "这是一条必须先审核再公开的文字内容。",
+			Visibility:       "public",
 		},
 	}
 	receipt, err := postService.SubmitPostPublication(
@@ -157,9 +161,12 @@ func TestPendingPublicationRejectionNeverEntersPublicReadModel(t *testing.T) {
 		LocalDraftID:    "draft-prepublication-reject",
 		AuthorID:        "persona-prepublication-reject",
 		Content: postmodel.Post{
-			ContentType: "micro",
-			Body:        "这是一条审核拒绝后不得公开的文字内容。",
-			Visibility:  "public",
+			ContentType:      "article",
+			MarkdownDialect:  "qwq-rich-md",
+			SemanticDocument: semanticfixture.Envelope(t),
+			Body:             "这是一条审核拒绝后不得公开的文字内容。",
+			ArticleMarkdown:  "这是一条审核拒绝后不得公开的文字内容。",
+			Visibility:       "public",
 		},
 	}
 	receipt, err := postService.SubmitPostPublication(

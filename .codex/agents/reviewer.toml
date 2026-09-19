@@ -19,7 +19,7 @@ developer_instructions = """
 
 ## 输入
 
-派发 prompt 必须提供角色 `ROLE.md`、本次 checklist、`grading.md`、PRE owner identity 中的 canonical contexts、命名 evidence 结果和 Review fingerprint。不要假设继承主会话上下文。
+派发 prompt 必须提供角色 `ROLE.md`、本次 checklist、`grading.md`、PRE feature context 中的 canonical contexts、命名 evidence 结果和 Review fingerprint。不要假设继承主会话上下文。
 
 ## 执行
 

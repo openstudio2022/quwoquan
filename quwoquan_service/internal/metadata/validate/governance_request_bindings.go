@@ -9,8 +9,24 @@ import (
 
 var pathBindingPattern = regexp.MustCompile(`\{([^{}]+)\}`)
 
+func validateJSONBindingPositions(operation ast.Operation) []Issue {
+ if operation.RequestBindings == nil { return nil }
+ var issues []Issue
+ bindings := operation.RequestBindings
+ for _, group := range []struct{location string;values []ast.RequestBinding}{{"path",bindings.Path},{"query",bindings.Query},{"header",bindings.Header},{"injected",bindings.Injected}} {
+  for _, binding := range group.values {
+   if invalidJSONBinding(group.location,binding) { issues=append(issues,issue("CONTRACT.REQUEST_BINDING.JSON",operation.SourcePath,"operation %q binding %q requires query encoding=json with explicit positive max_bytes",operation.ID,binding.Name)) }
+  }
+ }
+ return issues
+}
+
+func invalidJSONBinding(location string, binding ast.RequestBinding) bool {
+	return (binding.Encoding != "" || binding.MaxBytes != 0) && (location != "query" || binding.Encoding != "json" || binding.MaxBytes <= 0)
+}
+
 func validateRequestBindings(operation ast.Operation) []Issue {
-	issues := validateRequestConstants(operation)
+	issues := append(validateRequestConstants(operation), validateJSONBindingPositions(operation)...)
 	if len(operation.LegacyRequestKeys) > 0 {
 		issues = append(issues, issue(
 			"CONTRACT.REQUEST_BINDING.LEGACY_SHAPE",

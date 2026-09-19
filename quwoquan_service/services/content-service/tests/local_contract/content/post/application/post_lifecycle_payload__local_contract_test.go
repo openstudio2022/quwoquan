@@ -18,7 +18,7 @@ func TestPostLifecycleVisitedAtWireIsNullOrTimestamp(t *testing.T) {
 	for _, visited := range []time.Time{{}, time.Date(2026, 4, 5, 6, 30, 0, 0, time.UTC)} {
 		store := testsupport.NewPostStore(nil)
 		svc := newVisitedAtService(store)
-		_, err := svc.SubmitPostPublication(commandmeta.WithIdempotencyKey(context.Background(), "intent-visited-wire"), visitedAtPublicationCommand("wire", visited))
+		_, err := svc.SubmitPostPublication(commandmeta.WithIdempotencyKey(context.Background(), "intent-visited-wire"), visitedAtPublicationCommand(t, "wire", visited))
 		if err != nil {
 			t.Fatal(err)
 		}

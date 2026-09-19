@@ -141,7 +141,7 @@ func TestFenceJointSearchHarness(t *testing.T) {
 	for _, name := range []string{"a", "b"} {
 		release := rt.ReleaseCandidateBinding{Environment: "alpha", SourceOwner: "qwq_data", ReleaseID: "joint-" + name, ManifestDigest: "sha256:" + strings.Repeat(name, 64)}
 		identity := rt.ReleaseCandidateObjectIdentity{Release: release, ObjectType: "content.post", ObjectID: "post-" + name, SourceVersion: 1, SourceDigest: generation}
-		posts := rt.ReleasePostCandidateSnapshot{Release: release, SourceClosureDigest: generation, MediaClosureDigest: generation, Posts: []rt.ReleasePostPublicSnapshot{{Identity: identity, PostRef: "posts/" + name, AuthorID: "author", AuthorDisplayName: "作者", ContentType: "article", ContentIdentity: "work", Status: "published", Visibility: "public", ModerationStatus: "approved", Title: "联合搜索" + name, TagRefs: []string{}, EntityRefs: []string{}, MediaAssetIDs: []string{}, MediaURLs: []string{}, PublishedAt: "2026-09-13T00:00:00Z", UpdatedAt: "2026-09-13T00:00:00Z", DeepLink: "quwoquan://content/posts/post-" + name}}}
+		posts := rt.ReleasePostCandidateSnapshot{Release: release, SourceClosureDigest: generation, MediaClosureDigest: generation, Posts: []rt.ReleasePostPublicSnapshot{{Identity: identity, PostRef: "posts/" + name, AuthorID: "author", AuthorDisplayName: "作者", ContentType: "article", Status: "published", Visibility: "public", ModerationStatus: "approved", Title: "联合搜索" + name, TagRefs: []string{}, EntityRefs: []string{}, MediaAssetIDs: []string{}, MediaURLs: []string{}, PublishedAt: "2026-09-13T00:00:00Z", UpdatedAt: "2026-09-13T00:00:00Z", DeepLink: "quwoquan://content/posts/post-" + name}}}
 		if err = posts.Seal(); err != nil {
 			t.Fatal(err)
 		}

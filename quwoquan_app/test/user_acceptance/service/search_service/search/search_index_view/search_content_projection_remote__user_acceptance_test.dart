@@ -56,10 +56,11 @@ void main() {
               SubmitContentPostPublicationCommand(
                 publishIntentId: 'search-content-$suffix',
                 localDraftId: 'search-content-draft-$suffix',
-                contentType: ContentType.micro,
-                contentIdentity: ContentIdentity.moment,
+                contentType: ContentType.article,
                 title: title,
-                body: '$query 正文只来自公开 Content command',
+                articleMarkdown:
+                    '---\nmarkdownDialect: qwq-rich-md\n---\n\n'
+                    '$query 正文只来自公开 Content command',
                 visibility: Visibility.public,
               ),
             );
@@ -75,7 +76,8 @@ void main() {
         );
         if (indexed.title != title ||
             indexed.objectType != SearchObjectType.contentPost.wireValue ||
-            indexed.content?.postId != postId) {
+            indexed.content?.postId != postId ||
+            indexed.content?.contentType != ContentType.article) {
           throw StateError('Canonical Search content projection drifted');
         }
 

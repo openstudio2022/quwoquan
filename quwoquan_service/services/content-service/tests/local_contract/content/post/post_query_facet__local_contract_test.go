@@ -182,7 +182,6 @@ func TestPostQueryFacadeListAuthorPostsScopesOwnerAndValidatesCursor(t *testing.
 		"",
 		"",
 		"",
-		"",
 		10,
 	)
 	page, err := facade.ListUserPosts(ctx, ownerQuery)
@@ -199,7 +198,6 @@ func TestPostQueryFacadeListAuthorPostsScopesOwnerAndValidatesCursor(t *testing.
 	outsiderPrivateQuery := postports.NewAuthorPostPageQuery(
 		authorID,
 		queryViewer("persona-outsider"),
-		"",
 		"",
 		postports.PostVisibility("private"),
 		"",
@@ -224,7 +222,6 @@ func TestPostQueryFacadeListAuthorPostsScopesOwnerAndValidatesCursor(t *testing.
 		postports.AuthorPostAccessPublic,
 		"",
 		"",
-		"",
 		postports.AuthorPostCursor{},
 		10,
 	)
@@ -238,7 +235,6 @@ func TestPostQueryFacadeListAuthorPostsScopesOwnerAndValidatesCursor(t *testing.
 		postports.NewAuthorPostPageQuery(
 			authorID,
 			queryViewer("persona-outsider"),
-			"",
 			"",
 			"",
 			validCursor,
@@ -266,7 +262,6 @@ func TestPostQueryFacadeRejectsMalformedCursorBeforeReader(t *testing.T) {
 			queryViewer("persona-outsider"),
 			"",
 			"",
-			"",
 			"not-a-canonical-cursor",
 			10,
 		),
@@ -287,7 +282,6 @@ func TestPostQueryFacadeRejectsCursorOutsideQueryScope(t *testing.T) {
 		postports.AuthorPostAccessPublic,
 		"",
 		"",
-		"",
 		postports.AuthorPostCursor{},
 		10,
 	)
@@ -296,7 +290,6 @@ func TestPostQueryFacadeRejectsCursorOutsideQueryScope(t *testing.T) {
 		postports.NewAuthorPostPageQuery(
 			postports.NewPersonaID("persona-author"),
 			queryViewer("persona-outsider"),
-			"",
 			"",
 			"",
 			postports.NewAuthorPostCursor(
@@ -404,7 +397,7 @@ func TestListUserPostsEnforcesBlockServerSide(t *testing.T) {
 	page, err := facade.ListUserPosts(ctx, postports.NewAuthorPostPageQuery(
 		postports.NewPersonaID("persona-author"),
 		queryViewer("persona-blocked-viewer"),
-		"", "", "", "", 10,
+		"", "", "", 10,
 	))
 	if err != nil {
 		t.Fatalf("blocked viewer must receive empty page, not error: %v", err)
@@ -420,7 +413,7 @@ func TestListUserPostsEnforcesBlockServerSide(t *testing.T) {
 	page, err = facade.ListUserPosts(ctx, postports.NewAuthorPostPageQuery(
 		postports.NewPersonaID("persona-author"),
 		queryViewer("persona-friend"),
-		"", "", "", "", 10,
+		"", "", "", 10,
 	))
 	if err != nil {
 		t.Fatalf("unblocked viewer read failed: %v", err)
@@ -434,7 +427,7 @@ func TestListUserPostsEnforcesBlockServerSide(t *testing.T) {
 	if _, err = facade.ListUserPosts(ctx, postports.NewAuthorPostPageQuery(
 		postports.NewPersonaID("persona-author"),
 		queryViewer("persona-author"),
-		"", "", "", "", 10,
+		"", "", "", 10,
 	)); err != nil {
 		t.Fatalf("owner read failed: %v", err)
 	}
@@ -446,7 +439,7 @@ func TestListUserPostsEnforcesBlockServerSide(t *testing.T) {
 	if _, err = facade.ListUserPosts(ctx, postports.NewAuthorPostPageQuery(
 		postports.NewPersonaID("persona-author"),
 		queryViewer(""),
-		"", "", "", "", 10,
+		"", "", "", 10,
 	)); err != nil {
 		t.Fatalf("guest read failed: %v", err)
 	}
@@ -459,7 +452,7 @@ func TestListUserPostsEnforcesBlockServerSide(t *testing.T) {
 	_, err = facade.ListUserPosts(ctx, postports.NewAuthorPostPageQuery(
 		postports.NewPersonaID("persona-author"),
 		queryViewer("persona-blocked-viewer"),
-		"", "", "", "", 10,
+		"", "", "", 10,
 	))
 	assertPostQueryErrorCode(t, err, contentgenerated.AppErrorFromStorageReadFailed(""))
 }
@@ -515,7 +508,7 @@ func TestPublicPostQueriesRejectInvalidBindingBeforeAnyReader(t *testing.T) {
 		"ListUserPosts": func() error {
 			_, err := facade.ListUserPosts(context.Background(), postports.NewAuthorPostPageQuery(
 				postports.NewPersonaID("research-author"), queryViewer("persona-member"),
-				"", "", "", "", 20,
+				"", "", "", 20,
 			))
 			return err
 		},
@@ -567,7 +560,7 @@ func TestPublicQueriesUseExactActiveReleaseFence(t *testing.T) {
 		t.Fatal(err)
 	}
 	if _, err := facade.ListUserPosts(context.Background(), postports.NewAuthorPostPageQuery(
-		"research-author", queryViewer("persona-research"), "", "", "", "", 20,
+		"research-author", queryViewer("persona-research"), "", "", "", 20,
 	)); err != nil {
 		t.Fatal(err)
 	}

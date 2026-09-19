@@ -349,7 +349,7 @@ def review_bundle_evidence(*, bundle_root: Path, evidence_root: Path, handoff_re
     handoff = load(handoff_ref)
     validate_declared_fields(handoff, "handoff_manifest", "required_fields")
     refs = {handoff_ref, handoff["review_plan_ref"], handoff["review_consolidation_ref"],
-        handoff["owner_identity_ref"], handoff["candidate_evidence_ref"],
+        handoff["candidate_evidence_ref"],
         *handoff["evidence_receipt_refs"], *handoff["reviewer_result_refs"],
         *(item["ref"] for item in handoff["candidate_closure"])}
     for ref in handoff["evidence_receipt_refs"]:

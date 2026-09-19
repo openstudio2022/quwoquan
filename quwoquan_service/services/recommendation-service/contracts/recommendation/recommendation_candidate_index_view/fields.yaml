@@ -5,7 +5,7 @@ fields:
 - {name: releaseBinding, type: ReleaseQueryPreparationBinding, constraints: [NULLABLE], role: projection, description: Data recommendation分区，slice必须recommendation；revision不进入此身份。}
 - {name: scenario, source: scenario, type: string, constraints: [PK, NOT_NULL], classification: INTERNAL, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
 - {name: contentId, source: contentId, type: string, constraints: [PK, NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
-- {name: contentType, source: contentType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
+- {name: contentType, source: contentType, type: enum, enum_ref: ContentType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: none, ops_exposure: read, role: projection}
 - {name: authorId, source: authorId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, reference: true}
 - {name: tagRefs, source: tagRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection, tag_ref: true}
 - {name: entityRefs, source: entityRefs, type: '[]string', constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: none, ops_exposure: read, role: projection}

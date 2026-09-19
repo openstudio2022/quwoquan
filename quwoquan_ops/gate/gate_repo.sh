@@ -118,6 +118,7 @@ esac
 
 # 纯源码扫描先于工具链与重型门禁；所有合法 scope（含 service packaging）同轨执行。
 python3 -B quwoquan_app/scripts/runtime/architecture/verify_retired_terms_zero.py
+python3 -B quwoquan_data/scripts/cli.py verify contract-closure
 
 if [[ "$service_phase" != "packaging" ]]; then
 run_vertical_architecture_ratchet() {

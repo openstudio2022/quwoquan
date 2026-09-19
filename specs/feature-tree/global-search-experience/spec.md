@@ -104,20 +104,7 @@
 - location.place 与 entity.homepage 互斥单源，同一地点只出现一次。
 - integration.location_poi 不作为统一 result 对象。
 
-## 7. 工程归属
-
-- App：`quwoquan_app/lib/service/search_service`
-- App（协作引用，不用于代码归属）：`quwoquan_app/lib/runtime/di`
-- Contracts：`quwoquan_service/services/search-service/contracts`
-- Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/user-service/contracts`、`quwoquan_service/services/content-service/contracts`
-- Service：`quwoquan_service/services/search-service`
-- Service（协作引用，不用于代码归属）：`quwoquan_service/services/user-service`、`quwoquan_service/services/entity-service`、`quwoquan_service/services/content-service`、`quwoquan_service/services/chat-service`、`quwoquan_service/services/circle-service`
-- 测试：
-  - `local_contract`：`quwoquan_ops/tests/local_contract`
-  - `api_integration`：`quwoquan_ops/tests/acceptance/api_integration`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`、`quwoquan_app/test/user_acceptance/journeys/cross_domain_search`
-
-## 8. 开放事项
+## 7. 开放事项
 
 <a id="open-001"></a>
 ### OPEN-001 global search experience 商用运行证据准出

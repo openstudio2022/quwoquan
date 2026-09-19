@@ -12,8 +12,7 @@ ContentPostViewData _moment({
 }) => ContentPostViewData.fromWire(
   contentPostProjectionFixture(
     postId: postId,
-    contentType: 'micro',
-    contentIdentity: 'moment',
+    contentType: 'article',
     authorId: 'u1',
     body: body,
     intersectionReasons: intersectionReasons,
@@ -31,8 +30,7 @@ void main() {
       );
       final projection = contentPostProjectionFixture(
         postId: 'm-test',
-        contentType: 'micro',
-        contentIdentity: 'moment',
+        contentType: 'article',
         body: 'hello',
         intersectionReasons: <IntersectionReason>[reason],
       );
@@ -78,8 +76,7 @@ void main() {
     test('ContentPostProjection wire 往返保留 location 交集理由', () {
       final projection = contentPostProjectionFixture(
         postId: 'm-roundtrip',
-        contentType: 'micro',
-        contentIdentity: 'moment',
+        contentType: 'article',
         authorId: 'u1',
         body: '左边董宇辉右边俞敏洪',
         intersectionReasons: <IntersectionReason>[
@@ -104,7 +101,7 @@ void main() {
       final reason = intersectionReasonFixture();
       final wire = contentPostProjectionFixture(
         postId: 'm-noncanonical-reason',
-        contentType: 'micro',
+        contentType: 'article',
         intersectionReasons: <IntersectionReason>[reason],
       ).toWire();
       final reasons = wire['intersectionReasons']! as List<Object?>;

@@ -211,14 +211,19 @@ def _admit_dependencies(package: Path, publish: Path):
     import shutil
     from support.post_object_transaction_fixture import _admit_packaged_creator
     from content.release.canonical.content_pool_record import append_pool_record, build_canonical_pool_record
-    _admit_packaged_creator(package, publish)
+    creator_ref = json.loads((package / "object/manifest.json").read_bytes())["creatorProfileId"]
+    if not (publish / "creators" / creator_ref).is_dir():
+        _admit_packaged_creator(package, publish)
     root = publish / "entities/地点/中国/浙江省/杭州市/西湖区/景区/p0001/西湖/1"
     root.mkdir(parents=True)
     post = json.loads((package / "object/manifest.json").read_bytes())
-    ref = "地点/景区/西湖"
-    review = {"schema": "quwoquan_data.content_review", "stage": "5.review", "executionId": post["executionId"],
-              "objectRef": "entities/" + ref, "decision": "approved", "draft": {"ref": "4.draft/page.md", "digest": "sha256:" + "1" * 64},
-              "dimensions": [{"name": "content", "decision": "approved", "issues": []}], "blockingIssues": [], "assetRights": []}
+    ref = "travel/test/entity-" + "b" * 64
+    process_ref = "entities/travel/test/entity-" + "b" * 64
+    import copy
+    review = copy.deepcopy(json.loads((package / "object/content_review.json").read_bytes()))
+    review["objectRef"] = process_ref
+    for disposition in review["dispositions"]:
+        disposition["objectRef"] = process_ref
     _write_json(root / "content_review.json", review)
     digest = "sha256:" + hashlib.sha256((root / "content_review.json").read_bytes()).hexdigest()
     url = "https://zh.wikipedia.org/wiki/西湖"
@@ -261,7 +266,10 @@ def test_real_package_audit_apply_reads_logical_identity_and_carried_bytes(tmp_p
     apply_object_transaction(publish_root=publish, output_root=tmp_path / "output", package_root=package, transaction_id=transaction_id,
                              dry_run_attestation_sha256=audit["dryRunAttestationSha256"])
     root = publish / result["target"]["objectPath"]
-    assert (root / "media/01.jpg").read_bytes() == (package / "object/media/01.jpg").read_bytes()
+    assert not (root / "media/01.jpg").exists()
+    from core.content_library import resolve_media_holding
+    packaged_asset = json.loads((package / "object/manifest.json").read_bytes())["assets"][0]
+    assert resolve_media_holding(packaged_asset["sha256"]).read_bytes() == (package / "object/media/01.jpg").read_bytes()
     assert any(row.logical_ref == POST_REF and row.path == result["target"]["objectPath"] for row in object_placements(publish))
     from collections import Counter
     from content.release.canonical import aggregate_release_closure as closure

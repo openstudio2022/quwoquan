@@ -58,7 +58,7 @@
 - [`runtime-testinfra`](./runtime-testinfra/spec.md)：以 canonical 目录发现三层测试，以强类型请求按需准备隔离数据，并从真实执行、回读与清理生成证据。
 - [`system-architecture-and-engineering-guide`](./system-architecture-and-engineering-guide/spec.md)：领域服务对象优先目录、metadata 单轨、四环境配置、唯一运行拓扑、外部能力和三层测试治理。
 - [`system-topology-and-networking`](./system-topology-and-networking/spec.md)：南北向公开入口（gateway/DNS/TLS/CDN）与东西向平面组网（子网四平面、端口块、east-west URL）的唯一叙事收口，字面值只引用环境 YAML 真相源。
-- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
+- Feature 层表达业务与设计边界；工程影响由 current actual diff 与 dependency closure 推导。
 
 ## 5. 关键决策
 

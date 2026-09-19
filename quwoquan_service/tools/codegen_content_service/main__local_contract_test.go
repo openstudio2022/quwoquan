@@ -68,6 +68,31 @@ func TestContentServiceRoutePacketIncludesEveryObjectService(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/discovery-content/content-type-framework/spec.md#sit-003
+func TestContentServiceRetiresPostPromotionFromRoutesAndScaffold(t *testing.T) {
+	t.Parallel()
+
+	source := contentTestContractSource(t)
+	groups, err := loadServiceRoutes(source, "content-service")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, group := range groups {
+		for _, route := range group.Routes {
+			if route.Operation == "PromotePostToWork" || strings.Contains(route.Path, ":promoteToWork") {
+				t.Errorf("retired promotion route remains: %s %s", route.Operation, route.Path)
+			}
+		}
+	}
+	templateSource, err := os.ReadFile("http_scaffold_codegen.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(templateSource), "PromotePostToWork") {
+		t.Error("HTTP scaffold retains a dispatch branch for retired post promotion")
+	}
+}
+
 func TestContentServiceRoutePacketUsesCanonicalGetFeedQueryBindings(t *testing.T) {
 	t.Parallel()
 
@@ -83,7 +108,7 @@ func TestContentServiceRoutePacketUsesCanonicalGetFeedQueryBindings(t *testing.T
 				continue
 			}
 			for _, name := range []string{
-				"identity", "type", "sort", "channelId", "subCategory",
+				"type", "sort", "channelId", "subCategory",
 				"cursor", "limit", "feedRequestId",
 			} {
 				if !containsRequestBinding(route.RequestBindings.Query, name) {
@@ -93,6 +118,9 @@ func TestContentServiceRoutePacketUsesCanonicalGetFeedQueryBindings(t *testing.T
 						route.RequestBindings.Query,
 					)
 				}
+			}
+			if containsRequestBinding(route.RequestBindings.Query, "identity") {
+				t.Fatal("GetFeed retains the retired content identity query binding")
 			}
 			if route.Pagination.DefaultItems != 20 ||
 				route.Pagination.MaximumItems != 20 {
@@ -162,12 +190,6 @@ func TestContentServicePostBodiesUseCanonicalRequestEntities(t *testing.T) {
 		"UpdatePostSettings": {
 			"visibility", "primaryHomepageId", "primaryHomepageType",
 			"primaryHomepageSnapshot", "assistantUsePolicy",
-		},
-		"PromotePostToWork": {
-			"contentType", "title", "summary", "semanticMentions", "coverUrl",
-			"articleMarkdown", "markdownDialect", "articleAssetManifest",
-			"articleRenderProfile", "primaryHomepageId", "primaryHomepageType",
-			"primaryHomepageSnapshot", "visibility", "assistantUsePolicy",
 		},
 		"GenerateArticleSummary": {"title", "body"},
 	}
@@ -262,7 +284,6 @@ func TestContentServiceReadyOperationsDispatchThroughCanonicalOwners(t *testing.
 		"StageFilterCatalogRelease":    "handleStageFilterCatalogRelease",
 		"SubmitPostPublication":        "handleSubmitPostPublication",
 		"UpdatePostSettings":           "handleUpdatePostSettings",
-		"PromotePostToWork":            "handlePromotePostToWork",
 		"DeletePost":                   "handleDeletePost",
 	} {
 		block := generatedOperationDispatchBlock(t, string(routesSource), operation)

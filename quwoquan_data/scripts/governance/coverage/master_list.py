@@ -135,6 +135,8 @@ def load_master_list_file(path: Path) -> dict[str, Any]:
     data = yaml.safe_load(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
         raise ValueError(f"主清单文件顶层必须是 mapping: {path}")
+    from core.schema import assert_valid
+    assert_valid(data, "governance", "master_list", label=str(path))
     return data
 
 

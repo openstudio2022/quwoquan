@@ -7,8 +7,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 /// [ContentPostProjection.fromWire] APIs explicitly.
 ContentPostProjection contentPostProjectionFixture({
   String postId = 'post-1',
-  String contentType = 'micro',
-  String? contentIdentity,
+  String contentType = 'article',
   AssistantUsePolicy? assistantUsePolicy = AssistantUsePolicy.inherit,
   String? authorId = 'author-1',
   String? authorDisplayName = 'Author',
@@ -48,8 +47,10 @@ ContentPostProjection contentPostProjectionFixture({
   List<IntersectionReason>? intersectionReasons,
 }) => ContentPostProjection(
   postId: postId,
-  contentType: contentType,
-  contentIdentity: contentIdentity,
+  contentType: ContentType.fromWire(
+    contentType,
+    'ContentPostProjection.contentType',
+  ),
   assistantUsePolicy: assistantUsePolicy,
   authorId: authorId,
   authorDisplayName: authorDisplayName,

@@ -246,11 +246,6 @@ paths:
                 reader: DiscoveryFeedReader
                 slice: DiscoveryFeedSlice
             parameters:
-                - name: identity
-                  in: query
-                  required: false
-                  schema:
-                    type: string
                 - name: type
                   in: query
                   required: false
@@ -286,6 +281,64 @@ paths:
                   required: false
                   schema:
                     type: string
+                - name: clientPresentationContract
+                  in: query
+                  required: false
+                  content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                contentTypes:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - image
+                                            - video
+                                            - article
+                                    maxItems: 32
+                                contractDigest:
+                                    type: string
+                                    pattern: ^sha256:[0-9a-f]{64}$
+                                    maxLength: 71
+                                    minLength: 71
+                                listObjectKinds:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - post
+                                            - entity_homepage
+                                    maxItems: 32
+                                openSurfaces:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - home_feed
+                                            - profile_works
+                                            - media_immersive
+                                            - article_reader
+                                            - homepage_detail
+                                    maxItems: 32
+                                presentationRecipes:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - cover_media_card
+                                            - article_excerpt_card
+                                            - homepage_summary_card
+                                    maxItems: 32
+                            required:
+                                - contentTypes
+                                - listObjectKinds
+                                - presentationRecipes
+                                - openSurfaces
+                                - contractDigest
+                            additionalProperties: false
+                  x-max-bytes: 8192
                 - name: limit
                   in: query
                   required: false
@@ -1256,11 +1309,64 @@ paths:
                   required: true
                   schema:
                     type: string
-                - name: identity
+                - name: clientPresentationContract
                   in: query
                   required: false
-                  schema:
-                    type: string
+                  content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                contentTypes:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - image
+                                            - video
+                                            - article
+                                    maxItems: 32
+                                contractDigest:
+                                    type: string
+                                    pattern: ^sha256:[0-9a-f]{64}$
+                                    maxLength: 71
+                                    minLength: 71
+                                listObjectKinds:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - post
+                                            - entity_homepage
+                                    maxItems: 32
+                                openSurfaces:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - home_feed
+                                            - profile_works
+                                            - media_immersive
+                                            - article_reader
+                                            - homepage_detail
+                                    maxItems: 32
+                                presentationRecipes:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - cover_media_card
+                                            - article_excerpt_card
+                                            - homepage_summary_card
+                                    maxItems: 32
+                            required:
+                                - contentTypes
+                                - listObjectKinds
+                                - presentationRecipes
+                                - openSurfaces
+                                - contractDigest
+                            additionalProperties: false
+                  x-max-bytes: 8192
                 - name: type
                   in: query
                   required: false
@@ -1315,6 +1421,64 @@ paths:
                   required: true
                   schema:
                     type: string
+                - name: clientPresentationContract
+                  in: query
+                  required: false
+                  content:
+                    application/json:
+                        schema:
+                            type: object
+                            properties:
+                                contentTypes:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - image
+                                            - video
+                                            - article
+                                    maxItems: 32
+                                contractDigest:
+                                    type: string
+                                    pattern: ^sha256:[0-9a-f]{64}$
+                                    maxLength: 71
+                                    minLength: 71
+                                listObjectKinds:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - post
+                                            - entity_homepage
+                                    maxItems: 32
+                                openSurfaces:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - home_feed
+                                            - profile_works
+                                            - media_immersive
+                                            - article_reader
+                                            - homepage_detail
+                                    maxItems: 32
+                                presentationRecipes:
+                                    type: array
+                                    items:
+                                        type: string
+                                        enum:
+                                            - cover_media_card
+                                            - article_excerpt_card
+                                            - homepage_summary_card
+                                    maxItems: 32
+                            required:
+                                - contentTypes
+                                - listObjectKinds
+                                - presentationRecipes
+                                - openSurfaces
+                                - contractDigest
+                            additionalProperties: false
+                  x-max-bytes: 8192
             responses:
                 "200":
                     description: OK
@@ -1853,50 +2017,6 @@ paths:
                     application/json:
                         schema:
                             $ref: '#/components/schemas/UpdatePostSettingsRequest'
-            responses:
-                "200":
-                    description: OK
-                    content:
-                        application/json:
-                            schema:
-                                $ref: '#/components/schemas/ContentPostProjection'
-                default:
-                    description: Runtime failure
-                    content:
-                        application/json:
-                            schema:
-                                $ref: ../_shared/openapi_common.yaml#/components/schemas/ErrorResponse
-            security:
-                - bearerAuth: []
-    /content/posts/{postId}:promoteToWork:
-        post:
-            operationId: PromotePostToWork
-            x-contract-operation-id: content.post.PromotePostToWork
-            x-object-id: content.post
-            x-actor: persona
-            x-application:
-                kind: command
-                facet: PostLifecycleCommandFacet
-                method: promotePostToWork
-                aggregateOwner: Post
-            parameters:
-                - name: postId
-                  in: path
-                  required: true
-                  schema:
-                    type: string
-                - name: Idempotency-Key
-                  in: header
-                  required: true
-                  description: Stable business replay identity; distinct from X-Request-Id.
-                  schema:
-                    type: string
-            requestBody:
-                required: true
-                content:
-                    application/json:
-                        schema:
-                            $ref: '#/components/schemas/PromotePostToWorkRequest'
             responses:
                 "200":
                     description: OK
@@ -3957,11 +4077,6 @@ components:
             type: object
             description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
             x-contract-entity: ProfileInteractionReadFactAck
-            x-contract-placeholder: true
-        PromotePostToWorkRequest:
-            type: object
-            description: 字段由 fields/projection codegen 契约定义；当前 OpenAPI compiler 仅保留命名引用。
-            x-contract-entity: PromotePostToWorkRequest
             x-contract-placeholder: true
         ReactToContentCommentCommand:
             type: object

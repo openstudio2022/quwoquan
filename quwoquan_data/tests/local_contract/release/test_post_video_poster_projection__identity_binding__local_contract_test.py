@@ -18,6 +18,7 @@ from content.release.canonical.object_transaction_contract import (
 )
 from content.source import acquire
 from core import content_library, paths
+from support.semantic_review_fixture import approved_semantic_judgement
 from support.media_fixture import tiny_png_bytes
 
 
@@ -117,7 +118,7 @@ def video_execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                              "invocation": {"provider": "openai", "model": "test-model", "runId": f"poster-{role}-run"}},
                    "verdict": "pass"}
         if stage == "5.review":
-            payload["reviews"] = {REF: {"decision": "approved", "blockingIssues": [], "advisories": []}}
+            payload["reviews"] = {REF: approved_semantic_judgement(execution, REF)}
         seal.seal_stage(execution_id=execution_id, stage=stage,
                         input_path=_write(tmp_path / f"{stage}.json", payload))
     project_publish_final_surface(execution_root=execution, object_dir=execution / REF,

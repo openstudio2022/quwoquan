@@ -350,6 +350,7 @@ public final class RuntimeConfigPackageStoreTest {
     JsonObject manifest = request.getAsJsonObject("effectiveLaunchManifest");
     manifest.addProperty("environment", "alpha");
     manifest.addProperty("target", "alpha-local");
+    manifest.addProperty("entrypoint", "lib/main_alpha.dart");
     manifest.addProperty("contentSource", "bundled_snapshot");
     manifest.addProperty("requiresLocalTransport", false);
     manifest.addProperty("runtimeConfigSupplyMode", "build_time_self_supply");

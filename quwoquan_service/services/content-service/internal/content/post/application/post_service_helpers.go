@@ -102,7 +102,6 @@ func projectionPayloadForPost(post *postmodel.Post) map[string]any {
 		"authorDisplayNameSnapshot": post.AuthorDisplayNameSnapshot,
 		"authorAvatarUrlSnapshot":   post.AuthorAvatarUrlSnapshot,
 		"contentType":               post.ContentType,
-		"contentIdentity":           post.ContentIdentity,
 		"status":                    post.Status,
 		"visibility":                normalizeVisibility(post.Visibility),
 		"moderationStatus":          strings.ToLower(strings.TrimSpace(post.ModerationStatus)),
@@ -313,19 +312,6 @@ func sameStringSet(left, right []string) bool {
 	return true
 }
 
-func normalizeContentIdentity(contentType, requested string) string {
-	requested = strings.TrimSpace(strings.ToLower(requested))
-	if requested != "" {
-		return requested
-	}
-	switch strings.TrimSpace(strings.ToLower(contentType)) {
-	case "micro":
-		return "moment"
-	default:
-		return "work"
-	}
-}
-
 func normalizeAssistantUsePolicy(value string) string {
 	switch strings.TrimSpace(strings.ToLower(value)) {
 	case "", "inherit":
@@ -362,36 +348,6 @@ func validateVisibility(value string) error {
 	}
 }
 
-func validateContentIdentity(contentType, identity string) error {
-	contentType = strings.TrimSpace(strings.ToLower(contentType))
-	identity = strings.TrimSpace(strings.ToLower(identity))
-	switch identity {
-	case "moment":
-		if contentType != "micro" {
-			return rterr.NewInvalidArgument(
-				rterr.ModuleContent,
-				"点滴内容类型不合法",
-				"moment must use contentType=micro",
-			)
-		}
-	case "work":
-		if contentType == "micro" {
-			return rterr.NewInvalidArgument(
-				rterr.ModuleContent,
-				"作品内容类型不合法",
-				"work cannot use contentType=micro",
-			)
-		}
-	default:
-		return rterr.NewInvalidArgument(
-			rterr.ModuleContent,
-			"内容身份不合法",
-			"unsupported contentIdentity",
-		)
-	}
-	return nil
-}
-
 func applyPostSettingsPayload(post *postmodel.Post, payload map[string]any) error {
 	for _, key := range []string{
 		"title",
@@ -410,12 +366,6 @@ func applyPostSettingsPayload(post *postmodel.Post, payload map[string]any) erro
 			)
 		}
 	}
-	if contentIdentity, exists := payload["contentIdentity"]; exists {
-		post.ContentIdentity = normalizeContentIdentity(
-			post.ContentType,
-			strings.TrimSpace(asString(contentIdentity)),
-		)
-	}
 	if visibility, exists := payload["visibility"]; exists {
 		post.Visibility = normalizeVisibility(asString(visibility))
 	}
@@ -427,30 +377,14 @@ func applyPostSettingsPayload(post *postmodel.Post, payload map[string]any) erro
 	if err := NormalizePostObjectAnchors(post, payload); err != nil {
 		return err
 	}
-	if post.ContentIdentity == "" {
-		post.ContentIdentity = normalizeContentIdentity(post.ContentType, "")
-	}
 	if post.AssistantUsePolicy == "" {
 		post.AssistantUsePolicy = "inherit"
-	}
-	if err := validateContentIdentity(post.ContentType, post.ContentIdentity); err != nil {
-		return err
 	}
 	if err := validateVisibility(post.Visibility); err != nil {
 		return err
 	}
 	post.Visibility = normalizeVisibility(post.Visibility)
 	return nil
-}
-
-func recommendedPromotedContentType(post *postmodel.Post) string {
-	if strings.TrimSpace(post.VideoUrl) != "" {
-		return "video"
-	}
-	if len(asStringSlice(post.MediaUrls)) > 0 {
-		return "image"
-	}
-	return "article"
 }
 
 func normalizeVideoCoverContract(post *postmodel.Post) {
@@ -544,14 +478,8 @@ func validateVisitedAt(post *postmodel.Post) error {
 }
 
 func validatePostPublicationPayload(post *postmodel.Post) error {
-	if post.ContentIdentity == "" {
-		post.ContentIdentity = normalizeContentIdentity(post.ContentType, "")
-	}
 	if post.AssistantUsePolicy == "" {
 		post.AssistantUsePolicy = "inherit"
-	}
-	if err := validateContentIdentity(post.ContentType, post.ContentIdentity); err != nil {
-		return err
 	}
 	if err := validateVisibility(post.Visibility); err != nil {
 		return err
@@ -561,13 +489,6 @@ func validatePostPublicationPayload(post *postmodel.Post) error {
 		return err
 	}
 	switch strings.TrimSpace(post.ContentType) {
-	case "micro":
-		hasBody := strings.TrimSpace(post.Body) != ""
-		hasImages := len(asStringSlice(post.MediaUrls)) > 0
-		hasVideo := strings.TrimSpace(post.VideoUrl) != ""
-		if !hasBody && !hasImages && !hasVideo {
-			return rterr.NewInvalidArgument(rterr.ModuleContent, "微趣内容不能为空", "moment requires body/image/video at least one")
-		}
 	case "image":
 		if len(asStringSlice(post.MediaUrls)) == 0 {
 			return rterr.NewInvalidArgument(rterr.ModuleContent, "美图至少需要一张图片", "photo requires mediaUrls")

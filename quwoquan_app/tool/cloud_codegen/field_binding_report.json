@@ -1,6 +1,6 @@
 {
   "generator": "app-only-emitter",
-  "contractGraphSha256": "c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd",
+  "contractGraphSha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
   "bindings": [
     {
       "generatedPath": "lib/service/assistant_service/assistant/assistant_run/domain/generated/aggregation_state.g.dart",
@@ -1599,6 +1599,17 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ContentPostDetailSlice",
+      "dartField": "contentType",
+      "dartType": "ContentType",
+      "enumRef": "ContentType",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
       "dartClass": "ContentPostProjection",
       "dartField": "assistantUsePolicy",
       "dartType": "AssistantUsePolicy?",
@@ -1621,10 +1632,65 @@
     },
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ContentPostProjection",
+      "dartField": "contentType",
+      "dartType": "ContentType",
+      "enumRef": "ContentType",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
       "dartClass": "FilterCatalogSlice",
       "dartField": "status",
       "dartType": "FilterCatalogReleaseStatus",
       "enumRef": "FilterCatalogReleaseStatus",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ListItemPresentationEnvelope",
+      "dartField": "contentType",
+      "dartType": "ContentType?",
+      "enumRef": "ContentType",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ListItemPresentationEnvelope",
+      "dartField": "objectKind",
+      "dartType": "ListObjectKind",
+      "enumRef": "ListObjectKind",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ListItemPresentationEnvelope",
+      "dartField": "openSurface",
+      "dartType": "ContentUiSurface",
+      "enumRef": "ContentUiSurface",
+      "contractType": "enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/content/content_operation_contracts.g.dart",
+      "dartClass": "ListItemPresentationEnvelope",
+      "dartField": "presentationRecipe",
+      "dartType": "FeedPresentationRecipe?",
+      "enumRef": "FeedPresentationRecipe",
       "contractType": "enum",
       "contractSource": "",
       "clientDartType": "",
@@ -3349,17 +3415,6 @@
     {
       "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
       "dartClass": "SubmitContentPostPublicationCommand",
-      "dartField": "contentIdentity",
-      "dartType": "ContentIdentity?",
-      "enumRef": "ContentIdentity",
-      "contractType": "enum",
-      "contractSource": "",
-      "clientDartType": "",
-      "typed": true
-    },
-    {
-      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/requests/content/content_operation_contracts.g.requests.g.dart",
-      "dartClass": "SubmitContentPostPublicationCommand",
       "dartField": "contentType",
       "dartType": "ContentType",
       "enumRef": "ContentType",
@@ -3655,14 +3710,14 @@
       "typed": true
     },
     {
-      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_content_hit.g.dart",
-      "dartClass": "CanonicalSearchContentHit",
-      "dartField": "contentIdentity",
-      "dartType": "ContentIdentity?",
-      "enumRef": "ContentIdentity",
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/search/canonical_search_citation.g.dart",
+      "dartClass": "CanonicalSearchCitation",
+      "dartField": "contentType",
+      "dartType": "ContentType?",
+      "enumRef": "ContentType",
       "contractType": "enum",
-      "contractSource": "search/search/search_index_view/fields.yaml#types.CanonicalSearchContentHit",
-      "clientDartType": "ContentIdentity",
+      "contractSource": "search/search/search_index_view/fields.yaml#types.CanonicalSearchCitation",
+      "clientDartType": "ContentType",
       "typed": true
     },
     {
@@ -3685,6 +3740,50 @@
       "contractType": "enum",
       "contractSource": "search/search/search_index_view/fields.yaml#types.CanonicalSearchContentHit",
       "clientDartType": "MediaDeliveryAccessMode",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/shared_operation_types.g.dart",
+      "dartClass": "ClientContentPresentationContract",
+      "dartField": "contentTypes",
+      "dartType": "List\u003cContentType\u003e",
+      "enumRef": "ContentType",
+      "contractType": "[]enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/shared_operation_types.g.dart",
+      "dartClass": "ClientContentPresentationContract",
+      "dartField": "listObjectKinds",
+      "dartType": "List\u003cListObjectKind\u003e",
+      "enumRef": "ListObjectKind",
+      "contractType": "[]enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/shared_operation_types.g.dart",
+      "dartClass": "ClientContentPresentationContract",
+      "dartField": "openSurfaces",
+      "dartType": "List\u003cContentUiSurface\u003e",
+      "enumRef": "ContentUiSurface",
+      "contractType": "[]enum",
+      "contractSource": "",
+      "clientDartType": "",
+      "typed": true
+    },
+    {
+      "generatedPath": "packages/quwoquan_cloud_contracts/lib/src/generated/shared_operation_types.g.dart",
+      "dartClass": "ClientContentPresentationContract",
+      "dartField": "presentationRecipes",
+      "dartType": "List\u003cFeedPresentationRecipe\u003e",
+      "enumRef": "FeedPresentationRecipe",
+      "contractType": "[]enum",
+      "contractSource": "",
+      "clientDartType": "",
       "typed": true
     },
     {

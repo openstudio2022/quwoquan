@@ -171,6 +171,7 @@ def test_stackctl_up_and_all_down_modes_share_managed_python_binding():
     up=(root/"quwoquan_ops/cli/commands/up_runtime.py").read_text()
     down=(root/"quwoquan_ops/cli/commands/down_domain.py").read_text()
     script=(root/"quwoquan_app/scripts/gamma/start_local_gamma_mirror.sh").read_text()
+    authority=(root/"quwoquan_app/scripts/gamma/local_gamma_runtime_authority.sh").read_text()
     assert "bind_managed_stackctl_python(env)" in up
     assert down.count("bind_managed_stackctl_python(env)") == 1
     bind_index = down.index("bind_managed_stackctl_python(env)")
@@ -178,11 +179,12 @@ def test_stackctl_up_and_all_down_modes_share_managed_python_binding():
     assert bind_index < run_index
     assert 'cmd.append("--purge-rebuildable-state")' in down[:bind_index]
     assert "prepared_attempt_only" in down[:bind_index]
-    post=script[script.index("from quwoquan_ops.cli.commands.post_safety_runtime"):]
-    prefix=script[:script.index("from quwoquan_ops.cli.commands.post_safety_runtime")]
+    post=authority[authority.index("from quwoquan_ops.cli.commands.post_safety_runtime"):]
+    prefix=authority[:authority.index("from quwoquan_ops.cli.commands.post_safety_runtime")]
     assert '"$QWQ_STACKCTL_PYTHON" -B -' in prefix[-300:]
-    assert "stackctl-validated managed Python executable" in script
+    assert "stackctl-validated managed Python executable" in authority
     assert '|| -L "$QWQ_STACKCTL_PYTHON"' not in script
+    assert "ensure_post_safety_runtime_for_locked_up(os.environ[\"QWQ_LOCAL_RELEASE_TARGET\"])" in post
 
 
 def test_gamma_composition_and_database_share_managed_factory(monkeypatch):
@@ -193,7 +195,7 @@ def test_gamma_composition_and_database_share_managed_factory(monkeypatch):
     }
     monkeypatch.setattr(
         command, "_gamma_local_managed_connection_values",
-        lambda: {"QWQ_CONTENT_MONGO_ADMIN_URI": "mongodb://managed"},
+        lambda *args, **kwargs: {"QWQ_CONTENT_MONGO_ADMIN_URI": "mongodb://managed"},
     )
     expected = SimpleNamespace(target="gamma-local")
     startup = SimpleNamespace(

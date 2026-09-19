@@ -10,7 +10,6 @@ const (
 	PostModerationRejected       = "PostModerationRejected"
 	PostUpdated                  = "PostUpdated"
 	PostSettingsUpdated          = "PostSettingsUpdated"
-	PostPromotedToWork           = "PostPromotedToWork"
 	PostDeleted                  = "PostDeleted"
 	PostPrivacyRedacted          = "PostPrivacyRedacted"
 	PostPurged                   = "PostPurged"

@@ -21,49 +21,42 @@ events:
   delivery_semantics: transactional_outbox
   wire_event_type: PostSubmittedForReview
   payload_entity: Post
-  payload_fields: [postId, publishIntentId, localDraftId, authorId, contentType, contentIdentity, status, moderationStatus, contentDigest, createdAt]
+  payload_fields: [postId, publishIntentId, localDraftId, authorId, contentType, status, moderationStatus, contentDigest, createdAt]
 - name: PostPublished
   description: 真实对象发布的canonical公开快照，不承担Data activation通知。sourceVersion等于envelope aggregateVersion；ordinary来源显式null，Data完整源tuple，releaseDigest仅审计；所有字段按源payload严格解码，不猜来源或默认补值。
   delivery_semantics: transactional_outbox
   wire_event_type: PostPublished
   payload_entity: PostLifecycleProjectionPayload
   payload_shape: exact
-  payload_fields: [postId, authorId, contentType, contentIdentity, status, visibility, moderationStatus, title, body, summary, semanticDocument, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, mediaUrls, coverUrl, thumbnailUrl, videoUrl, width, height, durationMs, tagRefs, entityRefs, contentVertical, createdAt, publishedAt, updatedAt, publishIntentId, localDraftId, contentDigest, assistantUsePolicy, coverStrategy, coverFrameTimeMs, likeCount, commentCount, shareCount, mediaItems, semanticMentions, primaryHomepageId, primaryHomepageSnapshot, visitedAt, gatheringRef, captureDisclosure, sourcePostId, sourcePostAuthorId, contentId, contentVersion, variantPurpose, usageScope, environment, sourceOwner, releaseId, releaseDigest, manifestDigest, sourceVersion, safetyRevision]
+  payload_fields: [postId, authorId, contentType, status, visibility, moderationStatus, title, body, summary, semanticDocument, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, mediaUrls, coverUrl, thumbnailUrl, videoUrl, width, height, durationMs, tagRefs, entityRefs, contentVertical, createdAt, publishedAt, updatedAt, publishIntentId, localDraftId, contentDigest, assistantUsePolicy, coverStrategy, coverFrameTimeMs, likeCount, commentCount, shareCount, mediaItems, semanticMentions, primaryHomepageId, primaryHomepageSnapshot, visitedAt, gatheringRef, captureDisclosure, sourcePostId, sourcePostAuthorId, contentId, contentVersion, variantPurpose, usageScope, environment, sourceOwner, releaseId, releaseDigest, manifestDigest, sourceVersion, safetyRevision]
 - name: PostModerationRejected
   description: owner审核拒绝使对象失去公开资格；现役producer调用projectionPayloadForPost，复用同一canonical公开payload与显式来源/唯一sourceVersion，不能只声明聚合字段子集或用activation表示撤权。
   delivery_semantics: transactional_outbox
   wire_event_type: PostModerationRejected
   payload_entity: PostLifecycleProjectionPayload
   payload_shape: exact
-  payload_fields: [postId, authorId, contentType, contentIdentity, status, visibility, moderationStatus, title, body, summary, semanticDocument, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, mediaUrls, coverUrl, thumbnailUrl, videoUrl, width, height, durationMs, tagRefs, entityRefs, contentVertical, createdAt, publishedAt, updatedAt, publishIntentId, localDraftId, contentDigest, assistantUsePolicy, coverStrategy, coverFrameTimeMs, likeCount, commentCount, shareCount, mediaItems, semanticMentions, primaryHomepageId, primaryHomepageSnapshot, visitedAt, gatheringRef, captureDisclosure, sourcePostId, sourcePostAuthorId, contentId, contentVersion, variantPurpose, usageScope, environment, sourceOwner, releaseId, releaseDigest, manifestDigest, sourceVersion, safetyRevision]
+  payload_fields: [postId, authorId, contentType, status, visibility, moderationStatus, title, body, summary, semanticDocument, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, mediaUrls, coverUrl, thumbnailUrl, videoUrl, width, height, durationMs, tagRefs, entityRefs, contentVertical, createdAt, publishedAt, updatedAt, publishIntentId, localDraftId, contentDigest, assistantUsePolicy, coverStrategy, coverFrameTimeMs, likeCount, commentCount, shareCount, mediaItems, semanticMentions, primaryHomepageId, primaryHomepageSnapshot, visitedAt, gatheringRef, captureDisclosure, sourcePostId, sourcePostAuthorId, contentId, contentVersion, variantPurpose, usageScope, environment, sourceOwner, releaseId, releaseDigest, manifestDigest, sourceVersion, safetyRevision]
 - name: PostUpdated
   description: PostService projectionPayloadForPost产生的完整公开更新快照。
   delivery_semantics: transactional_outbox
   wire_event_type: PostUpdated
   payload_entity: PostLifecycleProjectionPayload
   payload_shape: exact
-  payload_fields: [postId, authorId, contentType, contentIdentity, status, visibility, moderationStatus, title, body, summary, semanticDocument, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, mediaUrls, coverUrl, thumbnailUrl, videoUrl, width, height, durationMs, tagRefs, entityRefs, contentVertical, createdAt, publishedAt, updatedAt, publishIntentId, localDraftId, contentDigest, assistantUsePolicy, coverStrategy, coverFrameTimeMs, likeCount, commentCount, shareCount, mediaItems, semanticMentions, primaryHomepageId, primaryHomepageSnapshot, visitedAt, gatheringRef, captureDisclosure, sourcePostId, sourcePostAuthorId, contentId, contentVersion, variantPurpose, usageScope, environment, sourceOwner, releaseId, releaseDigest, manifestDigest, sourceVersion, safetyRevision]
+  payload_fields: [postId, authorId, contentType, status, visibility, moderationStatus, title, body, summary, semanticDocument, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, mediaUrls, coverUrl, thumbnailUrl, videoUrl, width, height, durationMs, tagRefs, entityRefs, contentVertical, createdAt, publishedAt, updatedAt, publishIntentId, localDraftId, contentDigest, assistantUsePolicy, coverStrategy, coverFrameTimeMs, likeCount, commentCount, shareCount, mediaItems, semanticMentions, primaryHomepageId, primaryHomepageSnapshot, visitedAt, gatheringRef, captureDisclosure, sourcePostId, sourcePostAuthorId, contentId, contentVersion, variantPurpose, usageScope, environment, sourceOwner, releaseId, releaseDigest, manifestDigest, sourceVersion, safetyRevision]
 - name: PostSettingsUpdated
   description: 设置变更使用同一projectionPayloadForPost，保留Homepage/媒体/引用及权限字段。
   delivery_semantics: transactional_outbox
   wire_event_type: PostSettingsUpdated
   payload_entity: PostLifecycleProjectionPayload
   payload_shape: exact
-  payload_fields: [postId, authorId, contentType, contentIdentity, status, visibility, moderationStatus, title, body, summary, semanticDocument, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, mediaUrls, coverUrl, thumbnailUrl, videoUrl, width, height, durationMs, tagRefs, entityRefs, contentVertical, createdAt, publishedAt, updatedAt, publishIntentId, localDraftId, contentDigest, assistantUsePolicy, coverStrategy, coverFrameTimeMs, likeCount, commentCount, shareCount, mediaItems, semanticMentions, primaryHomepageId, primaryHomepageSnapshot, visitedAt, gatheringRef, captureDisclosure, sourcePostId, sourcePostAuthorId, contentId, contentVersion, variantPurpose, usageScope, environment, sourceOwner, releaseId, releaseDigest, manifestDigest, sourceVersion, safetyRevision]
-- name: PostPromotedToWork
-  description: 点滴升级作品后的当前完整快照；producer不发fromIdentity/toIdentity/previousContentType/promotedAt，不把不存在字段写入聚合。
-  delivery_semantics: transactional_outbox
-  wire_event_type: PostPromotedToWork
-  payload_entity: PostLifecycleProjectionPayload
-  payload_shape: exact
-  payload_fields: [postId, authorId, contentType, contentIdentity, status, visibility, moderationStatus, title, body, summary, semanticDocument, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, mediaUrls, coverUrl, thumbnailUrl, videoUrl, width, height, durationMs, tagRefs, entityRefs, contentVertical, createdAt, publishedAt, updatedAt, publishIntentId, localDraftId, contentDigest, assistantUsePolicy, coverStrategy, coverFrameTimeMs, likeCount, commentCount, shareCount, mediaItems, semanticMentions, primaryHomepageId, primaryHomepageSnapshot, visitedAt, gatheringRef, captureDisclosure, sourcePostId, sourcePostAuthorId, contentId, contentVersion, variantPurpose, usageScope, environment, sourceOwner, releaseId, releaseDigest, manifestDigest, sourceVersion, safetyRevision]
+  payload_fields: [postId, authorId, contentType, status, visibility, moderationStatus, title, body, summary, semanticDocument, authorDisplayNameSnapshot, authorAvatarUrlSnapshot, mediaUrls, coverUrl, thumbnailUrl, videoUrl, width, height, durationMs, tagRefs, entityRefs, contentVertical, createdAt, publishedAt, updatedAt, publishIntentId, localDraftId, contentDigest, assistantUsePolicy, coverStrategy, coverFrameTimeMs, likeCount, commentCount, shareCount, mediaItems, semanticMentions, primaryHomepageId, primaryHomepageSnapshot, visitedAt, gatheringRef, captureDisclosure, sourcePostId, sourcePostAuthorId, contentId, contentVersion, variantPurpose, usageScope, environment, sourceOwner, releaseId, releaseDigest, manifestDigest, sourceVersion, safetyRevision]
 - name: PostDeleted
   description: 仅owner权威删除，DeletePost原授权不变，status是删除前状态；Data release退出不产生此事件。显式来源/唯一sourceVersion由专属payload约束，删除失效覆盖同来源canonical对象全部保留候选，不能以release切换复活。
   delivery_semantics: transactional_outbox
   wire_event_type: PostDeleted
   payload_entity: PostDeletedPayload
   payload_shape: exact
-  payload_fields: [postId, authorId, contentType, contentIdentity, status, deletedAt, environment, sourceOwner, releaseId, manifestDigest, releaseDigest, sourceVersion, safetyRevision]
+  payload_fields: [postId, authorId, contentType, status, deletedAt, environment, sourceOwner, releaseId, manifestDigest, releaseDigest, sourceVersion, safetyRevision]
 - name: PostPrivacyRedacted
   description: 隐私脱敏完成的现行专属协议，尚缺producer运行证明。
   delivery_semantics: transactional_outbox

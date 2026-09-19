@@ -472,9 +472,6 @@ class AppRoutePaths {
   }
   static const String addContactSearchSegment = 'search';
 
-  static const String addContactScan = '/add-contact/scan';
-  static const String addContactScanSegment = 'scan';
-
   static const String addContactPhone = '/add-contact/phone';
   static const String addContactPhoneSegment = 'phone';
 

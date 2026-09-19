@@ -135,7 +135,7 @@ class BehaviorEvent {
   /// Closed feedback state: visible/impressed/click/dwell/interaction/negative.
   final String? state;
 
-  /// Content format: photo, video, article, moment (for ENER type stats)
+  /// Content format: image, video, article (for ENER type stats)
   final String? contentType;
 
   /// Wishlist target object id. Defaults to [contentId] for want-to-go events.
@@ -161,7 +161,7 @@ class BehaviorEvent {
   /// Position in feed list (0-based)
   final int? position;
 
-  /// 首页推荐频道 id（following/moment/work/photo/video/article 等）；非首页 feed 面为空字符串。
+  /// 首页推荐频道 id（following/recommend/photo/video/article 等）；非首页 feed 面为空字符串。
   final String? channelId;
 
   /// feed 下发的唯一推荐策略内容摘要（来源 DiscoveryFeedPage.policyDigest）；

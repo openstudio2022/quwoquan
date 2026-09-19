@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：不直接参与终端用户 Journey；为 Ops Portal 中具名 Human Authority 提供可理解、可访问且可恢复的决定入口
 >
-> 设计归属：[L2 DEC-002](../design.md#dec-002)
+> 设计引用：[L2 DEC-002](../design.md#dec-002)
 
 ## 1. 用户价值
 
@@ -64,7 +64,7 @@
 <a id="req-005"></a>
 ### REQ-005 人类主视图隐藏内部术语且保留受限审计详情
 
-- 面向角色的主视图必须使用人类可理解的事实、影响、未知项和后果，不得暴露 digest、CAS、typed blocker、fingerprint、owner manifest、receipt、exact-byte readback、内部绝对路径、命令或工具名。
+- 面向角色的主视图必须使用人类可理解的事实、影响、未知项和后果，不得暴露 digest、CAS、typed blocker、fingerprint、context manifest、receipt、exact-byte readback、内部绝对路径、命令或工具名。
 - 需要调查时，受权限保护的审计详情可以展示 canonical audit projection；技术详情必须与角色决定区隔，不得成为业务角色理解或提交的前置条件。
 - raw audit/evidence 必须经独立 least-privilege audit query/scope，角色卡 query 只得到 redacted role projection。recommendation 只在 provider 确认 required rounds sealed 后可见，并同时展示 assumptions/counterexamples/alternatives。Portal 不得手写 seal gate。
 - Portal 的导航入口只能来自 `quwoquan_service/contracts/metadata/_control_plane/portal_menu.yaml` authoring metadata 的 generated projection；generated 文件禁止手改，菜单存在也不代表服务器端读取或 submission 已授权。

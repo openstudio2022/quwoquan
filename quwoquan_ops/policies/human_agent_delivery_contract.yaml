@@ -125,7 +125,7 @@ schemas:
       exception_escalation: [cannot_continue_reason, safest_default]
       completion_report: [proof, limits]
     nullable_fields: [decision_owner, next_acceptance_role]
-    audit_only_internal_terms: [digest, cas, gate_block, typed_blocker, fingerprint, owner_manifest, receipt, readback, exact_byte, sha, internal_absolute_path, internal_command, internal_tool_name]
+    audit_only_internal_terms: [digest, cas, gate_block, typed_blocker, fingerprint, receipt, readback, exact_byte, sha, internal_absolute_path, internal_command, internal_tool_name]
   decision_unit:
     required_fields:
       - decision_unit_id

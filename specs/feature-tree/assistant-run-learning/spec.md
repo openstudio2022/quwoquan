@@ -131,17 +131,7 @@
 - 可观察结果：Catalog、Setting、Consent、Subscription、Placement 与 Run 分别表达自己的事实，且 Run 可追溯到唯一 package digest、Context/Tool 许可交集和 PresentationDocument。
 - 禁止结果：不得扫描源码资产、把 Subscription/Consent 当启用开关、让 Chat Membership 绑定单一 Skill、读取共享场景中的个人记忆/Connector，或为 Skill 增加专用 AgentLoop/Flutter 分支。
 
-## 7. 工程归属
-
-- App：`quwoquan_app/lib/service/assistant_service`
-- Contracts：`quwoquan_service/services/assistant-service/contracts`、`quwoquan_service/services/recommendation-service/contracts`、`quwoquan_service/services/user-service/contracts/persona_management/profile_update_proposal`
-- Service：`quwoquan_service/services/assistant-service`、`quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime`、`quwoquan_service/services/user-service/internal/persona_management/profile_update_proposal`
-- 测试：
-  - `local_contract`：`quwoquan_service/services/assistant-service/tests`、`quwoquan_service/services/user-service/tests/local_contract/persona_management/profile_update_proposal`
-  - `api_integration`：`quwoquan_service/services/assistant-service/tests`、`quwoquan_service/services/user-service/tests/api_integration/account/user_account/profile_update_proposal_store__api_integration_test.go`
-  - `user_acceptance`：`quwoquan_app/test/user_acceptance`
-
-## 8. 开放事项
+## 7. 开放事项
 
 <a id="open-001"></a>
 ### OPEN-001 assistant run learning 领域边界验收

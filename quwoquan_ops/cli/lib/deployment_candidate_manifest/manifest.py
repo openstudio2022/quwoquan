@@ -58,8 +58,9 @@ from .provider_runtime_package import (
 )
 from .release_binding import (
     _release_binding,
+    _workspace_root_digest,
     canonical_contract_graph_digest,
-    validate_release_attestations,
+    resolve_package_release_binding,
 )
 
 
@@ -609,6 +610,7 @@ def write_candidate_manifest(
     candidate_type: str = RUNTIME_CANDIDATE_TYPE,
     release_attestation: str = "",
     rollback_release_attestation: str = "",
+    candidate_evidence: str = "",
     app_launch_bundle: Mapping[str, Any] | None = None,
 ) -> Path:
     """Write the only candidate manifest after every package digest is sealed."""
@@ -686,9 +688,12 @@ def write_candidate_manifest(
             raise ValueError(
                 "deployment candidate has no complete safe legal-static package"
             ) from exc
-    release = validate_release_attestations(
-        release_attestation,
-        rollback_release_attestation,
+    release = _pkg.resolve_package_release_binding(
+        env_name,
+        target_name,
+        release_attestation=release_attestation,
+        rollback_release_attestation=rollback_release_attestation,
+        candidate_evidence=candidate_evidence,
     )
     contract_graph_digest = canonical_contract_graph_digest()
     if (
@@ -949,31 +954,52 @@ def validate_candidate_manifest(
         candidate_root=candidate_root,
     )
     release = payload.get("release")
-    if not isinstance(release, dict) or set(release) != {"candidate", "rollback"}:
-        raise ValueError("full deployment candidate release binding mismatch")
-    for label in ("candidate", "rollback"):
-        binding = release.get(label)
-        if not isinstance(binding, dict) or set(binding) != _RELEASE_BINDING_FIELDS:
-            raise ValueError(f"deployment candidate {label} release fields mismatch")
-        if not str(binding.get("releaseId") or ""):
-            raise ValueError(f"deployment candidate {label} releaseId is invalid")
-        for field in ("releaseDigest", "attestationDigest"):
-            if _DIGEST.fullmatch(str(binding.get(field) or "")) is None:
-                raise ValueError(f"deployment candidate {label} {field} is invalid")
-        attestation_ref = binding.get("attestationRef")
-        if not isinstance(attestation_ref, str) or not attestation_ref.strip():
-            raise ValueError(
-                f"deployment candidate {label} attestationRef is invalid"
-            )
+    local_authority = isinstance(release, dict) and release.get("authority") == "local-candidate-evidence"
+    if local_authority:
+        if expected_environment != "alpha" or expected_target != "alpha-local":
+            raise ValueError("local candidate evidence cannot authorize this target")
+        expected_fields = {"authority", "environmentScope", "nonPromotable", "workspaceRootDigest", "candidateEvidence"}
+        if set(release) != expected_fields or release.get("environmentScope") != "alpha-local" or release.get("nonPromotable") is not True:
+            raise ValueError("alpha-local candidate evidence authority fields mismatch")
+        evidence = release.get("candidateEvidence")
+        evidence_fields = {"ref", "canonicalBytesSha256", "changedPathsDigest", "impactPlanRef", "impactPlanDigest", "workspaceDigests"}
+        if not isinstance(evidence, dict) or set(evidence) != evidence_fields:
+            raise ValueError("alpha-local candidate evidence identity fields mismatch")
+        for field in ("canonicalBytesSha256", "changedPathsDigest", "impactPlanDigest"):
+            if _DIGEST.fullmatch(str(evidence.get(field) or "")) is None:
+                raise ValueError(f"alpha-local candidate evidence {field} is invalid")
+        if not isinstance(evidence.get("workspaceDigests"), dict) or not evidence["workspaceDigests"]:
+            raise ValueError("alpha-local candidate evidence workspaceDigests are invalid")
         if purpose == "currentness":
-            current = _release_binding(attestation_ref, label=label)
-            if current != binding:
-                raise ValueError(f"{label} release attestation bytes drifted")
-    if (
-        release["candidate"]["releaseId"] == release["rollback"]["releaseId"]
-        or release["candidate"]["releaseDigest"] == release["rollback"]["releaseDigest"]
-    ):
-        raise ValueError("candidate and rollback release identities must be distinct")
+            if release.get("workspaceRootDigest") != _workspace_root_digest():
+                raise ValueError("alpha-local candidate evidence belongs to another workspace")
+            current = _pkg.resolve_package_release_binding(
+                "alpha", "alpha-local", release_attestation="", rollback_release_attestation="",
+                candidate_evidence=str(evidence.get("ref") or ""),
+            )
+            if current != release:
+                raise ValueError("alpha-local candidate evidence bytes drifted")
+    else:
+        if not isinstance(release, dict) or set(release) != {"candidate", "rollback"}:
+            raise ValueError("full deployment candidate release binding mismatch")
+        for label in ("candidate", "rollback"):
+            binding = release.get(label)
+            if not isinstance(binding, dict) or set(binding) != _RELEASE_BINDING_FIELDS:
+                raise ValueError(f"deployment candidate {label} release fields mismatch")
+            if not str(binding.get("releaseId") or ""):
+                raise ValueError(f"deployment candidate {label} releaseId is invalid")
+            for field in ("releaseDigest", "attestationDigest"):
+                if _DIGEST.fullmatch(str(binding.get(field) or "")) is None:
+                    raise ValueError(f"deployment candidate {label} {field} is invalid")
+            attestation_ref = binding.get("attestationRef")
+            if not isinstance(attestation_ref, str) or not attestation_ref.strip():
+                raise ValueError(f"deployment candidate {label} attestationRef is invalid")
+            if purpose == "currentness":
+                current = _release_binding(attestation_ref, label=label)
+                if current != binding:
+                    raise ValueError(f"{label} release attestation bytes drifted")
+        if (release["candidate"]["releaseId"] == release["rollback"]["releaseId"] or release["candidate"]["releaseDigest"] == release["rollback"]["releaseDigest"]):
+            raise ValueError("candidate and rollback release identities must be distinct")
     if (
         purpose == "currentness"
         and payload.get("contractGraphDigest") != canonical_contract_graph_digest()

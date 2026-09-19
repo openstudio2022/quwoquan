@@ -85,10 +85,6 @@ def _feed_item_matches_release(
     case = cases_by_id.get(post_id)
     if case is None:
         return None
-    if _required_text(item, "contentIdentity", endpoint=endpoint) != "work":
-        raise PostApiVerificationError(
-            f"{endpoint} content identity mismatch for {case.post_ref}"
-        )
     if _required_text(item, "authorId", endpoint=endpoint) != case.author_id:
         raise PostApiVerificationError(f"{endpoint} author mismatch for {case.post_ref}")
     creator = creators_by_author.get(case.author_id)

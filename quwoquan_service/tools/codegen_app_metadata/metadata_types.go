@@ -98,6 +98,8 @@ type requestBindingDef struct {
 	Name     string `yaml:"name"`
 	Field    string `yaml:"field"`
 	Required *bool  `yaml:"required"`
+	Encoding string `yaml:"encoding"`
+	MaxBytes int    `yaml:"max_bytes"`
 }
 
 type requestBindingsDef struct {
@@ -379,7 +381,24 @@ type emptyStateDef struct {
 	CTALabelKey  string `yaml:"cta_label_key"`
 }
 
+type surfaceResponsiveGridDef struct {
+	ExpandedBreakpointDP float64 `yaml:"expanded_breakpoint_dp"`
+	MinColumns           int     `yaml:"min_columns"`
+	MaxColumns           int     `yaml:"max_columns"`
+	IdealColumnWidthDP   float64 `yaml:"ideal_column_width_dp"`
+}
+
+type surfaceLayoutPolicyDef struct {
+	Surface            string                    `yaml:"surface"`
+	LayoutKind         string                    `yaml:"layout_kind"`
+	CompactColumns     int                       `yaml:"compact_columns"`
+	ChromeFamily       string                    `yaml:"chrome_family"`
+	RecipeDrivenChrome bool                      `yaml:"recipe_driven_chrome"`
+	ResponsiveGrid     *surfaceResponsiveGridDef `yaml:"responsive_grid"`
+}
+
 type uiConfigFile struct {
+	SurfaceLayoutPolicies          []surfaceLayoutPolicyDef           `yaml:"surface_layout_policies"`
 	FeedRequestTypeByCategory      map[string]string                  `yaml:"feed_request_type_by_category"`
 	HomeChannels                   []homeChannelDef                   `yaml:"home_channels"`
 	DiscoveryTabs                  []discoveryTabDef                  `yaml:"discovery_tabs"`
@@ -531,7 +550,7 @@ type contentPublicationPolicyFile struct {
 
 type contentPublicationTextLimitsDef struct {
 	TitleMaxRunes            int `yaml:"title_max_runes"`
-	MicroBodyMaxRunes        int `yaml:"micro_body_max_runes"`
+	ArticleBodyMaxRunes      int `yaml:"article_body_max_runes"`
 	ArticleMarkdownMaxRunes  int `yaml:"article_markdown_max_runes"`
 	SummaryMaxRunes          int `yaml:"summary_max_runes"`
 	SemanticMentionsMaxItems int `yaml:"semantic_mentions_max_items"`
@@ -542,7 +561,6 @@ type contentPublicationFormatPolicyDef struct {
 	ArticleParagraphMinCount int  `yaml:"article_paragraph_min_count"`
 	ArticleWhenTitlePresent  bool `yaml:"article_when_title_present"`
 	ArticleWhenMediaPresent  bool `yaml:"article_when_media_present"`
-	UserConfirmationRequired bool `yaml:"user_confirmation_required"`
 }
 
 type contentPublicationRateLimitDef struct {

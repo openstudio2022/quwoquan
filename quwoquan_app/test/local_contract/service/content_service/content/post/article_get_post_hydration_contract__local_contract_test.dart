@@ -187,7 +187,6 @@ void main() {
       const summaryRaw = <String, dynamic>{
         'postId': 'article_hydration_switch',
         'contentType': 'article',
-        'contentIdentity': 'work',
         'authorId': 'writer_1',
         'authorDisplayName': '水合作者',
         'authorAvatarUrl': 'https://example.com/avatar.jpg',
@@ -198,7 +197,6 @@ void main() {
       const hydratedRaw = <String, dynamic>{
         'postId': 'article_hydration_switch',
         'contentType': 'article',
-        'contentIdentity': 'work',
         'authorId': 'writer_1',
         'authorDisplayName': '水合作者',
         'authorAvatarUrl': 'https://example.com/avatar.jpg',

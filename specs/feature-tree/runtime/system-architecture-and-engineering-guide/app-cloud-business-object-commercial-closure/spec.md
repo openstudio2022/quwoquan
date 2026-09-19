@@ -4,7 +4,7 @@
 
 > Journey / Scenario：AppRoot 当前全部 Journey；统一准出锚点为 [`REQ-009`](../../../spec.md#req-009)、[`REQ-010`](../../../spec.md#req-010) 与 [`UAT-009`](../../../spec.md#uat-009)。
 
-> 设计归属：[L2 DEC-001](../design.md#dec-001)、[DEC-018](../design.md#dec-018)、[DEC-019](../design.md#dec-019) 与 [DEC-024](../design.md#dec-024)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)、[DEC-018](../design.md#dec-018)、[DEC-019](../design.md#dec-019) 与 [DEC-024](../design.md#dec-024)
 
 ## 1. 用户价值
 
@@ -73,7 +73,7 @@
 ### REQ-007 L3 Story 与 AppRoot 十条 Scenario 双向可追踪
 
 - 父 L2 的 Story 列表与目录一致，AppRoot Scenario 与参与 L1 双向引用。
-- 本 Story 只保留 `spec.md`，设计归属上收到 L2 DEC。
+- 本 Story 只保留 `spec.md`，设计引用上收到 L2 DEC。
 - 测试 `spec_ref` 必须指向现存 GWT/SIT/UAT 锚点。
 
 <a id="req-008"></a>
@@ -203,7 +203,7 @@
 <a id="gwt-007"></a>
 ### GWT-007 App 对象纵切与页面参与关系单轨准出
 
-- GIVEN ContractGraph、所属 L1 工程归属、页面对象契约与 App production/test 树均来自同一受版本控制候选。
+- GIVEN ContractGraph、Feature context、页面对象契约与 App production/test 树均来自同一受版本控制候选。
 - WHEN 架构与测试治理按 service/context/object 反向解析全部 App 业务文件、页面和测试。
 - THEN 每个文件均有唯一对象或横切 owner，必需层与页面 source owner/participants 完整且没有占位层。
 - AND 层间与跨对象依赖只经过公开边界和唯一 composition root，旧业务大桶、私有跨对象 import、barrel、shim、双轨路径与 compatibility fallback 均不存在。

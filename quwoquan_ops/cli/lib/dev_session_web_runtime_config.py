@@ -1,8 +1,10 @@
 """dev-session 可变 Web hosting 的 runtime config 物化。
 
 test_live Web bootstrap 与 App 走同一条 runtime config 单轨：本模块从当前工作树
-派生 source identity、用本地 nonprod 签发域签出 runtime package 与 trust envelope，
-再物化到 target-scoped 的可变 hosting 根。
+派生 source identity、用本地 nonprod 签发域签出 runtime 文档与 trust envelope，
+再物化到 target-scoped 的可变 hosting 根。文档类型只由 content_source_policy
+派生：Alpha 必须是 bundled_snapshot 离线文档，Beta/Gamma/Prod 才签发 Remote
+在线 package。
 
 角色：lib。由 `quwoquan_ops/cli/commands/dev_session_runtime.py` 消费。
 """
@@ -17,6 +19,7 @@ from typing import Any, Callable
 
 from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
     build_runtime_config_trust_envelope,
+    load_launch_manifest_contract,
 )
 from quwoquan_ops.cli.lib.app_runtime_config_signing import decode_keyring
 from quwoquan_ops.cli.lib.local_app_runtime_config_keys import (
@@ -38,6 +41,40 @@ def _load_runtime_package_builder(repo_root: Path) -> Any:
     module = importlib.util.module_from_spec(specification)
     specification.loader.exec_module(module)
     return module
+
+
+def _hosting_runtime_document(
+    *,
+    builder: Any,
+    environment: str,
+    target: str,
+    source_revision: str,
+    source_tree_digest: str,
+    signing: Any,
+) -> dict[str, Any]:
+    """按 content_source_policy 签发唯一 Web hosting 文档，禁止环境开关覆盖。"""
+
+    content_source = load_launch_manifest_contract()["content_source_policy"].get(
+        environment
+    )
+    identity = {
+        "environment": environment,
+        "target": target,
+        "launch_policy": "test_live",
+        "source_git_sha": source_revision,
+        "source_tree_digest": source_tree_digest,
+        "signing": signing,
+    }
+    if content_source == "bundled_snapshot":
+        return builder.build_offline_bootstrap_document(**identity)
+    if content_source == "remote":
+        return builder.build_runtime_config_package(
+            values=builder.test_live_runtime_values(environment, target),
+            **identity,
+        )
+    raise ValueError(
+        f"Web hosting has no content source policy for environment {environment}"
+    )
 
 
 def materialize_dev_session_web_runtime_config(
@@ -69,12 +106,11 @@ def materialize_dev_session_web_runtime_config(
         raise ValueError("mutable Web runtime package source tree is invalid")
 
     signing = prepare_local_app_runtime_config_signing(repo_root)
-    runtime_package = builder.build_runtime_config_package(
+    runtime_package = _hosting_runtime_document(
+        builder=builder,
         environment=environment,
         target=target,
-        launch_policy="test_live",
-        values=builder.test_live_runtime_values(environment, target),
-        source_git_sha=source_revision,
+        source_revision=source_revision,
         source_tree_digest="sha1:" + tree_revision,
         signing=signing,
     )

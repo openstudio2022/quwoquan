@@ -180,11 +180,11 @@ def _load_plan(args):
     return path, raw, plan
 
 
-def _gamma_local_managed_connection_values():
+def _gamma_local_managed_connection_values(target=""):
     from quwoquan_ops.cli.commands.source_allocation import (
         _gamma_local_managed_connections, gamma_local_mongo_uri,
     )
-    source = _gamma_local_managed_connections(create=False)
+    source = _gamma_local_managed_connections(create=False, target=target)
     return {
         "QWQ_SOURCE_PG_ADMIN_DSN": source["pg_admin"],
         "QWQ_SOURCE_REDIS_ADMIN_URL": source["redis_admin"],
@@ -197,7 +197,7 @@ def _gamma_local_managed_connection_values():
 def _connection_factory(target, dependencies, managed_connections=None):
     if managed_connections is not None:
         raise ValueError("caller managed connections are forbidden")
-    values = _gamma_local_managed_connection_values() if target == "gamma-local" else None
+    values = _gamma_local_managed_connection_values(target) if target in {"alpha-local", "beta-local", "gamma-local"} else None
     return dependencies["ManagedAuthorityConnectionFactory"](values)
 
 
@@ -215,8 +215,8 @@ def _database(startup, connection_factory):
 
 
 def _gamma_local_startup_prerequisites(target: str, dependencies):
-    if target != "gamma-local":
-        raise ValueError("local startup material producer is gamma-local only")
+    if target not in {"alpha-local", "beta-local", "gamma-local"}:
+        raise ValueError(f"local startup material producer does not support {target}")
     from quwoquan_ops.cli.commands.source_allocation import ensure_source_allocation_for_locked_up
     source_current, source, binding, connections = ensure_source_allocation_for_locked_up(target)
     snapshot = output_paths.active_deployment_candidate_snapshot(target)
@@ -228,7 +228,8 @@ def _gamma_local_startup_prerequisites(target: str, dependencies):
     attempt = json.loads(_required(startup))
     attempt_id = str(attempt.get("attemptId") or "").strip()
     if not attempt_id: raise ValueError("post safety startup attempt missing")
-    expected = dependencies["PostSafetyTarget"]("gamma", target, manifest["packageDigest"],
+    environment = target.removesuffix("-local")
+    expected = dependencies["PostSafetyTarget"](environment, target, manifest["packageDigest"],
         manifest["dataPlaneBinding"]["bindingDigest"], mongo[0]["resource"], mongo[0]["namespace"], attempt_id, attempt_id)
     from quwoquan_ops.cli.commands.source_allocation import gamma_local_mongo_uri
     managed = {

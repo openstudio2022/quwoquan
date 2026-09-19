@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from support.publish_repository_fixture import make_publish_repository
 from PIL import Image
 
 DATA_ROOT = next(
@@ -75,7 +76,7 @@ def test_cross_execution_exact_image_identity_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     existing = publish / "posts/image/摄影/既有图片/1"
     write_json(
@@ -104,7 +105,7 @@ def test_cross_execution_perceptual_duplicate_is_rejected(
     asset_id: str,
     error: str,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     write_json(
         publish / "posts/image/摄影/既有图片/1/manifest.json",
@@ -129,7 +130,7 @@ def test_cross_execution_perceptual_duplicate_is_rejected(
 def test_cross_execution_stable_binding_reference_reuse_is_allowed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, carrier: str,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     existing = _manifest(digest="sha256:" + "a" * 64, perceptual_hash="0" * 16)
     write_json(publish / "posts/image/摄影/原作品/1/manifest.json", existing)
@@ -143,7 +144,7 @@ def test_cross_execution_stable_binding_reference_reuse_is_allowed(
 def test_cross_execution_explicit_logical_version_is_allowed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     existing = _manifest(digest="sha256:" + "a" * 64, perceptual_hash="0" * 16)
     write_json(publish / "posts/image/摄影/同作品/1/manifest.json", existing)
@@ -156,7 +157,7 @@ def test_commercial_image_requires_perceptual_identity(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     write_json(
         package / "object/manifest.json",
@@ -175,7 +176,7 @@ def test_existing_image_manifest_without_perceptual_hash_is_rejected(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    publish = tmp_path / "publish"
+    publish = make_publish_repository(tmp_path / "publish")
     package = tmp_path / "package"
     write_json(
         publish / "posts/image/摄影/旧图片/1/manifest.json",

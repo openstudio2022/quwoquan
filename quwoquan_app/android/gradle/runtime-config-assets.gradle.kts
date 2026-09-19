@@ -248,6 +248,11 @@ fun loadGeneratedLaunchContract(): Map<String, Any?> {
     }
     declaredFiles.forEach { declaration ->
         val relativePath = declaration["path"]?.toString().orEmpty()
+        // Android builds validate shared and Android launch-contract bytes only.
+        // iOS generated output is owned and verified by the iOS build lane.
+        if (relativePath.startsWith("quwoquan_app/ios/")) {
+            return@forEach
+        }
         val expectedDigest = declaration["sha256"]?.toString().orEmpty()
         val source = repositoryRoot.resolve(relativePath).canonicalFile
         if (relativePath.isEmpty() || File(relativePath).isAbsolute ||

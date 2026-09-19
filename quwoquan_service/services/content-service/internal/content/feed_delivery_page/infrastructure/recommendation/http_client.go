@@ -54,11 +54,21 @@ func (client *HTTPClient) Create(
 	ctx context.Context,
 	command transport.CreateRankedRecommendationWindowCommand,
 ) (transport.RankedRecommendationPage, error) {
+	if err := transport.ValidateClientContentPresentationContract(
+		command.ClientPresentationContract,
+	); err != nil {
+		return transport.RankedRecommendationPage{}, fmt.Errorf(
+			"%w: create ranked window client presentation contract: %v",
+			deliveryapp.ErrRecommendationUnavailable,
+			err,
+		)
+	}
 	body, err := json.Marshal(transport.CreateRankedRecommendationWindowRequestBody{
-		ContentFence: command.ContentFence,
-		SubjectId:    command.SubjectId,
-		Scenario:     command.Scenario,
-		Limit:        command.Limit,
+		ContentFence:               command.ContentFence,
+		SubjectId:                  command.SubjectId,
+		Scenario:                   command.Scenario,
+		ClientPresentationContract: command.ClientPresentationContract,
+		Limit:                      command.Limit,
 	})
 	if err != nil {
 		return transport.RankedRecommendationPage{}, fmt.Errorf(
@@ -87,12 +97,25 @@ func (client *HTTPClient) GetPage(
 		url.PathEscape(strings.TrimSpace(request.WindowId)),
 		1,
 	)
-	body, err := json.Marshal(struct {
-		ContentFence transport.ReleasePinnedQueryFence `json:"contentFence"`
-		SubjectID    string                            `json:"subjectId"`
-		FromOrdinal  *int                              `json:"fromOrdinal,omitempty"`
-		Limit        *int                              `json:"limit,omitempty"`
-	}{request.ContentFence, strings.TrimSpace(request.SubjectId), request.FromOrdinal, request.Limit})
+	if err := transport.ValidateClientContentPresentationContract(
+		request.ClientPresentationContract,
+	); err != nil {
+		return transport.RankedRecommendationPage{}, fmt.Errorf(
+			"%w: ranked window page client presentation contract: %v",
+			deliveryapp.ErrRecommendationUnavailable,
+			err,
+		)
+	}
+	// windowId 走 path，其余查询字段走 body。clientPresentationContract 必须与
+	// 建窗时相同：续页窗口的能力绑定由 recommendation 侧按本字段校验，缺席即
+	// 让窗口退回固定基线，与首刷不再是同一能力。
+	body, err := json.Marshal(getRankedRecommendationPageRequestBody{
+		ContentFence:               request.ContentFence,
+		SubjectID:                  strings.TrimSpace(request.SubjectId),
+		ClientPresentationContract: request.ClientPresentationContract,
+		FromOrdinal:                request.FromOrdinal,
+		Limit:                      request.Limit,
+	})
 	if err != nil {
 		return transport.RankedRecommendationPage{}, err
 	}
@@ -104,6 +127,17 @@ func (client *HTTPClient) GetPage(
 		"",
 		300*time.Millisecond,
 	)
+}
+
+// getRankedRecommendationPageRequestBody 是续页查询的 wire body。GetPage 没有
+// 生成 request body 类型（windowId 属于 path），字段集合仍必须与
+// GetRankedRecommendationPageQuery 去掉 windowId 后完全一致。
+type getRankedRecommendationPageRequestBody struct {
+	ContentFence               transport.ReleasePinnedQueryFence           `json:"contentFence"`
+	SubjectID                  string                                      `json:"subjectId"`
+	ClientPresentationContract transport.ClientContentPresentationContract `json:"clientPresentationContract"`
+	FromOrdinal                *int                                        `json:"fromOrdinal,omitempty"`
+	Limit                      *int                                        `json:"limit,omitempty"`
 }
 
 type transientStatusError struct {
@@ -245,54 +279,129 @@ func validatePage(page transport.RankedRecommendationPage) error {
 	default:
 		return fmt.Errorf("ranked page model bucket is invalid")
 	}
+	// 窗口回显的能力声明必须自洽：digest 由本地重算，不接受对方自报。
+	if err := transport.ValidateClientContentPresentationContract(
+		page.ClientPresentationContract,
+	); err != nil {
+		return fmt.Errorf("ranked recommendation page presentation contract is invalid: %w", err)
+	}
 	seenOrdinals := make(map[int]struct{}, len(page.Items))
-	seenContent := make(map[string]struct{}, len(page.Items))
+	seenObjects := make(map[string]struct{}, len(page.Items))
 	for _, item := range page.Items {
-		contentID := strings.TrimSpace(item.ContentId)
-		if item.Ordinal < 0 || contentID == "" || strings.TrimSpace(item.FeatureSnapshotDigest) == "" ||
+		objectID, err := listItemObjectIdentity(item.Envelope)
+		if err != nil {
+			return err
+		}
+		if err := envelopeWithinContract(
+			item.Envelope,
+			page.ClientPresentationContract,
+		); err != nil {
+			return err
+		}
+		if item.Ordinal < 0 || strings.TrimSpace(item.FeatureSnapshotDigest) == "" ||
 			item.ItemFeatureSnapshot == nil {
 			return fmt.Errorf("ranked recommendation item is invalid")
 		}
 		if _, duplicate := seenOrdinals[item.Ordinal]; duplicate {
 			return fmt.Errorf("ranked recommendation item ordinal is duplicated")
 		}
-		if _, duplicate := seenContent[contentID]; duplicate {
-			return fmt.Errorf("ranked recommendation content identity is duplicated")
+		if _, duplicate := seenObjects[objectID]; duplicate {
+			return fmt.Errorf("ranked recommendation object identity is duplicated")
 		}
 		seenOrdinals[item.Ordinal] = struct{}{}
-		seenContent[contentID] = struct{}{}
-	}
-	if len(page.ObjectCards) > 20 {
-		return fmt.Errorf("ranked recommendation page has too many object cards")
-	}
-	seenObjectCards := make(map[string]struct{}, len(page.ObjectCards))
-	for _, card := range page.ObjectCards {
-		objectID := strings.TrimSpace(card.ObjectId)
-		if strings.TrimSpace(card.ObjectKind) == "" || objectID == "" ||
-			strings.TrimSpace(card.Title) == "" || strings.TrimSpace(card.ReasonKey) == "" ||
-			strings.TrimSpace(card.RecallPath) == "" {
-			return fmt.Errorf("ranked recommendation object card is invalid")
-		}
-		if _, duplicate := seenObjectCards[objectID]; duplicate {
-			return fmt.Errorf("ranked recommendation object card identity is duplicated")
-		}
-		seenObjectCards[objectID] = struct{}{}
-		seenTags := make(map[string]struct{}, len(card.TagRefs))
-		for _, rawTag := range card.TagRefs {
-			tag := strings.TrimSpace(rawTag)
-			if tag == "" {
-				return fmt.Errorf("ranked recommendation object card tag is empty")
-			}
-			if _, duplicate := seenTags[tag]; duplicate {
-				return fmt.Errorf("ranked recommendation object card tag is duplicated")
-			}
-			seenTags[tag] = struct{}{}
-		}
+		seenObjects[objectID] = struct{}{}
 	}
 	if page.NextOrdinal != nil && (*page.NextOrdinal < 0 || len(page.Items) == 0) {
 		return fmt.Errorf("ranked recommendation continuation is invalid")
 	}
 	return nil
+}
+
+// listItemObjectIdentity 按 objectKind 读出这一项的对象身份。objectKind 决定
+// 读哪一个引用字段；引用与 objectKind 不匹配、缺席或两个引用同时出现都是
+// 无效窗口，不能靠取值组合推断这一项到底是什么。
+func listItemObjectIdentity(
+	envelope transport.ListItemPresentationEnvelope,
+) (string, error) {
+	objectKind := string(envelope.ObjectKind)
+	if envelope.ObjectKind.Validate() != nil || envelope.OpenSurface.Validate() != nil {
+		return "", fmt.Errorf("ranked recommendation list item envelope is incomplete")
+	}
+	if (envelope.Post != nil) == (envelope.Homepage != nil) {
+		return "", fmt.Errorf(
+			"ranked recommendation list item envelope must carry exactly one object reference",
+		)
+	}
+	switch {
+	case envelope.Post != nil:
+		if objectKind != "post" {
+			return "", fmt.Errorf(
+				"ranked recommendation list item envelope objectKind %q does not match its post reference",
+				objectKind,
+			)
+		}
+		postID := strings.TrimSpace(envelope.Post.PostId)
+		if postID == "" {
+			return "", fmt.Errorf("ranked recommendation list item post reference is empty")
+		}
+		return objectKind + ":" + postID, nil
+	default:
+		if objectKind != "entity_homepage" {
+			return "", fmt.Errorf(
+				"ranked recommendation list item envelope objectKind %q does not match its homepage reference",
+				objectKind,
+			)
+		}
+		homepageID := strings.TrimSpace(envelope.Homepage.HomepageId)
+		if homepageID == "" {
+			return "", fmt.Errorf("ranked recommendation list item homepage reference is empty")
+		}
+		return objectKind + ":" + homepageID, nil
+	}
+}
+
+// envelopeWithinContract 断言窗口条目没有越过该窗口自己声明的能力。窗口是按
+// 请求能力构造的，越界条目意味着对方没有遵守建窗契约；这类条目不能靠客户端
+// 丢弃兜底，只能让整个窗口 fail-closed。
+func envelopeWithinContract(
+	envelope transport.ListItemPresentationEnvelope,
+	contract transport.ClientContentPresentationContract,
+) error {
+	if !declares(contract.ListObjectKinds, envelope.ObjectKind) {
+		return fmt.Errorf(
+			"ranked recommendation list item objectKind %q is outside the window presentation contract",
+			envelope.ObjectKind,
+		)
+	}
+	if !declares(contract.OpenSurfaces, envelope.OpenSurface) {
+		return fmt.Errorf(
+			"ranked recommendation list item openSurface %q is outside the window presentation contract",
+			envelope.OpenSurface,
+		)
+	}
+	if envelope.ContentType != nil && !declares(contract.ContentTypes, *envelope.ContentType) {
+		return fmt.Errorf(
+			"ranked recommendation list item contentType %q is outside the window presentation contract",
+			*envelope.ContentType,
+		)
+	}
+	if envelope.PresentationRecipe != nil &&
+		!declares(contract.PresentationRecipes, *envelope.PresentationRecipe) {
+		return fmt.Errorf(
+			"ranked recommendation list item presentationRecipe %q is outside the window presentation contract",
+			*envelope.PresentationRecipe,
+		)
+	}
+	return nil
+}
+
+func declares[member comparable](declared []member, value member) bool {
+	for _, candidate := range declared {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
 }
 
 func optionalText(value *string) string {

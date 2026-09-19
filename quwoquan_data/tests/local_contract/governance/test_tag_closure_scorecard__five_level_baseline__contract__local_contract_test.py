@@ -174,6 +174,7 @@ def test_gate_blocks_dangling_refs_and_schema_drift(monkeypatch: pytest.MonkeyPa
 
 def test_repository_orphan_ratchet_is_not_degraded() -> None:
     report = build_report(collect_scorecard())
+    assert report.orphans["no_collection_channel"] == closure_scorecard.ORPHAN_NO_CHANNEL_CEILING
 
     assert gate_violations(report) == [], (
         "标签闭环基线已退化，运行 "

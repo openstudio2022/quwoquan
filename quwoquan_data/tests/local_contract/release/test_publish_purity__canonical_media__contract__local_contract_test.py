@@ -23,6 +23,7 @@ if str(SCRIPTS_ROOT) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_ROOT))
 
 from verify.verify_publish_purity import publish_purity_issues  # noqa: E402
+from support.publish_repository_fixture import make_publish_repository
 
 
 def _write(path: Path, body: bytes) -> None:
@@ -31,6 +32,7 @@ def _write(path: Path, body: bytes) -> None:
 
 
 def test_publish_refuses_a_media_root(tmp_path: Path):
+    make_publish_repository(tmp_path)
     body = b"cover-bytes"
     digest = hashlib.sha256(body).hexdigest()
     _write(
@@ -42,11 +44,11 @@ def test_publish_refuses_a_media_root(tmp_path: Path):
 
     # Content-addressing does not earn a body a place in the versioned tree: the
     # store it belongs to is the library, so the root itself is what is refused.
-    assert any("publish root only permits" in issue for issue in issues)
-    assert any("creators, entities, posts, tags" in issue for issue in issues)
+    assert any("ROOT_ENTRY_INVALID: media" in issue for issue in issues)
 
 
 def test_publish_refuses_a_media_body_nested_under_a_canonical_root(tmp_path: Path):
+    make_publish_repository(tmp_path)
     _write(tmp_path / "posts/image/摄影/作品/1/assets/cover.jpg", b"cover-bytes")
 
     issues = publish_purity_issues(tmp_path)
@@ -54,23 +56,15 @@ def test_publish_refuses_a_media_body_nested_under_a_canonical_root(tmp_path: Pa
     # `posts/` is a root publish owns, so only judging the whole path catches a
     # body that hides inside an object surface.
     assert any(
-        "publish carries documents only" in issue for issue in issues
+        "outside carried media/source closure" in issue for issue in issues
     ), issues
 
 
 def test_publish_accepts_a_document_only_tree(tmp_path: Path):
-    entity = tmp_path / "entities/地点/景区/真实地点"
-    _write(entity / "_entity.json", json.dumps({"label": "真实地点"}).encode("utf-8"))
+    make_publish_repository(tmp_path)
+    ref = "travel/test/entity-" + "d" * 64
+    entity = tmp_path / "entities" / ref / "1"
+    _write(entity / "manifest.json", json.dumps({"schema": "quwoquan_data.entity_object", "entityRef": "/entity/" + ref, "version": 1}).encode("utf-8"))
     _write(entity / "page.md", "# 真实地点\n".encode("utf-8"))
 
     assert publish_purity_issues(tmp_path) == []
-
-
-def test_publish_post_requires_explicit_work_identity(tmp_path: Path):
-    manifest = tmp_path / "posts" / "article" / "攻略" / "西湖" / "1" / "manifest.json"
-    manifest.parent.mkdir(parents=True)
-    manifest.write_text('{"contentType":"article","assets":[]}', encoding="utf-8")
-
-    issues = publish_purity_issues(tmp_path)
-
-    assert any("post_content_identity_invalid" in issue for issue in issues)

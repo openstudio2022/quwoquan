@@ -44,7 +44,7 @@ final class OperationPrivacyPolicy {
 }
 
 /// 与下表同源的条目数；完整性测试不得手写第二个计数。
-const int generatedOperationPrivacyPolicyCount = 554;
+const int generatedOperationPrivacyPolicyCount = 553;
 
 /// operation.privacy 的端侧运行时投影。
 /// key 为 ContractGraph operation id；查不到即 fail-closed。
@@ -2227,15 +2227,6 @@ const Map<String, OperationPrivacyPolicy> generatedOperationPrivacyPolicies =
     responseClassification: OperationPrivacyClass.internal,
     logPolicy: OperationLogPolicy.metadataOnly,
     telemetryAttributes: <String>{'identity', 'outcome', 'type'},
-  ),
-  'content.post.PromotePostToWork': OperationPrivacyPolicy(
-    operationId: 'content.post.PromotePostToWork',
-    domain: 'content',
-    metric: 'content_post_promote_to_work',
-    requestClassification: OperationPrivacyClass.pii,
-    responseClassification: OperationPrivacyClass.pii,
-    logPolicy: OperationLogPolicy.metadataOnly,
-    telemetryAttributes: <String>{'outcome'},
   ),
   'content.post.SubmitPostPublication': OperationPrivacyPolicy(
     operationId: 'content.post.SubmitPostPublication',

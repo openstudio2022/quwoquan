@@ -17,6 +17,9 @@ func renderDomainOperationContract(
 	output.WriteString(activeContractSHA256)
 	output.WriteString("\n\nlibrary;\n\n")
 	if spec.HasRequestPart {
+		if requestDomainUsesJSONQuery(spec.Domain) {
+			output.WriteString("import 'dart:convert';\n")
+		}
 		output.WriteString("import '../operation_request_payload.dart';\n")
 	}
 	externalImports := make([]string, 0, len(spec.ExternalImports)+1)

@@ -17,7 +17,6 @@ import 'package:quwoquan_app/runtime/observability/runtime_diagnostics.dart';
 import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/di/app_cloud_client_context_provider.dart';
-import 'package:quwoquan_app/runtime/platform/firebase_incoming_call_runtime.dart';
 import 'package:quwoquan_app/runtime/platform/app_recovery_native_bridge.dart';
 import 'package:quwoquan_app/design_system/theme/app_theme.dart';
 import 'package:quwoquan_app/runtime/observability/telemetry/app_telemetry_session_store.dart';
@@ -115,9 +114,6 @@ Future<void> _runQuwoquanAppInBootstrapZone({
     unawaited(_hydrateNativeStartupTimingForBootstrap());
     await CloudRuntimeConfig.hydrateFromNativeRuntimePackage();
     _configureContentComposition?.call();
-    if (CloudRuntimeConfig.networkAccessAllowed) {
-      registerFirebaseIncomingCallBackgroundHandler();
-    }
     initializeStartupTelemetryRuntime();
     CloudRuntimeConfig.validateRequiredEndpoints();
     attachStartupTelemetryTransport();

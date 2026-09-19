@@ -23,6 +23,7 @@ from governance.coverage.distribution import project_asset_admission  # noqa: E4
 from tests.support.post_object_transaction_fixture import (  # noqa: E402
     POST_REF,
     _fixture,
+    _isolate_creator_avatar_cas,
     _write_json,
     build_post_object_transaction_package,
 )
@@ -118,7 +119,7 @@ def test_post_transaction_transcribes_access_policy_into_rights_closure(tmp_path
         package_root=package,
     )
 
-    rights = json.loads((package / "object/rights.json").read_text(encoding="utf-8"))
-    recorded = rights["assets"][0]
-    assert recorded["accessPolicy"] == "tos_restricted"
-    assert_valid(rights, "release", "asset_rights_closure")
+    manifest = json.loads((package / "object/manifest.json").read_bytes())
+    source = json.loads((package / "object" / manifest["sourceRefs"][0]).read_bytes())
+    assert source["assets"][0]["accessPolicy"] == "tos_restricted"
+    assert not (package / "object/rights.json").exists()

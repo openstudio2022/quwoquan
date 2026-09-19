@@ -198,7 +198,7 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 	opts = NormalizeImportOptions(opts)
 	n := 0
 	for _, p := range posts {
-		contentIdentity, err := canonicalImportedContentIdentity(p.ContentIdentity)
+		contentType, err := canonicalImportedContentType(p.ContentType)
 		if err != nil {
 			return n, fmt.Errorf("%s: %w", p.PostRef, err)
 		}
@@ -228,8 +228,7 @@ func UpsertDiscoveryFeedWithOptions(ctx context.Context, coll *mongo.Collection,
 			"contentId":                 p.ContentID,
 			"contentVersion":            p.ContentVersion,
 			"title":                     p.Title,
-			"contentType":               p.ContentType,
-			"contentIdentity":           contentIdentity,
+			"contentType":               contentType,
 			"authorId":                  p.AuthorID,
 			"authorDisplayNameSnapshot": p.AuthorDisplayName,
 			"authorAvatarUrlSnapshot":   p.AuthorAvatarURL,

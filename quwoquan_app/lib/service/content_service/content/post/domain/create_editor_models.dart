@@ -12,22 +12,6 @@ part 'create_editor_models_draft.dart';
 
 enum EditorStartAction { gallery, video, write, capture }
 
-enum CreateContentIdentity { moment, work }
-
-extension CreateContentIdentityX on CreateContentIdentity {
-  String get value => name;
-
-  String get label => this == CreateContentIdentity.moment ? '点滴' : '作品';
-}
-
-@immutable
-class IdentitySuggestion {
-  const IdentitySuggestion({required this.identity, required this.reason});
-
-  final CreateContentIdentity identity;
-  final String reason;
-}
-
 enum CreateEditorKind { media, text }
 
 enum CreateMediaKind { none, images, video }

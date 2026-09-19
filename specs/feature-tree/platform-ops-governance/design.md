@@ -23,7 +23,7 @@
 - [`config-and-reliability-governance`](./config-and-reliability-governance/spec.md)：承接 `platform-ops` 的平台运维控制面规格，负责把“配置治理 + 服务治理 + 发布灰度 + 环境依赖”沉淀为可设计、可实现、可验收的统一平台能力。
 - [`observability-and-alerting`](./observability-and-alerting/spec.md)：建立日志、指标、追踪与告警的统一治理能力，覆盖云侧服务、端侧运行时和控制面配置发布链路。
 - [`security-privacy-audit`](./security-privacy-audit/spec.md)：统一发布前与运营期的权限、隐私、审计和供应链检查
-- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
+- Feature 层表达业务与设计边界；工程影响由 current actual diff 与 dependency closure 推导。
 
 ## 5. 关键决策
 
@@ -50,8 +50,8 @@
 
 <a id="dec-003"></a>
 ### DEC-003 App 依赖 bundle 同步以 receipt-first/active-last 原子事务推进单槽 active 代际
-- 决策：`stackctl app-dependency-sync` 在单一 sync lock 内一次构建全部五个依赖组件闭包（production Pub、Patrol Pub、production iOS Pods、Patrol iOS Pods、Android Gradle），按在线解析 → fresh 私有 home 完整离线回放 → 封存不可变组件快照 → readback 验证的固定顺序执行；先原子落盘本次 attempt 的 sync receipt，最后一步以原子替换推进单槽 active pointer，commit 后 active readback 必须与本次 attempt 一致才算 committed。
-- 理由：App 打包、UAT 与 canonical launcher 消费的是一份跨组件一致的依赖代际。按组件分次更新或在线成功即激活会产生不可复现或跨 attempt 混合的闭包；receipt-first/active-last 保证任何时刻 active pointer 指向的代际都有完整 receipt 可回读，消费方无需推断中间态。
+- 决策：`stackctl app-dependency-sync` 在单一 sync lock 内消费显式 `android|ios|all` platform plan；每个平台闭包均包含共享 Pub 组件及自身 native 组件，按在线解析 → fresh 私有 home 完整离线回放 → 封存不可变组件快照 → readback 验证的固定顺序执行。receipt/active 记录平台 coverage、平台 input identity、组件 outputs/digests 与 nonPromotable；先原子落盘 receipt，最后原子替换 active pointer，commit 后 readback 必须一致。`android` plan 不解析 CocoaPods、不运行 iOS config/replay；受管 package/UAT 必须显式投影平台，Prod/promotion 固定要求 `all`。
+- 理由：App 打包、UAT 与 canonical launcher 消费的是一份平台内跨组件一致的依赖代际。平台 plan 使 Android 能独立同步和验证而不触发 iOS 工具链；显式 coverage 与平台 input identity 防止把 Android-only 事实提升为 iOS 或全平台事实。receipt-first/active-last 保证 active 代际完整可回读。
 - 被否决方案：按组件独立激活、在线解析成功即切换 active、无锁并发同步互相覆盖、以同步顺带更新锁定声明、把 work 目录或未 commit receipt 作为消费面、把 ambiguous commit 静默重试成成功。
 - 失败恢复：source/toolchain identity 漂移、在线解析失败、离线回放失败、封存或 readback 失败均保留首个 typed blocker 且 active pointer 保持上一份已验证代际；active 写入已开始但无法证明 commit 结果时以 activation ambiguous 的 typed blocker 报告，禁止自动重试，只能由显式重新同步收敛。锁定声明永不更新，锁漂移是独立 typed blocker，不由同步修复。
 - 约束与影响：调用方（打包、UAT、canonical launcher 的交互式 stale 恢复）只能消费 committed active readback。launcher 侧触发边界（live outer launcher only、pre-projection、one-shot、双 TTY、保留首个 stale blocker）由 [`runtime-config` design DEC-003](../runtime/runtime-config/design.md#dec-003) 拥有，本 DEC 只拥有 sync 事务本身的对象与恢复语义。

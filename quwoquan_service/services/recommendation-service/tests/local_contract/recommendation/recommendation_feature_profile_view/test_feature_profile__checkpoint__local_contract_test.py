@@ -41,7 +41,7 @@ def test_behavior_projection_uses_canonical_state_without_copying_policy_weights
             "tagRefs": ["Topic/旅行"],
             "entityRefs": ["地点/景区/色达"],
             "authorId": "persona-author",
-            "contentType": "post",
+            "contentType": "article",
             "impactHelpType": "decision",
             "intersectionDimension": "same_city",
             "intersectionTagRefs": ["Topic/旅行"],
@@ -62,7 +62,7 @@ def test_behavior_projection_uses_canonical_state_without_copying_policy_weights
         "intersectionDimension:same_city": 1.0,
         "tag:Topic/旅行": 1.0,
     }
-    assert mutation.content_type == "post"
+    assert mutation.content_type == "article"
     assert mutation.impact_help_type == "decision"
     assert mutation.intersection_dimension == "same_city"
     assert mutation.intersection_tag_refs == ("Topic/旅行",)

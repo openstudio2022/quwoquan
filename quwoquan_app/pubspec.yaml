@@ -94,11 +94,8 @@ dependencies:
   simple_icons: ^16.23.0
 
   # 添加联系人：二维码扫描(含图库识别) / 系统通讯录读取 / 中文转拼音首字母分组
-  mobile_scanner: ^7.2.0
   flutter_contacts: ^2.2.2
   lpinyin: ^2.0.3
-  firebase_core: ^4.12.1
-  firebase_messaging: ^16.4.3
   image: ^4.8.0
   cryptography: ^2.9.0
 
@@ -116,6 +113,8 @@ dev_dependencies:
   video_player_platform_interface: ^6.9.0
 
 dependency_overrides:
+  geolocator_android:
+    path: vendor/plugins/geolocator_android
   audio_session:
     path: vendor/plugins/audio_session
   camera_android_camerax:
@@ -130,8 +129,6 @@ dependency_overrides:
     path: vendor/plugins/image_picker_android
   livekit_client:
     path: vendor/plugins/livekit_client
-  mobile_scanner:
-    path: vendor/plugins/mobile_scanner
   package_info_plus:
     path: vendor/plugins/package_info_plus
   photo_manager:

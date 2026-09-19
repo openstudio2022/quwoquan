@@ -511,8 +511,7 @@ SearchResponse _cloudResult(
   } else if (normalized.objectTypes.contains(SearchObjectType.contentPost)) {
     const item = PostSearchItemView(
       postId: 'post_west_lake_timelapse',
-      contentType: 'video',
-      contentIdentity: 'work',
+      contentType: ContentType.video,
       title: '西湖夜景延时',
       summary: '云侧内容命中',
       coverUrl:

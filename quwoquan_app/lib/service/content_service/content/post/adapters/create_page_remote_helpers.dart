@@ -5,7 +5,6 @@ import 'package:quwoquan_app/service/content_service/content/post/adapters/creat
 import 'package:quwoquan_app/service/content_service/content/post/adapters/create_page_article_media_uploader.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/prepared_post_publication_payload.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
-import 'package:quwoquan_app/service/content_service/content/post/domain/generated/content_publication_policy.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/publish_settings_models.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/qwq_markdown.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
@@ -25,29 +24,6 @@ int paragraphCountForPayload(String text) {
       .length;
 }
 
-/// 系统对文字形态的「建议」：只用于确认页初始化与预览等非提交路径。
-/// 阈值与云端 `publication_policy.yaml` 同源（codegen），不维护第二份。
-bool shouldPublishAsArticleForPayload(CreateEditorState state) {
-  return (ContentPublicationPolicy.articleWhenTitlePresent &&
-          state.title.trim().isNotEmpty) ||
-      state.body.trim().length >=
-          ContentPublicationPolicy.articleBodyMinRunes ||
-      paragraphCountForPayload(state.body) >=
-          ContentPublicationPolicy.articleParagraphMinCount;
-}
-
-/// 提交/预览共用的文字形态判定：用户在发布确认页固化的
-/// [PublishSettings.textContentType] 是唯一确认值；仅当尚未经过确认页
-/// （草稿投影预览等非提交路径）时才回落到建议函数。提交路径由
-/// `_publish` 在确认页返回后 fail-closed 校验确认值非空（GWT-001）。
-bool resolveTextPublishAsArticle(CreateEditorState state) {
-  return switch (state.settings.textContentType.trim()) {
-    'article' => true,
-    'micro' => false,
-    _ => shouldPublishAsArticleForPayload(state),
-  };
-}
-
 String articleSummaryForPayload(CreateEditorState state) {
   final documentText = state.articleDocument.body.trim();
   final plainText = documentText.isNotEmpty ? documentText : state.body.trim();
@@ -62,9 +38,7 @@ String articleSummaryForPayload(CreateEditorState state) {
 
 String coverAssetPathForPayload(CreateEditorState state) {
   if (state.editorKind == CreateEditorKind.text) {
-    return resolveTextPublishAsArticle(state)
-        ? state.articleCoverImagePath.trim()
-        : '';
+    return state.articleCoverImagePath.trim();
   }
   if (state.hasVideo) {
     if (state.videoThumbnail.trim().isNotEmpty) {
@@ -356,27 +330,16 @@ Map<String, Object?> buildPostPublicationPayloadMap(CreateEditorState state) {
       ...settings,
     };
   }
-  final asArticle = resolveTextPublishAsArticle(state);
-  if (asArticle) {
-    return <String, Object?>{
-      'contentType': 'article',
-      'title': state.title.trim(),
-      'summary': summary,
-      'coverUrl': coverAssetPath,
-      'articleMarkdown': buildArticleMarkdownForPayload(state),
-      'markdownDialect': qwqRichMarkdownVersion,
-      'articleAssetManifest': buildArticleAssetManifestForPayload(state),
-      'articleRenderProfile': buildArticleRenderProfileForPayload(state),
-      ...settings,
-    };
-  }
+  // 文字编辑器只产出 article：形态不再由用户确认，也不从正文长度或媒体推导。
   return <String, Object?>{
-    'contentType': 'micro',
+    'contentType': 'article',
     'title': state.title.trim(),
-    'body': state.body.trim(),
-    if (summary.isNotEmpty) 'summary': summary,
-    'mediaUrls': state.imagePaths,
+    'summary': summary,
     'coverUrl': coverAssetPath,
+    'articleMarkdown': buildArticleMarkdownForPayload(state),
+    'markdownDialect': qwqRichMarkdownVersion,
+    'articleAssetManifest': buildArticleAssetManifestForPayload(state),
+    'articleRenderProfile': buildArticleRenderProfileForPayload(state),
     ...settings,
   };
 }
@@ -425,9 +388,7 @@ buildPostPublicationPayloadWithRemoteMedia({
       mediaPreparationIdentity?.trim().isNotEmpty == true
       ? mediaPreparationIdentity!.trim()
       : state.draftId?.trim() ?? '';
-  final publishesArticle =
-      state.editorKind == CreateEditorKind.text &&
-      resolveTextPublishAsArticle(state);
+  final publishesArticle = state.editorKind == CreateEditorKind.text;
   final hasMediaSource =
       state.hasVideo ||
       state.imagePaths.isNotEmpty ||
@@ -845,7 +806,6 @@ submitContentPostPublicationCommandFromPreparedPayload(
   publishIntentId: _postPublicationIntentIdForLocalDraft(localDraftId),
   localDraftId: localDraftId,
   contentType: _requiredPostType(payload['contentType']),
-  contentIdentity: _optionalPostIdentity(payload['contentIdentity']),
   title: _optionalPayloadText(payload['title']),
   body: _optionalPayloadText(payload['body']),
   summary: _optionalPayloadText(payload['summary']),

@@ -41,40 +41,41 @@ def _seed_canonical() -> tuple[Path, str, str]:
     payload = b"canonical-cas-asset"
     digest = hashlib.sha256(payload).hexdigest()
     object_key = f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}.png"
-    physical = root / object_key
+    physical = root / "posts" / "article/攻略/p0001/毕棚沟攻略/1/media/cover.png"
     physical.parent.mkdir(parents=True)
     physical.write_bytes(payload)
     admit_library_bytes(payload, kind=MEDIA_KIND)
     post_ref = "posts/article/攻略/毕棚沟攻略/1"
-    post = root / post_ref
-    write_json(
-        post / "manifest.json",
-        {
-            "assets": [
-                {
-                    "assetId": "cover",
-                    "objectKey": object_key,
-                    "sha256": "sha256:" + digest,
-                }
-            ]
-        },
-    )
-    write_json(
-        post / "rights_snapshots" / "cover.json",
-        {
-            "assetId": "cover",
-            "manifestAsset": {
-                "assetId": "cover",
-                "sha256": "sha256:" + digest,
-            },
-        },
-    )
+    post = root / "posts" / "article/攻略/p0001/毕棚沟攻略/1"
+    physical = post / "media/cover.png"
+    physical.parent.mkdir(parents=True, exist_ok=True)
+    physical.write_bytes(payload)
+    source_body = b"fixture source evidence"
+    source_root = post / "sources/s001"
+    source_root.mkdir(parents=True, exist_ok=True)
+    (source_root / "evidence.txt").write_bytes(source_body)
+    source_ref = "sources/s001/source.json"
+    write_json(source_root / "source.json", {
+        "schema": "quwoquan_data.publish_source", "sourceId": "s001",
+        "sourceUrl": "https://example.test/media/cover", "sourceUseMode": "licensed_adaptation",
+        "fetchedAt": "2026-09-16T00:00:00Z", "metadata": {},
+        "assets": [{"assetId": "cover", "sourceAssetRef": "sources/s001/assets/cover.png", "sourceAsset": {"rightsAuditStatus": "verified"}}],
+        "evidence": [{"path": "evidence.txt", "sha256": "sha256:" + hashlib.sha256(source_body).hexdigest(), "bytes": len(source_body), "kind": "source_snapshot"}],
+    })
+    write_json(post / "manifest.json", {
+        "objectRef": post_ref.removeprefix("posts/"), "contentType": "article", "contentId": "post-media-fixture", "version": 1,
+        "assets": [{"assetId": "cover", "path": "media/cover.png", "sha256": "sha256:" + digest, "bytes": len(payload), "sourceRefs": [source_ref]}],
+    })
     return root, post_ref, object_key
 
 
 def test_materialize_release_media_reads_closed_cas_only() -> None:
     canonical, post_ref, object_key = _seed_canonical()
     release_root = Path(tempfile.mkdtemp(prefix="release_media_"))
+    import shutil
+    shutil.copytree(canonical / "posts/article/攻略/p0001/毕棚沟攻略/1", release_root / "release-a/payload/objects/posts/article/攻略/毕棚沟攻略/1")
+    copied = release_root / "release-a/payload/objects/posts/article/攻略/毕棚沟攻略/1"
+    assert (copied / "media/cover.png").is_file()
     report = materialize_release_media(
         release_id="release-a",
         post_refs=[post_ref],
@@ -89,7 +90,7 @@ def test_materialize_release_media_reads_closed_cas_only() -> None:
     assert asset["kind"] == "image"
     assert asset["sha256"] == "sha256:" + object_key.split("/")[-1].split(".")[0]
     assert asset["rightsSnapshotRefs"] == [
-        "objects/posts/article/攻略/毕棚沟攻略/1/rights_snapshots/cover.json"
+        "objects/posts/article/攻略/毕棚沟攻略/1/sources/s001/source.json"
     ]
     assert is_public_media_slice_key(asset["publicSliceKey"])
     path = release_root / "release-a/payload/media_manifest.json"
@@ -97,8 +98,8 @@ def test_materialize_release_media_reads_closed_cas_only() -> None:
     assert (
         release_root / "release-a/payload" / asset["publicSliceKey"]
     ).read_bytes() == b"canonical-cas-asset"
-    assert (canonical / object_key).read_bytes() == b"canonical-cas-asset"
-    assert (canonical / post_ref / "manifest.json").is_file()
+    assert (canonical / "posts" / "article/攻略/p0001/毕棚沟攻略/1/media/cover.png").read_bytes() == b"canonical-cas-asset"
+    assert (canonical / "posts" / "article/攻略/p0001/毕棚沟攻略/1/manifest.json").is_file()
 
 
 def test_release_media_manifest_is_create_once() -> None:
@@ -124,7 +125,7 @@ def test_release_media_manifest_is_create_once() -> None:
 def test_invalid_or_dangling_asset_ref_fails_closed() -> None:
     canonical, post_ref, _ = _seed_canonical()
     write_json(
-        canonical / post_ref / "manifest.json",
+        canonical / "posts" / "article/攻略/p0001/毕棚沟攻略/1/manifest.json",
         {"assets": [{"objectKey": "../escape.png", "sha256": "sha256:" + "0" * 64}]},
     )
     release_root = Path(tempfile.mkdtemp(prefix="release_media_bad_"))
@@ -143,7 +144,8 @@ def test_cas_key_and_hash_contract() -> None:
     canonical, _, object_key = _seed_canonical()
     assert is_cas_media_object_key(object_key)
     assert not is_cas_media_object_key("../escape.png")
-    assert sha256_file(canonical / object_key) == "sha256:" + object_key.split("/")[-1].split(".")[0]
+    carried = canonical / "posts/article/攻略/p0001/毕棚沟攻略/1/media/cover.png"
+    assert sha256_file(carried) == "sha256:" + object_key.split("/")[-1].split(".")[0]
 
 
 def test_public_slice_is_kind_scoped_and_derives_ascii_from_canonical_asset_identity() -> None:
@@ -204,49 +206,28 @@ def test_release_manifest_unifies_avatar_image_video_identity_and_rights() -> No
         object_key = (
             f"media/objects/sha256/{digest[:2]}/{digest[2:4]}/{digest}{suffix}"
         )
-        physical = canonical / object_key
+        root = canonical / object_kind / object_ref
+        physical = root / f"media/source{suffix}"
         physical.parent.mkdir(parents=True, exist_ok=True)
         physical.write_bytes(payload)
         admit_library_bytes(payload, kind=MEDIA_KIND)
-        root = canonical / object_kind / object_ref
-        write_json(
-            root / ("assets.refs.json" if object_kind == "creators" else "manifest.json"),
-            {
-                "assets": [
-                    {
-                        "assetId": asset_id,
-                        "objectKey": object_key,
-                        "sha256": f"sha256:{digest}",
-                        "bytes": len(payload),
-                    }
-                ]
-            },
-        )
-        if object_kind != "creators":
-            write_json(
-                root / "manifest.json",
-                {
-                    "assets": [
-                        {
-                            "assetId": asset_id,
-                            "kind": asset_kind,
-                            "mimeType": content_type,
-                            "objectKey": object_key,
-                            "sha256": f"sha256:{digest}",
-                        }
-                    ]
-                },
-            )
-        write_json(
-            root / "rights_snapshots" / f"{asset_kind}.json",
-            {
-                "assetId": asset_id,
-                "manifestAsset": {
-                    "assetId": asset_id,
-                    "sha256": f"sha256:{digest}",
-                },
-            },
-        )
+        evidence = f"source:{asset_id}".encode()
+        source_root = root / "sources/s001"
+        source_root.mkdir(parents=True, exist_ok=True)
+        (source_root / "evidence.txt").write_bytes(evidence)
+        source_ref = "sources/s001/source.json"
+        write_json(source_root / "source.json", {
+            "schema": "quwoquan_data.publish_source", "sourceId": "s001",
+            "sourceUrl": f"https://example.test/{asset_id}", "sourceUseMode": "licensed_adaptation",
+            "fetchedAt": "2026-09-16T00:00:00Z", "metadata": {},
+            "assets": [{"assetId": asset_id}],
+            "evidence": [{"path": "evidence.txt", "sha256": "sha256:" + hashlib.sha256(evidence).hexdigest(), "bytes": len(evidence), "kind": "source_snapshot"}],
+        })
+        write_json(root / ("profile.json" if object_kind == "creators" else "manifest.json"), {
+            "assets": [{"assetId": asset_id, "kind": asset_kind, "mimeType": content_type,
+                        "path": f"media/source{suffix}", "sha256": f"sha256:{digest}",
+                        "bytes": len(payload), "sourceRefs": [source_ref]}]
+        })
 
     seed(
         object_kind="creators",
@@ -307,20 +288,12 @@ def test_release_object_media_binding_removes_private_cas_and_environment_urls()
                 {
                     "assetId": "cover",
                     "role": "cover",
+                    "kind": "image",
+                    "sha256": "sha256:" + "a" * 64,
                     "objectKey": "media/objects/sha256/aa/bb/" + "a" * 64 + ".jpg",
                     "cdnUrl": "https://private.invalid/object",
                 }
             ]
-        },
-    )
-    write_json(
-        rights_snapshot_path,
-        {
-            "assetId": "cover",
-            "manifestAsset": {
-                "assetId": "cover",
-                "objectKey": "media/objects/sha256/aa/bb/" + "a" * 64 + ".jpg",
-            },
         },
     )
     bind_release_object_media_assets(
@@ -331,6 +304,9 @@ def test_release_object_media_binding_removes_private_cas_and_environment_urls()
                     "assetId": "cover",
                     "kind": "image",
                     "sha256": "sha256:" + "a" * 64,
+                    "ownerRefs": ["entities/地点/景区/示例"],
+                    "publicSliceKey": "media/image/s/asset/cover/v1/source.jpg",
+                    "deliveryField": "cdnUrl",
                 }
             ]
         },
@@ -343,7 +319,7 @@ def test_release_object_media_binding_removes_private_cas_and_environment_urls()
         "sha256": "sha256:" + "a" * 64,
     }
     assert "objectKey" not in manifest_path.read_text(encoding="utf-8")
-    assert "objectKey" not in rights_snapshot_path.read_text(encoding="utf-8")
+    assert not rights_snapshot_path.exists()
 
 
 def test_release_object_media_binding_preserves_read_only_unrelated_json(

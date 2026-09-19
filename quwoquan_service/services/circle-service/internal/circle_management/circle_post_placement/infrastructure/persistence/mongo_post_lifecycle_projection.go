@@ -108,7 +108,7 @@ func (projection *MongoPostLifecycleProjection) ApplyPostLifecycle(ctx context.C
 func (projection *MongoPostLifecycleProjection) applyPostView(ctx context.Context, event placementports.PostLifecycleEvent) error {
 	switch event.EventType {
 	case "PostCreated", "PostPublished", "PostUpdated", "PostSettingsUpdated",
-		"PostPromotedToWork", "PostModerationRejected", "PostDeleted",
+		"PostModerationRejected", "PostDeleted",
 		"PostPrivacyRedacted", "PostPurged":
 		// These facts can change the minimal Post external reference.
 	default:
@@ -250,8 +250,8 @@ func (projection *MongoPostLifecycleProjection) applyFeedItemView(
 	document := bson.M{
 		"_id": event.PostID, "postVersion": event.PostVersion,
 		"status": "published", "visibility": "public",
-		"moderationStatus": strings.TrimSpace(event.Moderation),
-		"contentType":      snapshot.ContentType, "contentIdentity": snapshot.ContentIdentity,
+		"moderationStatus":          strings.TrimSpace(event.Moderation),
+		"contentType":               snapshot.ContentType,
 		"assistantUsePolicy":        snapshot.AssistantUsePolicy,
 		"authorId":                  event.OwnerPersonaID,
 		"authorDisplayNameSnapshot": snapshot.AuthorDisplayName,

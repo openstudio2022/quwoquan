@@ -84,22 +84,9 @@ Map<String, Object?> createEditorSurfaceExtrasPublishSuccess(
 ContentType _requiredPostType(Object? raw) => switch ('$raw'.trim()) {
   'image' => ContentType.image,
   'video' => ContentType.video,
-  'micro' => ContentType.micro,
   'article' => ContentType.article,
   final value => throw ArgumentError.value(value, 'contentType', 'unsupported'),
 };
-
-ContentIdentity? _optionalPostIdentity(Object? raw) =>
-    switch (_optionalPayloadText(raw)) {
-      null => null,
-      'moment' => ContentIdentity.moment,
-      'work' => ContentIdentity.work,
-      final value => throw ArgumentError.value(
-        value,
-        'contentIdentity',
-        'unsupported',
-      ),
-    };
 
 Visibility? _optionalPostVisibility(Object? raw) =>
     switch (_optionalPayloadText(raw)) {

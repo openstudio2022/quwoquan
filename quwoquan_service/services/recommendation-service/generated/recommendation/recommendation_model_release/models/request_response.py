@@ -7,20 +7,42 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from enum import Enum
+from pydantic_core import core_schema
 
 
-class StageRecommendationModelReleaseCommand(BaseModel):
-    """固化一份尚未激活的模型发布；releaseId 与摘要共同形成不可变身份。"""
-    releaseId: str
-    scenario: str
-    modelDigest: str
-    featureContractDigest: str
-    artifactUri: str
-    verificationDigest: str
-    evaluationMetrics: dict[str, Any]
-    idempotencyKey: str
+class _ContractEnum(str, Enum):
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        return core_schema.no_info_before_validator_function(
+            cls._validate_wire,
+            handler(source_type),
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize_wire),
+        )
 
-    model_config = ConfigDict(extra="forbid")
+    @classmethod
+    def _serialize_wire(cls, value):
+        return cls._validate_wire(value).value
+
+    @classmethod
+    def _validate_wire(cls, value):
+        if isinstance(value, cls):
+            return value
+        if type(value) is not str:
+            raise ValueError("enum wire value must be a string")
+        return cls(value)
+
+
+class ContentType(_ContractEnum):
+    VALUE_IMAGE = "image"
+    VALUE_VIDEO = "video"
+    VALUE_ARTICLE = "article"
+
+
+class RecommendationModelReleaseStatus(_ContractEnum):
+    VALUE_STAGED = "staged"
+    VALUE_ACTIVE = "active"
+    VALUE_RETIRED = "retired"
 
 
 class ActivateRecommendationModelReleaseCommand(BaseModel):
@@ -33,22 +55,10 @@ class ActivateRecommendationModelReleaseCommand(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class RecommendationModelReleaseCommandResult(BaseModel):
-    """Stage 或 Activate 的聚合提交结果。"""
-    releaseId: str
-    scenario: str
-    status: str
-    version: int
-    activeReleaseId: str | None = None
-    idempotentReplay: bool
-
-    model_config = ConfigDict(extra="forbid")
-
-
 class CandidateInput(BaseModel):
     """评分 Reader 的候选 transport DTO，不登记为业务对象。 N3-3 特征偏斜收口：publishHour 由服务端从 publishedAt 派生随请求下发 （训练-在线同源）；bodyLength/aspectRatio/hasCover 因在线召回投影不携带 已从特征 registry 退役（S1 召回投影补齐后再启用），wire 不传。 """
     contentId: str | None = None
-    contentType: str | None = None
+    contentType: ContentType | None = None
     authorId: str | None = None
     tagRefs: list[str] | None = None
     entityRefs: list[str] | None = None
@@ -75,15 +85,6 @@ class CandidateInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class CandidateScore(BaseModel):
-    """单条候选评分 transport 结果。"""
-    contentId: str | None = None
-    score: float | None = None
-    detail: dict[str, Any] | None = None
-
-    model_config = ConfigDict(extra="forbid")
-
-
 class ModelScoreRequest(BaseModel):
     """已激活 RecommendationModelRelease 的多场景评分 transport DTO，不是业务对象。"""
     scenario: str
@@ -98,6 +99,22 @@ class ModelScoreRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class BatchModelScoreRequest(BaseModel):
+    """同一调用上下文中的强类型批量评分请求。"""
+    requests: list[ModelScoreRequest]
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class CandidateScore(BaseModel):
+    """单条候选评分 transport 结果。"""
+    contentId: str | None = None
+    score: float | None = None
+    detail: dict[str, Any] | None = None
+
+    model_config = ConfigDict(extra="forbid")
+
+
 class ModelScoreResponse(BaseModel):
     """单次评分 Reader 的 transport 结果；模型命中时必须返回具体发布身份供曝光事实审计。"""
     scores: list[CandidateScore]
@@ -106,15 +123,34 @@ class ModelScoreResponse(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-class BatchModelScoreRequest(BaseModel):
-    """同一调用上下文中的强类型批量评分请求。"""
-    requests: list[ModelScoreRequest]
+class BatchModelScoreResponse(BaseModel):
+    """与批量评分请求顺序一一对应的强类型结果。"""
+    results: list[ModelScoreResponse]
 
     model_config = ConfigDict(extra="forbid")
 
 
-class BatchModelScoreResponse(BaseModel):
-    """与批量评分请求顺序一一对应的强类型结果。"""
-    results: list[ModelScoreResponse]
+class RecommendationModelReleaseCommandResult(BaseModel):
+    """Stage 或 Activate 的聚合提交结果。"""
+    releaseId: str
+    scenario: str
+    status: RecommendationModelReleaseStatus
+    version: int
+    activeReleaseId: str | None = None
+    idempotentReplay: bool
+
+    model_config = ConfigDict(extra="forbid")
+
+
+class StageRecommendationModelReleaseCommand(BaseModel):
+    """固化一份尚未激活的模型发布；releaseId 与摘要共同形成不可变身份。"""
+    releaseId: str
+    scenario: str
+    modelDigest: str
+    featureContractDigest: str
+    artifactUri: str
+    verificationDigest: str
+    evaluationMetrics: dict[str, Any]
+    idempotencyKey: str
 
     model_config = ConfigDict(extra="forbid")

@@ -15,6 +15,16 @@ from core.io import read_json
 from core.schema import assert_valid
 
 _MAX_PATH_SEGMENT_BYTES = 255
+
+_RELEASE_EVIDENCE_SCHEMAS = {
+    "environment_release_run": ("release", "environment_release_run"),
+    "environment_release_result": ("release", "environment_release_result"),
+    "applied_release_ref": ("release", "applied_release_ref"),
+    "rollback_release_ref": ("release", "rollback_release_ref"),
+    "environment_coverage_receipt": ("release", "environment_coverage_receipt"),
+    "tag_consumer_verification": ("release", "tag_consumer_verification"),
+    "environment_release_lifecycle_exit": ("release", "environment_release_lifecycle_exit"),
+}
 # production 单相位不再预置任何 verify 证据文件。
 _VERIFY_PREDEPOSITED_FILES: frozenset[str] = frozenset()
 _RESULT_REF_FIELDS = (
@@ -240,7 +250,10 @@ def write_release_evidence(
         write_environment_result(path, document)
         return
     payload = dict(document)
-    assert_valid(payload, "release", schema_name, label=f"{schema_name}:{path}")
+    schema_target = _RELEASE_EVIDENCE_SCHEMAS.get(schema_name)
+    if schema_target is None:
+        raise ValueError(f"unregistered release evidence schema: {schema_name}")
+    assert_valid(payload, *schema_target, label=f"{schema_name}:{path}")
     create_once_canonical_json(path, payload)
 
 

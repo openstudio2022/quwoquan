@@ -156,6 +156,23 @@ def _activate_snapshot(repo: Path, output: Path, archive_sha: str) -> None:
         "schema": dependency_bundle.APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA,
         "claim": "PREPARED_NOT_ACTIVE",
         "attemptId": "face",
+        "platforms": ["android", "ios"],
+        "platformInputs": {
+            "android": {
+                "flutterVersion": "3.47.0",
+                "flutterCommandResolutionDigest": "sha256:" + "b" * 64,
+                "productionPubResolutionInputDigest": wrapper["resolutionInputDigest"],
+                "patrolPubResolutionInputDigest": "sha256:" + "e" * 64,
+                "nativeResolutionInputDigest": "sha256:" + "f" * 64,
+            },
+            "ios": {
+                "flutterVersion": "3.47.0",
+                "flutterCommandResolutionDigest": "sha256:" + "b" * 64,
+                "productionPubResolutionInputDigest": wrapper["resolutionInputDigest"],
+                "patrolPubResolutionInputDigest": "sha256:" + "e" * 64,
+            },
+        },
+        "nonPromotable": False,
         "components": components,
         "activationEvidence": {
             "requiredActiveRef": "env/repo/local/app-dependency-sync/cache/active.json",
@@ -173,6 +190,23 @@ def _activate_snapshot(repo: Path, output: Path, archive_sha: str) -> None:
         "productionPubResolutionInputDigest": wrapper["resolutionInputDigest"],
         "patrolPubResolutionInputDigest": "sha256:" + "e" * 64,
         "nativeResolutionInputDigest": "sha256:" + "f" * 64,
+        "platforms": ["android", "ios"],
+        "platformInputs": {
+            "android": {
+                "flutterVersion": "3.47.0",
+                "flutterCommandResolutionDigest": "sha256:" + "b" * 64,
+                "productionPubResolutionInputDigest": wrapper["resolutionInputDigest"],
+                "patrolPubResolutionInputDigest": "sha256:" + "e" * 64,
+                "nativeResolutionInputDigest": "sha256:" + "f" * 64,
+            },
+            "ios": {
+                "flutterVersion": "3.47.0",
+                "flutterCommandResolutionDigest": "sha256:" + "b" * 64,
+                "productionPubResolutionInputDigest": wrapper["resolutionInputDigest"],
+                "patrolPubResolutionInputDigest": "sha256:" + "e" * 64,
+            },
+        },
+        "nonPromotable": False,
         "components": components,
         "receiptRef": receipt_ref,
         "receiptDigest": _digest_bytes(_canonical_bytes(receipt)),
@@ -205,7 +239,8 @@ def _stable_flutter_identity(monkeypatch: pytest.MonkeyPatch) -> None:
         },
     )
 
-    def load_production_only(*, repo_root: Path):
+    def load_production_only(*, repo_root: Path, platforms=("android", "ios")):
+        del platforms
         return SimpleNamespace(
             production_pub=pub_cache_store.load_managed_pub_cache_snapshot(
                 repo_root=repo_root
@@ -257,11 +292,11 @@ def _stable_flutter_identity(monkeypatch: pytest.MonkeyPatch) -> None:
 
     def managed(operation: str, *, staging: Path, **_kwargs):
         if operation == "load-active":
-            bundle = dependency_bundle.load_active_dependency_bundle(repo_root=package_reuse.ROOT)
+            bundle = dependency_bundle.load_active_dependency_bundle(repo_root=package_reuse.ROOT, required_platforms=tuple(_kwargs.get("platforms", ("android", "ios"))))
             return {"manifests": input_capsule._dependency_manifest_payloads(bundle)}
         if operation == "materialize-active":
             snapshots = input_capsule.load_managed_dependency_snapshots(
-                repo_root=package_reuse.ROOT
+                repo_root=package_reuse.ROOT, platforms=tuple(_kwargs.get("platforms", ("android", "ios")))
             )
             return {
                 "records": input_capsule.copy_dependency_bundle_to_capsule(

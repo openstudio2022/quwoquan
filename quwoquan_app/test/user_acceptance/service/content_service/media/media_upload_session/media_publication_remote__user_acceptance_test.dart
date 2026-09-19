@@ -18,6 +18,10 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:patrol/patrol.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentType;
+import 'package:quwoquan_app/service/content_service/content/post/presentation/works_viewer_article.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/article_markdown_codec.dart';
 import 'package:quwoquan_app/l10n/copy/ui_text_constants.dart'
     show ContentText, CreationText;
 import 'package:quwoquan_app/runtime/di/app_providers_content_extras.dart'
@@ -26,12 +30,15 @@ import 'package:quwoquan_app/runtime/di/app_providers_content_facets.dart'
     show contentPostDeleteCommandWriterProvider;
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
+
 import '../../../../../support/runtime/patrol/patrol_test_support.dart';
+
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_delete.dart'
     show contentPostDeleteIdempotencyKey;
 import 'package:quwoquan_app/service/content_service/content/post/application/create_draft_store_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/post_publication_intent_queue_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/create_editor_models.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/article_document_models.dart';
 
 const _pngBase64 =
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/iZk9HQAAAABJRU5ErkJggg==';
@@ -72,19 +79,19 @@ void main() {
   );
 
   patrolTest(
-    'micro publication reaches result and canonical work browser through Remote',
+    'short untitled text publishes as article and reads back through Remote',
     tags: const <String>[
       'user-acceptance',
       'content',
       'text-publication',
-      'micro',
+      'untitled-short-article',
     ],
     skip: !kRunPatrolAcceptance,
     config: PatrolTesterConfig(
       visibleTimeout: const Duration(seconds: 15),
       printLogs: true,
     ),
-    ($) => _runTextPublicationJourney($, publishAsArticle: false),
+    ($) => _runTextPublicationJourney($, withTitleAndLongBody: false),
   );
 
   patrolTest(
@@ -100,7 +107,7 @@ void main() {
       visibleTimeout: const Duration(seconds: 15),
       printLogs: true,
     ),
-    ($) => _runTextPublicationJourney($, publishAsArticle: true),
+    ($) => _runTextPublicationJourney($, withTitleAndLongBody: true),
   );
 }
 
@@ -121,6 +128,7 @@ Future<void> _runMediaPublicationJourney(
   final source = await _writeSource(mediaKind, nonce);
   String? postId;
   String? acceptedState;
+  ContentType? submittedType;
   final subscription = container.listen<PostPublicationIntentQueueState>(
     postPublicationIntentQueueProvider,
     (_, next) {
@@ -128,6 +136,7 @@ Future<void> _runMediaPublicationJourney(
         if (intent.command.localDraftId != draftId) {
           continue;
         }
+        submittedType = intent.command.contentType;
         final observedPostId = intent.postId?.trim() ?? '';
         if (observedPostId.isNotEmpty) {
           postId = observedPostId;
@@ -178,13 +187,11 @@ Future<void> _runMediaPublicationJourney(
       $,
       '${AppRoutePaths.createPathTemplate}?draftId=${Uri.encodeQueryComponent(draftId)}',
     );
-    await $(
-      TestKeys.createPage,
-    ).waitUntilVisible(timeout: const Duration(seconds: 20));
+    await $(TestKeys.createPage)
+        .waitUntilVisible(timeout: const Duration(seconds: 20));
     await $(TestKeys.createPublishButton).tap();
-    await $(
-      TestKeys.createPublishConfirmSheet,
-    ).waitUntilVisible(timeout: const Duration(seconds: 15));
+    await $(TestKeys.createPublishConfirmSheet)
+        .waitUntilVisible(timeout: const Duration(seconds: 15));
     await $(TestKeys.createPublishConfirmButton).tap();
     await _waitForPublicationResultWithRecovery($);
     final accepted = await _waitFor(
@@ -215,6 +222,12 @@ Future<void> _runMediaPublicationJourney(
     final detail = await container
         .read(workBrowserContentPostDetailReaderProvider)
         .getPost(postId: postId!);
+    final expectedType = mediaKind == CreateMediaKind.images
+        ? ContentType.image
+        : ContentType.video;
+    expect(submittedType, expectedType);
+    expect(detail.post.id, postId);
+    expect(detail.post.type, expectedType);
     expect(detail.post.normalizedBody, marker);
     if (mediaKind == CreateMediaKind.images) {
       expect(detail.post.imageUrls, isNotEmpty);
@@ -259,7 +272,7 @@ Future<void> _runMediaPublicationJourney(
 
 Future<void> _runTextPublicationJourney(
   PatrolIntegrationTester $, {
-  required bool publishAsArticle,
+  required bool withTitleAndLongBody,
 }) async {
   await launchPatrolAppOnce($);
 
@@ -269,14 +282,32 @@ Future<void> _runTextPublicationJourney(
   container.read(postPublicationIntentQueueProvider);
 
   final nonce = DateTime.now().microsecondsSinceEpoch;
-  final contentType = publishAsArticle ? 'article' : 'micro';
-  final draftId = 'remote-text-uat-$contentType-$nonce';
-  final marker = 'remote $contentType publication $nonce';
-  final body = publishAsArticle
-      ? '$marker\n\n${List<String>.filled(6, '这是一段远端文章发布验收正文。').join()}'
+  final textCase = withTitleAndLongBody ? 'titled-long' : 'untitled-short';
+  final draftId = 'remote-text-uat-$textCase-$nonce';
+  final marker = 'remote article publication $textCase $nonce';
+  final body = withTitleAndLongBody
+      ? '$marker\n${List<String>.filled(6, '这是一段远端文章发布验收正文。').join()}'
       : marker;
+  // 草稿持久化只序列化 canonical 文档，不能仅修改其 title/body 只读投影。
+  final document = ArticleDocumentData(
+    nodes: <ArticleDocumentNode>[
+      if (withTitleAndLongBody)
+        ArticleDocumentNode(
+          id: 'title',
+          type: ArticleDocumentNodeType.documentTitle,
+          text: marker,
+        ),
+      for (final (index, paragraph) in body.split('\n').indexed)
+        ArticleDocumentNode(
+          id: 'paragraph_$index',
+          type: ArticleDocumentNodeType.paragraph,
+          text: paragraph,
+        ),
+    ],
+  );
   String? postId;
   String? acceptedState;
+  ContentType? submittedType;
   final subscription = container.listen<PostPublicationIntentQueueState>(
     postPublicationIntentQueueProvider,
     (_, next) {
@@ -284,6 +315,7 @@ Future<void> _runTextPublicationJourney(
         if (intent.command.localDraftId != draftId) {
           continue;
         }
+        submittedType = intent.command.contentType;
         final observedPostId = intent.postId?.trim() ?? '';
         if (observedPostId.isNotEmpty) {
           postId = observedPostId;
@@ -304,8 +336,9 @@ Future<void> _runTextPublicationJourney(
           draftFlowKind: CreateDraftFlowKind.article,
         ).copyWith(
           draftId: draftId,
-          title: publishAsArticle ? marker : '',
-          body: body,
+          title: document.title,
+          body: document.body,
+          articleDocument: document,
         );
     await container
         .read(createDraftStoreProvider.notifier)
@@ -323,28 +356,25 @@ Future<void> _runTextPublicationJourney(
       $,
       '${AppRoutePaths.createPathTemplate}?draftId=${Uri.encodeQueryComponent(draftId)}',
     );
-    await $(
-      TestKeys.createPage,
-    ).waitUntilVisible(timeout: const Duration(seconds: 20));
+    await $(TestKeys.createPage)
+        .waitUntilVisible(timeout: const Duration(seconds: 20));
     await $(TestKeys.createPublishButton).tap();
-    await $(
-      TestKeys.createPublishConfirmSheet,
-    ).waitUntilVisible(timeout: const Duration(seconds: 15));
-    // GWT-001：确认页显示系统建议的最终形态（用户可修改），提交按确认值。
-    expect(
-      find.byKey(const ValueKey<String>('publish-confirm-form-row')),
-      findsOneWidget,
-      reason: '文字发布确认页必须显示可修改的发布形态行。',
-    );
-    expect(
-      find.text(
-        publishAsArticle
-            ? CreationText.publishFormArticle
-            : CreationText.publishFormMicro,
-      ),
-      findsWidgets,
-      reason: '确认页必须显示与内容建议一致的最终形态。',
-    );
+    await $(TestKeys.createPublishConfirmSheet)
+        .waitUntilVisible(timeout: const Duration(seconds: 15));
+    // GWT-001：长短正文使用同一文章类型，确认面只设置公开范围和去向。
+    final confirmSheet = find.byKey(TestKeys.createPublishConfirmSheet);
+    for (final label in <String>[
+      CreationText.whoCanSeeLabel,
+      CreationText.visibilityPublic,
+      CreationText.attachHomepageTitle,
+      CreationText.selectPublishCirclesLabel,
+    ]) {
+      expect(
+        find.descendant(of: confirmSheet, matching: find.text(label)),
+        findsOneWidget,
+        reason: '文章确认页必须保留真实发布设置：$label。',
+      );
+    }
     await $(TestKeys.createPublishConfirmButton).tap();
     await _waitForPublicationResultWithRecovery($);
     // GWT-005：结果页展示真实分发去向摘要（此旅程为公开发布）。
@@ -365,32 +395,45 @@ Future<void> _runTextPublicationJourney(
         timeout: const Duration(minutes: 2),
       ),
       isTrue,
-      reason: '真实 $contentType 发布必须推进到受理状态并保留 canonical postId。',
+      reason: '真实 $textCase 文章发布必须推进到受理状态并保留 canonical postId。',
     );
     await $(TestKeys.createPublishResultDoneButton).tap();
 
     final detail = await container
         .read(workBrowserContentPostDetailReaderProvider)
         .getPost(postId: postId!);
-    expect(detail.post.type, contentType);
+    expect(submittedType, ContentType.article);
+    expect(detail.post.id, postId);
+    expect(detail.post.type, ContentType.article);
+    final readbackMarkdown = detail.detailWire.articleMarkdown;
+    expect(readbackMarkdown, isNotNull);
     expect(
-      publishAsArticle ? detail.post.title : detail.post.normalizedBody,
-      contains(marker),
-      reason: 'Remote 回读必须保留 $contentType 的 canonical 内容。',
+      ArticleMarkdownCodec.parseDocument(readbackMarkdown!).body,
+      document.body,
+      reason: 'Remote canonical Markdown 必须保留 $textCase 文章的完整正文顺序。',
     );
+    if (withTitleAndLongBody) {
+      expect(detail.post.title, marker);
+    }
 
     await patrolGoTo($, AppRoutePaths.workBrowser(workId: postId!));
     expect(
       await _waitFor(
         $,
         () => find
-            .byKey(const ValueKey<String>('works-top-rail'))
+            .byWidgetPredicate(
+              (widget) =>
+                  widget is PostWorksViewerArticle &&
+                  widget.post.id == postId &&
+                  widget.post.type == ContentType.article &&
+                  widget.article.document.body == document.body,
+            )
             .evaluate()
             .isNotEmpty,
         timeout: const Duration(seconds: 30),
       ),
       isTrue,
-      reason: '$contentType 发布结果必须能进入 canonical workBrowser。',
+      reason: '$textCase 发布结果必须由同一 Post 的文章阅读面展示完整正文。',
     );
     expect(
       find.byKey(const ValueKey<String>('work-browser-entry-error')),
@@ -430,9 +473,8 @@ Future<void> _waitForPublicationResultWithRecovery(
     }
     expect(retry, lessThan(maxUserRetries), reason: '连续恢复后仍未进入发布结果面。');
     await $(ContentText.tryAgain).tap();
-    await $(
-      TestKeys.createPublishConfirmSheet,
-    ).waitUntilVisible(timeout: const Duration(seconds: 20));
+    await $(TestKeys.createPublishConfirmSheet)
+        .waitUntilVisible(timeout: const Duration(seconds: 20));
     await $(TestKeys.createPublishConfirmButton).tap();
   }
   fail('媒体发布恢复循环未进入终态。');

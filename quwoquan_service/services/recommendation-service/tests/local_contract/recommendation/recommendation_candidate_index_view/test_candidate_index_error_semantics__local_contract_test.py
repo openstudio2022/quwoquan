@@ -46,8 +46,7 @@ def _fields(*, valid_identity: bool = True) -> dict[bytes, bytes]:
     payload = {
         "sourceOwner": None, "environment": None, "releaseId": None,
         "manifestDigest": None, "releaseDigest": None, "sourceVersion": 4,
-        "safetyRevision": 1,
-        "contentIdentity": "work", "title": "旅行", "body": "正文",
+        "safetyRevision": 1, "title": "旅行", "body": "正文",
         "summary": "摘要", "authorDisplayNameSnapshot": "作者",
         "authorAvatarUrlSnapshot": "", "coverUrl": "", "thumbnailUrl": "",
         "videoUrl": "", "width": 0, "height": 0, "durationMs": 0,

@@ -116,13 +116,13 @@ func TestExposureObservabilityCapacityLocalContract(t *testing.T) {
 		"force_rule_scorer",
 		"disable_exposure_dynamic_budget",
 		"disable_collaborative_recall_sources",
-		"disable_object_cards",
 	} {
 		if !slices.Contains(layerIDs, required) {
 			t.Fatalf("rollback_layers missing %q: %#v", required, layerIDs)
 		}
 	}
 	for _, forbidden := range []string{
+		"disable_object_cards",
 		"disable_resurface_source",
 		"fallback_to_hot_and_new_content_sources",
 	} {

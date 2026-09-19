@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
 
 import pytest
+from tests.support.presentation import presentation_contract, post_envelope, homepage_envelope
 
 from internal.recommendation.ranked_recommendation_window.domain.model import (
     ReleasePinnedQueryFence,
-    RecommendationObjectCard,
     RankedCandidate,
     RankedRecommendationWindow,
     RankingResult,
@@ -153,6 +153,7 @@ def _window(
     created_at = datetime(2026, 7, 31, 12, tzinfo=timezone.utc)
     return RankedRecommendationWindow.create(
         content_fence=ReleasePinnedQueryFence(release=None, revision=0),
+        client_presentation_contract=presentation_contract(),
         window_id=window_id,
         subject_id=subject_id,
         scenario="content_feed",
@@ -168,23 +169,12 @@ def _window(
             user_feature_snapshot={"engagement": 0.7},
             candidates=(
                 RankedCandidate(
-                    content_id="post-001",
+                    envelope=post_envelope("post-001", "image"),
                     score=0.8,
                     feature_snapshot_digest="feature-digest-001",
                     item_feature_snapshot=item_snapshot or {"quality": 0.8},
                 ),
-            ),
-            object_cards=(
-                RecommendationObjectCard(
-                    object_kind="entity_homepage",
-                    object_id="homepage-001",
-                    title="公开对象页",
-                    subtitle="公开副标题",
-                    cover_url=None,
-                    tag_refs=("旅行",),
-                    reason_key="affinity",
-                    recall_path="entity_card_affinity",
-                ),
+                RankedCandidate(homepage_envelope("homepage-001"), 0.7, "homepage-feature", {"title": "公开对象页"}),
             ),
         ),
         now=created_at,
@@ -202,7 +192,7 @@ def test_store_uses_privacy_safe_same_slot_keys_and_non_sliding_reads() -> None:
 
     assert len(redis.values) == 1
     key = next(iter(redis.values))
-    assert key.startswith("rec:ranked_feed_window:{rfw-")
+    assert key.startswith("rec:ranked_feed_window_v2:{rfw-")
     assert ":persona-001:" not in key
     assert "recommendation:ranked-window" not in key
     tag = key[key.index("{") : key.index("}") + 1]
@@ -213,9 +203,25 @@ def test_store_uses_privacy_safe_same_slot_keys_and_non_sliding_reads() -> None:
     restored = store.get("persona-001", persisted.window_id)
     assert restored == persisted
     assert restored.items[0].item_feature_snapshot == {"quality": 0.8}
-    assert restored.object_cards[0].object_id == "homepage-001"
+    assert restored.items[1].envelope.homepage.homepageId == "homepage-001"
     assert redis.mutations == mutations_before_read
     assert store.get("persona-other", persisted.window_id) is None
+
+
+def test_old_storage_namespace_is_not_read_and_old_payload_is_not_upgraded():
+    import json
+    from internal.recommendation.ranked_recommendation_window.infrastructure.redis_store import WindowStoreError
+    redis = _Redis()
+    store = _store(redis)
+    window = _window()
+    key, _, _ = store._keys(store._subject_hash(window.subject_id), window.window_id)
+    redis.values[key.replace("ranked_feed_window_v2", "ranked_feed_window")] = b'{"objectCards":[]}'
+    assert store.get(window.subject_id, window.window_id) is None
+    document = json.loads(store._encode_window(window))
+    del document["clientPresentationContract"]
+    document["objectCards"] = []
+    with pytest.raises(WindowStoreError):
+        store._decode_window(json.dumps(document), expected_subject_id=window.subject_id, expected_window_id=window.window_id)
 
 
 def test_subject_erasure_scans_only_one_bounded_shard_and_preserves_other_owner() -> None:

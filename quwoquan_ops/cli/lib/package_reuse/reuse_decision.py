@@ -154,6 +154,7 @@ def write_package_fingerprint(
     service_packages: Sequence[str] | None = None,
     release_attestation: str = "",
     rollback_release_attestation: str = "",
+    candidate_evidence: str = "",
     expected_snapshot: dict[str, object] | None = None,
     candidate_root: Path | None = None,
 ) -> Path:
@@ -183,6 +184,7 @@ def write_package_fingerprint(
         packages,
         release_attestation=release_attestation,
         rollback_release_attestation=rollback_release_attestation,
+        candidate_evidence=candidate_evidence,
     )
     snapshot = expected_snapshot or _pkg.workspace_snapshot(deployment_roots=roots)
     snapshot_roots = _normalized_input_roots(

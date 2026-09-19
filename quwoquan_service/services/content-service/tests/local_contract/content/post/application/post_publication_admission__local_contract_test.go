@@ -41,7 +41,7 @@ func TestPostPublicationAdmissionEnforcesTextLimitsBeforeWriting(t *testing.T) {
 			testsupport.FixedPublicationSafetyGate{},
 		),
 	)
-	command := testPublicationCommand("intent-too-long", "draft-too-long")
+	command := testPublicationCommand(t, "intent-too-long", "draft-too-long")
 	command.Content.Title = strings.Repeat(
 		"文",
 		contentgenerated.PostPublicationTitleMaxRunes+1,
@@ -90,7 +90,7 @@ func TestPostPublicationAdmissionRoutesReviewAndUnavailableToPending(t *testing.
 					testCase.gate,
 				),
 			)
-			command := testPublicationCommand(
+			command := testPublicationCommand(t,
 				"intent-"+strings.ReplaceAll(testCase.name, " ", "-"),
 				"draft-"+strings.ReplaceAll(testCase.name, " ", "-"),
 			)
@@ -167,7 +167,7 @@ func TestPostPublicationAdmissionRejectAndRateFailureWriteNothing(t *testing.T) 
 				BindDataPorts(store),
 				WithPublicationAdmission(testCase.rate, testCase.safety),
 			)
-			command := testPublicationCommand(
+			command := testPublicationCommand(t,
 				"intent-"+strings.ReplaceAll(testCase.name, " ", "-"),
 				"draft-"+strings.ReplaceAll(testCase.name, " ", "-"),
 			)
@@ -192,7 +192,7 @@ func TestPostPublicationAdmissionRejectAndRateFailureWriteNothing(t *testing.T) 
 func TestPostPublicationAdmissionMissingPortsFailsClosed(t *testing.T) {
 	store := testsupport.NewPostStore(nil)
 	service := NewPostService(BindDataPorts(store))
-	command := testPublicationCommand("intent-no-ports", "draft-no-ports")
+	command := testPublicationCommand(t, "intent-no-ports", "draft-no-ports")
 	_, err := service.SubmitPostPublication(
 		commandmeta.WithIdempotencyKey(
 			context.Background(),

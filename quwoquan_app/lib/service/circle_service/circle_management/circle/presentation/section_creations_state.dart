@@ -170,16 +170,16 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   bool get _isAdminOrOwner =>
       widget.role == CircleRole.owner || widget.role == CircleRole.admin;
 
-  ({String? identity, String? type}) _feedQueryForState(CircleState state) {
+  ContentType? _feedQueryForState(CircleState state) {
     switch (state.activeSubTab) {
       case CircleCreationSubTab.image:
-        return (identity: 'work', type: 'image');
+        return ContentType.image;
       case CircleCreationSubTab.video:
-        return (identity: 'work', type: 'video');
+        return ContentType.video;
       case CircleCreationSubTab.article:
-        return (identity: 'work', type: 'article');
+        return ContentType.article;
       case CircleCreationSubTab.all:
-        return (identity: null, type: null);
+        return null;
     }
   }
 
@@ -235,17 +235,17 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     CircleCreationSubTab.article => ProfileText.creationSubText,
   };
 
-  bool _matchesIdentityFilter(
+  bool _matchesContentTypeFilter(
     CircleHubFeedPostEntry entry,
     CircleCreationSubTab tab,
   ) {
     switch (tab) {
       case CircleCreationSubTab.image:
-        return _entryDisplayFormat(entry) == 'image';
+        return entry.contentType == ContentType.image;
       case CircleCreationSubTab.video:
-        return _entryDisplayFormat(entry) == 'video';
+        return entry.contentType == ContentType.video;
       case CircleCreationSubTab.article:
-        return _entryDisplayFormat(entry) == 'note';
+        return entry.contentType == ContentType.article;
       case CircleCreationSubTab.all:
         return true;
     }
@@ -257,14 +257,6 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
   bool _entryIsVideo(CircleHubFeedPostEntry entry) {
     return entry.isVideo;
-  }
-
-  String _entryIdentity(CircleHubFeedPostEntry entry) {
-    return entry.contentIdentity;
-  }
-
-  String _entryDisplayFormat(CircleHubFeedPostEntry entry) {
-    return entry.displayFormat;
   }
 
   String _entryArticleTemplate(CircleHubFeedPostEntry entry) {
@@ -307,20 +299,11 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
   }
 
   String _entryTypeLabel(CircleHubFeedPostEntry entry) {
-    final identity = _entryIdentity(entry);
-    if (identity == 'moment') {
-      return DiscoveryText.creationFilterMoment;
-    }
-    switch (_entryDisplayFormat(entry)) {
-      case 'image':
-        return DiscoveryText.workFormatFilterImage;
-      case 'video':
-        return DiscoveryText.workFormatFilterVideo;
-      case 'note':
-        return ProfileText.creationSubText;
-      default:
-        return ObjectHomepageText.homepageContentTypeDefault;
-    }
+    return switch (entry.contentType) {
+      ContentType.image => DiscoveryText.workFormatFilterImage,
+      ContentType.video => DiscoveryText.workFormatFilterVideo,
+      ContentType.article => ProfileText.creationSubText,
+    };
   }
 
   Widget _entryArticleTemplateBadge(CircleHubFeedPostEntry entry) {
@@ -459,10 +442,8 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
     final result = await context.push<Object?>(
       AppRoutePaths.workBrowser(
         workId: tappedDto.id,
-        filter: _isVideoPost(tappedDto)
-            ? 'video'
-            : (tappedDto.isArticleLike ? 'article' : 'image'),
-        source: 'circle',
+        filter: tappedDto.type.wireName,
+        source: ReferralSource.circlePost.value,
         index: '$initialIndex',
       ),
       extra: MediaViewerExtra(
@@ -471,7 +452,6 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
             .toList(growable: false),
         dtoPosts: viewerDtos,
         initialIndex: initialIndex,
-        source: 'circle',
         circleId: widget.circleId,
         rawPostsById: rawPostsById,
         interactionSnapshot: interactionSnapshot,
@@ -486,10 +466,6 @@ class _SectionCreationsState extends ConsumerState<SectionCreations> {
 
   bool _supportsViewer(ContentPostViewData post) {
     return post.supportsUnifiedViewer;
-  }
-
-  bool _isVideoPost(ContentPostViewData post) {
-    return post.isVideoLike;
   }
 
   void _applyViewerResult(MediaViewerResult result) {

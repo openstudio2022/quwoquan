@@ -4,7 +4,7 @@
 
 > Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-> 设计归属：[L2 DEC-001](../design.md#dec-001)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
@@ -187,7 +187,7 @@
 - GIVEN 用户从手机号页开始登录，认证投递链可能停止、短信可能延迟，验证请求也可能错误、断网或超时。
 - WHEN App 执行 readiness、发码、输入或系统自动填入、验证、重发与更换手机号。
 - THEN 每一时刻页面至多显示一条用户可理解的提示和一组不重复的恢复按钮；依赖不可用不进入验证码页，结果未知不显示黄色警告，验证码错误可立即重输，网络失败可直接重新验证。
-- AND iOS 真机只消费系统验证码建议，Android 真机只消费与当前 requestRef 精确绑定的 Retriever 消息；模拟器证据诚实区分 protected harness 与真实短信 AutoFill，任一路径均只提交一次且不泄露手机号或 OTP。
+- AND iOS 与 Android 均只消费操作系统键盘提供的验证码建议或用户手工输入；Android 不链接 Google Play SMS Retriever，也不读取短信。模拟器证据诚实区分受保护 harness 与真实系统建议，任一路径均只提交一次且不泄露手机号或 OTP。
 
 ## 6. 依赖
 

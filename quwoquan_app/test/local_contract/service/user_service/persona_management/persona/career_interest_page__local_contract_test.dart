@@ -257,13 +257,7 @@ class _CareerProfileEditQuery implements ProfileEditQuery {
     throw UnimplementedError();
   }
 
-  @override
-  Future<ProfileQrResolveWire> resolveProfileQrToken({
-    required String token,
-    String handle = '',
-  }) {
-    throw UnimplementedError();
-  }
+
 }
 
 class _CareerInterestHost extends StatefulWidget {

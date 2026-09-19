@@ -43,12 +43,16 @@ def validate_document(
     issues: list[str],
 ) -> bool:
     try:
-        assert_valid(
-            document,
-            "release",
-            schema_name,
-            label=f"{schema_name}:{path}",
-        )
+        if schema_name == "release_header":
+            assert_valid(document, "release", "release_header", label=f"release_header:{path}")
+        elif schema_name == "release_desired_state":
+            assert_valid(document, "release", "release_desired_state", label=f"release_desired_state:{path}")
+        elif schema_name == "release_attestation":
+            assert_valid(document, "release", "release_attestation", label=f"release_attestation:{path}")
+        elif schema_name == "environment_release_lifecycle_exit":
+            assert_valid(document, "release", "environment_release_lifecycle_exit", label=f"environment_release_lifecycle_exit:{path}")
+        else:
+            raise ValueError(f"unregistered lifecycle schema: {schema_name}")
     except (FileNotFoundError, ValueError) as exc:
         issues.append(str(exc))
         return False

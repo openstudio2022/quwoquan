@@ -8,6 +8,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from core.media_asset_url import sha256_file
+from core.schema import assert_valid
 from content.release.canonical.post_transaction_sources import read_object_sources
 from content.release.canonical.object_transaction_contract import ObjectTransactionError, _safe_rel
 
@@ -94,6 +95,23 @@ def creator_avatar_quality_issues(
         ):
             issues.append({"code": "creator_avatar_cas_invalid", "ref": creator_ref})
             continue
+        rights_identity_valid = True
+        for rights_path in sorted((root / "rights_snapshots").glob("*.json")):
+            rights = _object(rights_path)
+            if not rights or rights.get("schema") != "quwoquan_data.creator_avatar_rights_snapshot":
+                continue
+            try:
+                assert_valid(rights, "release", "creator_avatar_rights_snapshot", label=str(rights_path))
+            except ValueError:
+                rights_identity_valid = False
+                continue
+            manifest_asset = rights.get("manifestAsset")
+            rights_identity_valid = rights_identity_valid and (
+                rights.get("assetId") == asset_id
+                and isinstance(manifest_asset, Mapping)
+                and manifest_asset.get("assetId") == asset_id
+                and manifest_asset.get("sha256") == digest
+            )
         try:
             sources = read_object_sources(root, profile)
             evidence_matches = [
@@ -102,7 +120,7 @@ def creator_avatar_quality_issues(
             ]
         except (ObjectTransactionError, OSError, ValueError):
             evidence_matches = []
-        if not evidence_matches:
+        if not rights_identity_valid or not evidence_matches:
             issues.append(
                 {"code": "creator_avatar_quality_evidence_missing", "ref": creator_ref}
             )

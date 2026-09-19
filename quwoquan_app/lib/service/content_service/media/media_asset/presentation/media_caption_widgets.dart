@@ -18,6 +18,7 @@ class MediaCaptionBlock extends StatelessWidget {
     required this.onToggle,
     this.layoutSpec = ImmersiveViewerStageLayoutSpec.feedRail,
     this.railKey,
+    this.imageCaption = '',
     this.header,
     this.titleTrailing,
     this.preCaption,
@@ -26,6 +27,9 @@ class MediaCaptionBlock extends StatelessWidget {
 
   final String title;
   final String caption;
+
+  /// 当前图片资产的说明，与作品配文独立，缺席时不使用作品文字兜底。
+  final String imageCaption;
   final bool isExpanded;
   final VoidCallback onToggle;
   final ImmersiveViewerStageLayoutSpec layoutSpec;
@@ -102,6 +106,23 @@ class MediaCaptionBlock extends StatelessWidget {
                 onToggle: onToggle,
                 captionStyle: captionStyle,
               ),
+            if (imageCaption.isNotEmpty) ...[
+              if (caption.isNotEmpty)
+                Divider(
+                  height: context.safeGetIntraGroupSpacing(SpacingSize.sm),
+                  color: AppColors.immersiveForeground.withValues(alpha: 0.3),
+                ),
+              _buildExpandableCaption(
+                context,
+                caption: imageCaption,
+                isExpanded: isExpanded,
+                onToggle: onToggle,
+                captionStyle: captionStyle.copyWith(
+                  fontSize: AppTypography.sm,
+                  color: AppColors.immersiveForeground.withValues(alpha: 0.7),
+                ),
+              ),
+            ],
             if (footer != null) ...[
               SizedBox(
                 height: context.safeGetIntraGroupSpacing(SpacingSize.xs),

@@ -24,12 +24,6 @@ class ImmersiveViewerStageLayoutSpec {
   static const ImmersiveViewerStageLayoutSpec articleStage =
       ImmersiveViewerStageLayoutSpec(horizontalInset: AppSpacing.containerLg);
 
-  static const ImmersiveViewerStageLayoutSpec textStage =
-      ImmersiveViewerStageLayoutSpec(
-        horizontalInset: AppSpacing.containerMd,
-        maxContentWidth: AppSpacing.feedMaxContentWidth,
-      );
-
   final double horizontalInset;
   final double? maxContentWidth;
 

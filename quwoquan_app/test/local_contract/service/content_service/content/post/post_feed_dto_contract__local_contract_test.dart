@@ -8,8 +8,7 @@ import '../../../../../support/service/content_service/content/post/content_post
 ContentPostProjection _projectionFromView(ContentPostViewData view) =>
     contentPostProjectionFixture(
       postId: view.id,
-      contentType: view.type,
-      contentIdentity: view.identity,
+      contentType: view.type.wireName,
       assistantUsePolicy: view.assistantUsePolicy,
       authorId: view.authorId,
       authorDisplayName: view.displayName,
@@ -41,9 +40,28 @@ ContentPostProjection _projectionFromView(ContentPostViewData view) =>
       intersectionReasons: view.intersectionReasons,
     );
 
+/// 统一列表项：每个 post 投影都随自描述信封交付。
+ContentListItemProjection _listItem(ContentPostViewData view) {
+  final projection = _projectionFromView(view);
+  return ContentListItemProjection(
+    envelope: ListItemPresentationEnvelope(
+      objectKind: ListObjectKind.post,
+      contentType: projection.contentType,
+      presentationRecipe: projection.contentType == ContentType.article
+          ? FeedPresentationRecipe.articleExcerptCard
+          : FeedPresentationRecipe.coverMediaCard,
+      openSurface: projection.contentType == ContentType.article
+          ? ContentUiSurface.articleReader
+          : ContentUiSurface.mediaImmersive,
+      post: ListItemPostRef(postId: projection.postId),
+    ),
+    post: projection,
+  );
+}
+
 ContentDiscoveryFeedPageSlice _page(List<ContentPostViewData> views) =>
     ContentDiscoveryFeedPageSlice(
-      items: views.map(_projectionFromView).toList(growable: false),
+      items: views.map(_listItem).toList(growable: false),
       outcome: views.isEmpty
           ? ContentFeedOutcome.empty
           : ContentFeedOutcome.content,
@@ -51,7 +69,6 @@ ContentDiscoveryFeedPageSlice _page(List<ContentPostViewData> views) =>
           ? ContentFeedEmptyReason.noEligibleContent
           : null,
       feedRequestId: 'feed-request-1',
-      objectCards: const <FeedObjectCard>[],
     );
 
 ContentPostViewData _photo() => contentPostViewDataBuilder(
@@ -85,8 +102,11 @@ ContentPostViewData _video() => contentPostViewDataBuilder(
   commentCount: 892,
 );
 
-ContentPostViewData _moment() =>
-    contentPostViewDataBuilder(postId: 'moment-1', contentType: 'micro');
+ContentPostViewData _plainArticle() => contentPostViewDataBuilder(
+  postId: 'plain-article-1',
+  contentType: 'article',
+  body: '无标题的纯文字文章',
+);
 
 ContentPostViewData _article() => contentPostViewDataBuilder(
   postId: 'article-1',
@@ -101,11 +121,11 @@ void main() {
   group('ContentDiscoveryFeedPageSlice — canonical items', () {
     test('photo item 保持作者、媒体、统计和时间事实', () {
       final original = _photo();
-      final projection = _page(<ContentPostViewData>[original]).items.single;
+      final projection = _page(<ContentPostViewData>[original]).items.single.post!;
       final item = ContentPostViewData.fromWire(projection);
 
       expect(item.id, 'd1');
-      expect(item.type, 'image');
+      expect(item.type, ContentType.image);
       expect(item.authorId, 'nature_photographer');
       expect(item.displayName, '自然摄影师');
       expect(item.avatarUrl, contains('media/avatar/s/archived-avatar/'));
@@ -120,11 +140,11 @@ void main() {
     test('video item 保持单一视频形态和时长', () {
       final original = _video();
       final item = ContentPostViewData.fromWire(
-        _page(<ContentPostViewData>[original]).items.single,
+        _page(<ContentPostViewData>[original]).items.single.post!,
       );
 
       expect(item.id, 'video_tokyo_midnight');
-      expect(item.type, 'video');
+      expect(item.type, ContentType.video);
       expect(item.authorId, 'a1');
       expect(item.displayName, '楹语小筑');
       expect(item.body, contains('东京'));
@@ -135,16 +155,19 @@ void main() {
       expect(item.imageUrls, isEmpty);
     });
 
-    test('moment 与 article 使用同一 ContentPostProjection owner', () {
-      final source = <ContentPostViewData>[_moment(), _article()];
+    test('纯文字与带标题文章使用同一 ContentPostProjection owner', () {
+      final source = <ContentPostViewData>[_plainArticle(), _article()];
       final page = _page(source);
       final items = page.items
-          .map(ContentPostViewData.fromWire)
+          .map((item) => ContentPostViewData.fromWire(item.post!))
           .toList(growable: false);
 
-      expect(items.map((item) => item.type), <String>['micro', 'article']);
-      expect(items.first.identity, 'moment');
-      expect(items.last.identity, 'work');
+      expect(items.map((item) => item.type), <ContentType>[
+        ContentType.article,
+        ContentType.article,
+      ]);
+      expect(items.first.title, isEmpty);
+      expect(items.first.body, '无标题的纯文字文章');
       expect(items.last.title, contains('Web开发'));
     });
 
@@ -152,12 +175,12 @@ void main() {
       final page = _page(<ContentPostViewData>[
         _photo(),
         _video(),
-        _moment(),
+        _plainArticle(),
         _article(),
       ]);
 
-      for (final projection in page.items) {
-        final item = ContentPostViewData.fromWire(projection);
+      for (final listItem in page.items) {
+        final item = ContentPostViewData.fromWire(listItem.post!);
         expect(item.id, isNotEmpty);
         expect(item.authorId, isNotEmpty, reason: 'postId=${item.id}');
         expect(item.displayName, isNotEmpty, reason: 'postId=${item.id}');
@@ -180,20 +203,18 @@ void main() {
     test('feed page round-trip 保持 typed cursor envelope 和 items', () {
       final source = _photo();
       final page = ContentDiscoveryFeedPageSlice(
-        items: <ContentPostProjection>[_projectionFromView(source)],
+        items: <ContentListItemProjection>[_listItem(source)],
         outcome: ContentFeedOutcome.content,
         nextCursor: 'feed.next',
         previousCursor: 'feed.previous',
         paginationExpiresAt: DateTime.utc(2026, 8, 4, 12),
         feedRequestId: 'feed-request-roundtrip',
-        policyDigest:
-            'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        objectCards: const <FeedObjectCard>[],
+        policyDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       );
 
       final decoded = ContentDiscoveryFeedPageSlice.fromWire(page.toWire());
 
-      expect(decoded.items.single.postId, source.id);
+      expect(decoded.items.single.post!.postId, source.id);
       expect(decoded.nextCursor, 'feed.next');
       expect(decoded.previousCursor, 'feed.previous');
       expect(decoded.paginationExpiresAt, DateTime.utc(2026, 8, 4, 12));
@@ -204,7 +225,9 @@ void main() {
       final page = _page(<ContentPostViewData>[_photo()]).toWire();
       final item = Map<String, Object?>.from(
         (page['items']! as List<Object?>).single! as Map,
-      )..['id'] = 'retired-id';
+      );
+      item['post'] = Map<String, Object?>.from(item['post']! as Map)
+        ..['id'] = 'retired-id';
       page['items'] = <Object?>[item];
 
       expect(

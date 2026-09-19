@@ -5,18 +5,59 @@ package eventpayload
 
 import "time"
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
+type ContentType string
+
+const (
+	ContentTypeImage   ContentType = "image"
+	ContentTypeVideo   ContentType = "video"
+	ContentTypeArticle ContentType = "article"
+)
+
+func (v ContentType) Validate() error {
+	switch v {
+	case "image", "video", "article":
+		return nil
+	}
+	return fmt.Errorf("invalid ContentType")
+}
+func (v ContentType) MarshalJSON() ([]byte, error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(v))
+}
+func (v *ContentType) UnmarshalJSON(data []byte) error {
+	var wire *string
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire == nil {
+		return fmt.Errorf("invalid ContentType")
+	}
+	next := ContentType(*wire)
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	*v = next
+	return nil
+}
+
 type PostDeletedPayload struct {
-	PostId          string    `json:"postId"`
-	AuthorId        string    `json:"authorId"`
-	ContentType     string    `json:"contentType"`
-	ContentIdentity string    `json:"contentIdentity"`
-	Status          string    `json:"status"`
-	DeletedAt       time.Time `json:"deletedAt"`
-	Environment     *string   `json:"environment"`
-	SourceOwner     *string   `json:"sourceOwner"`
-	ReleaseId       *string   `json:"releaseId"`
-	ManifestDigest  *string   `json:"manifestDigest"`
-	ReleaseDigest   *string   `json:"releaseDigest"`
-	SourceVersion   int64     `json:"sourceVersion"`
-	SafetyRevision  int64     `json:"safetyRevision"`
+	PostId         string      `json:"postId"`
+	AuthorId       string      `json:"authorId"`
+	ContentType    ContentType `json:"contentType"`
+	Status         string      `json:"status"`
+	DeletedAt      time.Time   `json:"deletedAt"`
+	Environment    *string     `json:"environment"`
+	SourceOwner    *string     `json:"sourceOwner"`
+	ReleaseId      *string     `json:"releaseId"`
+	ManifestDigest *string     `json:"manifestDigest"`
+	ReleaseDigest  *string     `json:"releaseDigest"`
+	SourceVersion  int64       `json:"sourceVersion"`
+	SafetyRevision int64       `json:"safetyRevision"`
 }

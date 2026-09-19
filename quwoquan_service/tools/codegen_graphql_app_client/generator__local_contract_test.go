@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,6 +15,7 @@ import (
 	"github.com/vektah/gqlparser/v2/parser"
 	contractcodegen "quwoquan_service/internal/metadata/codegen"
 	contractgraph "quwoquan_service/internal/metadata/graph"
+	"quwoquan_service/internal/testsupport/contractsview"
 )
 
 func TestGenerateBindsPersistedDocumentCostAndCompleteOwnerSlice(t *testing.T) {
@@ -105,24 +107,32 @@ func TestGenerateRendersCanonicalFiveSliceBundleFromSignedRegistry(t *testing.T)
 		t.Fatal(err)
 	}
 	serviceRoot := filepath.Clean(filepath.Join(workingDirectory, "..", ".."))
-	registryPath := filepath.Join(serviceRoot, "services/api-edge/resources/policies/graphql_read/persisted_query_registry.example.json")
-	metadataPath := filepath.Join(serviceRoot, "services/api-edge/resources/policies/graphql_read/query_metadata.json")
+	root := t.TempDir()
+	metadataDir := contractsview.Build(t)
+	registryPath := filepath.Join(root, "registry.json")
+	metadataPath := filepath.Join(root, "query_metadata.json")
 	schemaPath := filepath.Join(serviceRoot, "services/api-edge/resources/policies/graphql_read/schema.graphqls")
+	metadataBytes, err := os.ReadFile(filepath.Join(serviceRoot, "services/api-edge/resources/policies/graphql_read/query_metadata.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(metadataPath, metadataBytes, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// 真实 canonical owner 文档经正式生成器构建临时 registry，绝不覆盖主线共享产物。
+	command := exec.Command("go", "run", "./tools/codegen_graphql_read_registry",
+		"-metadata-dir", metadataDir, "-schema", schemaPath, "-metadata", metadataPath,
+		"-candidate-digest", canonicalDigest('1'), "-output", registryPath)
+	command.Dir = serviceRoot
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("generate temporary canonical registry: %v\n%s", err, output)
+	}
 	graphBytes, err := os.ReadFile(filepath.Join(serviceRoot, "generated/contract_graph.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var graph contractGraphDocument
 	if err := json.Unmarshal(graphBytes, &graph); err != nil {
-		t.Fatal(err)
-	}
-	for index := range graph.Operations {
-		if graph.Operations[index].ID == gatewayOperationID {
-			graph.Operations[index].ResponseAdmission.MaximumBodyBytes = 300000
-		}
-	}
-	base, err := exactGraphOperation(graph.Operations, detailOperationID)
-	if err != nil {
 		t.Fatal(err)
 	}
 	registryBytes, err := os.ReadFile(registryPath)
@@ -137,25 +147,11 @@ func TestGenerateRendersCanonicalFiveSliceBundleFromSignedRegistry(t *testing.T)
 	for _, entry := range registry.Entries {
 		if entry.AppClientBundle != nil && entry.AppClientBundle.BundleID == detailBundleID {
 			bundleEntries = append(bundleEntries, entry)
-			operationPresent := false
-			for _, operation := range graph.Operations {
-				if operation.ID == entry.CanonicalOperationID {
-					operationPresent = true
-					break
-				}
-			}
-			if !operationPresent {
-				clone := base
-				clone.ID = entry.CanonicalOperationID
-				clone.LocalOperationID = entry.OperationName
-				graph.Operations = append(graph.Operations, clone)
-			}
 		}
 	}
 	if len(bundleEntries) != 5 {
 		t.Fatalf("canonical signed ContentPostDetail bundle entries=%d want=5", len(bundleEntries))
 	}
-	root := t.TempDir()
 	graphPath := writeJSON(t, root, "contract_graph.json", graph)
 	lockBytes, err := os.ReadFile(filepath.Join(serviceRoot, "../quwoquan_app/tool/cloud_codegen/contract_graph.lock.json"))
 	if err != nil {
@@ -175,7 +171,8 @@ func TestGenerateRendersCanonicalFiveSliceBundleFromSignedRegistry(t *testing.T)
 	}
 	lockPath := writeJSON(t, root, "app_lock.json", lock)
 
-	generated, _, err := generateFixture(t, Options{
+	generated, _, err := Generate(Options{
+		MetadataDir:  metadataDir,
 		RegistryPath: registryPath, MetadataPath: metadataPath, SchemaPath: schemaPath,
 		ContractGraphPath: graphPath, AppLockPath: lockPath,
 	})
@@ -190,6 +187,8 @@ func TestGenerateRendersCanonicalFiveSliceBundleFromSignedRegistry(t *testing.T)
 		}
 	}
 	for _, want := range []string{
+		"'semanticDocument'",
+		"return decodeContentPostDetailSlice(assembled)",
 		"presenceSourceField: 'articleAssetManifestSummary'",
 		"PersistedGraphQLAssemblyStrategy.assignKey",
 		"if (target[entry.key] != entry.value)",

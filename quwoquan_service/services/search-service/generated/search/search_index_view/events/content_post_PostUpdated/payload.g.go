@@ -5,26 +5,104 @@ package eventpayload
 
 import "time"
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
+type ContentType string
+
+const (
+	ContentTypeImage   ContentType = "image"
+	ContentTypeVideo   ContentType = "video"
+	ContentTypeArticle ContentType = "article"
+)
+
+func (v ContentType) Validate() error {
+	switch v {
+	case "image", "video", "article":
+		return nil
+	}
+	return fmt.Errorf("invalid ContentType")
+}
+func (v ContentType) MarshalJSON() ([]byte, error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(v))
+}
+func (v *ContentType) UnmarshalJSON(data []byte) error {
+	var wire *string
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire == nil {
+		return fmt.Errorf("invalid ContentType")
+	}
+	next := ContentType(*wire)
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	*v = next
+	return nil
+}
+
+type MediaDeliveryAccessMode string
+
+const (
+	MediaDeliveryAccessModePublic      MediaDeliveryAccessMode = "public"
+	MediaDeliveryAccessModeSignedGrant MediaDeliveryAccessMode = "signed_grant"
+)
+
+func (v MediaDeliveryAccessMode) Validate() error {
+	switch v {
+	case "public", "signed_grant":
+		return nil
+	}
+	return fmt.Errorf("invalid MediaDeliveryAccessMode")
+}
+func (v MediaDeliveryAccessMode) MarshalJSON() ([]byte, error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(v))
+}
+func (v *MediaDeliveryAccessMode) UnmarshalJSON(data []byte) error {
+	var wire *string
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire == nil {
+		return fmt.Errorf("invalid MediaDeliveryAccessMode")
+	}
+	next := MediaDeliveryAccessMode(*wire)
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	*v = next
+	return nil
+}
+
 type PostMediaItem struct {
-	Kind                     string  `json:"kind"`
-	MediaAssetId             *string `json:"mediaAssetId"`
-	MediaAssetVersion        *int64  `json:"mediaAssetVersion"`
-	AccessMode               *string `json:"accessMode"`
-	Url                      string  `json:"url"`
-	CoverUrl                 *string `json:"coverUrl"`
-	CoverAssetId             *string `json:"coverAssetId"`
-	ThumbnailUrl             *string `json:"thumbnailUrl"`
-	DurationMs               *int64  `json:"durationMs"`
-	Width                    *int64  `json:"width"`
-	Height                   *int64  `json:"height"`
-	PreviewTrackManifestUrl  *string `json:"previewTrackManifestUrl"`
-	PreviewTrackVersion      *int64  `json:"previewTrackVersion"`
-	HlsCmafMasterManifestUrl *string `json:"hlsCmafMasterManifestUrl"`
-	HlsCmafDescriptorVersion *int64  `json:"hlsCmafDescriptorVersion"`
-	Title                    *string `json:"title"`
-	Caption                  *string `json:"caption"`
-	CoverStrategy            *string `json:"coverStrategy"`
-	CoverFrameTimeMs         *int64  `json:"coverFrameTimeMs"`
+	Kind                     string                   `json:"kind"`
+	MediaAssetId             *string                  `json:"mediaAssetId"`
+	MediaAssetVersion        *int64                   `json:"mediaAssetVersion"`
+	AccessMode               *MediaDeliveryAccessMode `json:"accessMode"`
+	Url                      string                   `json:"url"`
+	CoverUrl                 *string                  `json:"coverUrl"`
+	CoverAssetId             *string                  `json:"coverAssetId"`
+	ThumbnailUrl             *string                  `json:"thumbnailUrl"`
+	DurationMs               *int64                   `json:"durationMs"`
+	Width                    *int64                   `json:"width"`
+	Height                   *int64                   `json:"height"`
+	PreviewTrackManifestUrl  *string                  `json:"previewTrackManifestUrl"`
+	PreviewTrackVersion      *int64                   `json:"previewTrackVersion"`
+	HlsCmafMasterManifestUrl *string                  `json:"hlsCmafMasterManifestUrl"`
+	HlsCmafDescriptorVersion *int64                   `json:"hlsCmafDescriptorVersion"`
+	Title                    *string                  `json:"title"`
+	Caption                  *string                  `json:"caption"`
+	CoverStrategy            *string                  `json:"coverStrategy"`
+	CoverFrameTimeMs         *int64                   `json:"coverFrameTimeMs"`
 }
 
 type PostSemanticMention struct {
@@ -49,8 +127,7 @@ type PostLifecycleHomepagePayload struct {
 type PostLifecycleProjectionPayload struct {
 	PostId                    string                        `json:"postId"`
 	AuthorId                  string                        `json:"authorId"`
-	ContentType               string                        `json:"contentType"`
-	ContentIdentity           string                        `json:"contentIdentity"`
+	ContentType               ContentType                   `json:"contentType"`
 	Status                    string                        `json:"status"`
 	Visibility                string                        `json:"visibility"`
 	ModerationStatus          string                        `json:"moderationStatus"`

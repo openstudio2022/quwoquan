@@ -1,9 +1,6 @@
 // spec_ref: specs/feature-tree/user-identity-profile-relationship/settings-and-device-token/account-lifecycle-self-service-account-closure/spec.md#gwt-003
 // spec_ref: specs/feature-tree/chat-conversation/realtime-call/spec.md#sit-004
 
-import 'dart:async';
-
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/notification_service/notification_delivery/notification_delivery_job/application/public/incoming_call_presentation_acknowledger.dart';
@@ -11,13 +8,10 @@ import 'package:quwoquan_app/service/user_service/account/device_registration/ap
 import 'package:quwoquan_app/service/notification_service/notification_delivery/notification_delivery_job/adapters/incoming_call_presentation_remote.dart';
 import 'package:quwoquan_app/service/user_service/account/device_registration/adapters/device_push_endpoint_remote.dart';
 import 'package:quwoquan_app/runtime/context/cloud_client_context.dart';
-import 'package:quwoquan_app/runtime/platform/firebase_incoming_call_runtime.dart';
 import 'package:quwoquan_app/runtime/platform/incoming_call_envelope.dart';
 import 'package:quwoquan_app/runtime/platform/incoming_call_native_bridge.dart';
-import 'package:quwoquan_app/runtime/platform/platform_target.dart';
 import 'package:quwoquan_app/runtime/platform/push_endpoint_gateway.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -96,153 +90,6 @@ void main() {
     expect(
       cancelledFirst.claim(cancelledEnvelope, now: now),
       IncomingCallClaimResult.duplicate,
-    );
-  });
-
-  test('FCM token 初值与刷新均持久化，Web 不初始化 Firebase', () async {
-    final gateway = _RecordingPushEndpointGateway();
-    final client = _FakeFirebasePushMessagingClient(initialToken: 'fcm-1');
-    final runtime = FirebaseIncomingCallRuntime(
-      pushEndpointGateway: gateway,
-      messagingRuntime: FirebasePushMessagingRuntime(
-        client: client,
-        platformReader: () => AppPlatform.android,
-      ),
-    );
-    final foregroundEnvelopes = <IncomingCallEnvelope>[];
-    final foregroundSubscription = runtime.foregroundIncomingCalls.listen(
-      foregroundEnvelopes.add,
-    );
-    addTearDown(foregroundSubscription.cancel);
-    final foregroundCancellations = <IncomingCallPushEnvelope>[];
-    final cancellationSubscription = runtime.foregroundCancellations.listen(
-      foregroundCancellations.add,
-    );
-    addTearDown(cancellationSubscription.cancel);
-
-    final state = await runtime.start();
-    expect(state.supported, isTrue);
-    expect(state.configured, isTrue);
-    expect(client.notificationPermissionRequested, isFalse);
-    expect(
-      gateway.upserts,
-      contains(DevicePushEndpoint(kind: PushEndpointKind.fcm, token: 'fcm-1')),
-    );
-
-    client.emitToken('fcm-2');
-    await Future<void>.delayed(Duration.zero);
-    expect(
-      gateway.upserts,
-      contains(DevicePushEndpoint(kind: PushEndpointKind.fcm, token: 'fcm-2')),
-    );
-    final foregroundEnvelope = envelope(
-      expiresAt: DateTime.now().toUtc().add(const Duration(minutes: 1)),
-    );
-    final occurredAt = DateTime.now().toUtc();
-    client.emitForeground(
-      RemoteMessage(
-        data: <String, dynamic>{
-          'action': 'ring',
-          ...foregroundEnvelope.toMap(),
-          'occurredAt': occurredAt.toIso8601String(),
-        },
-      ),
-    );
-    await Future<void>.delayed(Duration.zero);
-    expect(foregroundEnvelopes, <IncomingCallEnvelope>[foregroundEnvelope]);
-    client.emitForeground(
-      RemoteMessage(
-        data: <String, dynamic>{
-          'action': 'cancel',
-          ...foregroundEnvelope.toMap(),
-          'occurredAt': occurredAt
-              .add(const Duration(seconds: 1))
-              .toIso8601String(),
-        },
-      ),
-    );
-    await Future<void>.delayed(Duration.zero);
-    expect(foregroundCancellations, hasLength(1));
-    expect(
-      foregroundCancellations.single.action,
-      IncomingCallPushAction.cancel,
-    );
-    await runtime.stop();
-
-    final webClient = _FakeFirebasePushMessagingClient(initialToken: 'unused');
-    final webRuntime = FirebaseIncomingCallRuntime(
-      pushEndpointGateway: gateway,
-      messagingRuntime: FirebasePushMessagingRuntime(
-        client: webClient,
-        platformReader: () => AppPlatform.web,
-      ),
-    );
-    expect((await webRuntime.start()).supported, isFalse);
-    expect(webClient.initializeCount, 0);
-  });
-
-  test('缺少真实 Firebase 配置时 fail-closed 且不写入假 token', () async {
-    final gateway = _RecordingPushEndpointGateway();
-    final runtime = FirebaseIncomingCallRuntime(
-      pushEndpointGateway: gateway,
-      messagingRuntime: FirebasePushMessagingRuntime(
-        client: _FakeFirebasePushMessagingClient(
-          initialToken: null,
-          initializationError: PlatformException(code: 'missing-config'),
-        ),
-        platformReader: () => AppPlatform.android,
-      ),
-    );
-
-    final state = await runtime.start();
-    expect(state.supported, isTrue);
-    expect(state.configured, isFalse);
-    expect(gateway.upserts, isEmpty);
-  });
-
-  test('tap 与来电共享同一 Firebase owner 且缺配置时零 SDK 访问', () async {
-    final client = _FakeFirebasePushMessagingClient(
-      initialToken: null,
-      initializationError: PlatformException(code: 'missing-config'),
-    );
-    final messagingRuntime = FirebasePushMessagingRuntime(
-      client: client,
-      platformReader: () => AppPlatform.android,
-    );
-    final incomingRuntime = FirebaseIncomingCallRuntime(
-      pushEndpointGateway: _RecordingPushEndpointGateway(),
-      messagingRuntime: messagingRuntime,
-    );
-    final taps = <PushTapIntent>[];
-
-    await messagingRuntime.start(taps.add);
-    final incomingState = await incomingRuntime.start();
-
-    expect(
-      incomingState.availability,
-      FirebasePushMessagingRuntimeAvailability.notConfigured,
-    );
-    expect(client.initializeCount, 1);
-    expect(client.openedMessagesReadCount, 0);
-    expect(client.initialMessageReadCount, 0);
-    expect(client.tokenReadCount, 0);
-    expect(taps, isEmpty);
-  });
-
-  test('非配置类 Firebase 初始化失败表达 unavailable 而非 notConfigured', () async {
-    final runtime = FirebasePushMessagingRuntime(
-      client: _FakeFirebasePushMessagingClient(
-        initialToken: null,
-        initializationError: PlatformException(code: 'runtime-failure'),
-      ),
-      platformReader: () => AppPlatform.android,
-    );
-
-    final state = await runtime.initialize();
-
-    expect(
-      state.availability,
-      FirebasePushMessagingRuntimeAvailability.unavailable,
     );
   });
 
@@ -390,20 +237,6 @@ void main() {
     expect(await gateway.readPendingMutations(), isEmpty);
   });
 
-  test('账号 closed 终态清除 Android FCM 来电去重残留', () async {
-    SharedPreferences.setMockInitialValues(<String, Object>{
-      'rtc.incoming.fcm_seen_deliveries': '[{"callId":"$callId"}]',
-    });
-
-    await clearFirebaseIncomingCallStateForTerminalAccountClosure();
-
-    final preferences = await SharedPreferences.getInstance();
-    expect(
-      preferences.containsKey('rtc.incoming.fcm_seen_deliveries'),
-      isFalse,
-    );
-  });
-
   test('设备 endpoint 与展示 ACK 均经 generated operation client', () async {
     final executor = _RecordingCloudOperationExecutor();
     final client = GeneratedCloudOperationClient(executor);
@@ -472,67 +305,6 @@ void main() {
     expect(capability.nativeUiAvailable, isFalse);
     expect(await bridge.readPendingEnvelopes(), isEmpty);
   });
-}
-
-final class _FakeFirebasePushMessagingClient
-    implements FirebasePushMessagingClient {
-  _FakeFirebasePushMessagingClient({
-    required this.initialToken,
-    this.initializationError,
-  });
-
-  final String? initialToken;
-  final Object? initializationError;
-  final _refreshes = StreamController<String>.broadcast(sync: true);
-  final _foregroundMessages = StreamController<RemoteMessage>.broadcast(
-    sync: true,
-  );
-  int initializeCount = 0;
-  int openedMessagesReadCount = 0;
-  int initialMessageReadCount = 0;
-  int tokenReadCount = 0;
-  bool notificationPermissionRequested = false;
-
-  void emitToken(String token) => _refreshes.add(token);
-
-  void emitForeground(RemoteMessage message) =>
-      _foregroundMessages.add(message);
-
-  @override
-  Future<void> initialize() async {
-    initializeCount += 1;
-    final error = initializationError;
-    if (error != null) {
-      throw error;
-    }
-  }
-
-  @override
-  Future<String?> readToken() async {
-    tokenReadCount += 1;
-    return initialToken;
-  }
-
-  @override
-  Stream<String> get tokenRefreshes => _refreshes.stream;
-
-  @override
-  Stream<RemoteMessage> get foregroundMessages => _foregroundMessages.stream;
-
-  @override
-  Stream<RemoteMessage> get openedMessages {
-    openedMessagesReadCount += 1;
-    return const Stream.empty();
-  }
-
-  @override
-  Future<RemoteMessage?> readInitialMessage() async {
-    initialMessageReadCount += 1;
-    return null;
-  }
-
-  @override
-  Future<bool> readNotificationAuthorization() async => false;
 }
 
 final class _RecordingPushEndpointGateway implements PushEndpointGateway {

@@ -88,9 +88,6 @@ def produce(data: dict[str, Any]) -> Path | str:
     downstream = str(data.get("downstream") or "")
     human_decision_ref = data.get("human_decision_ref")
     admission_class = str(data.get("admission_class") or "ordinary")
-    if "owner_manifest_ref" in data:
-        raise HandoffManifestError("IDENTITY.MIGRATION_REQUIRED: owner_manifest_ref 已退役")
-    owner_identity_ref = str(data.get("owner_identity_ref") or "")
     candidate_evidence_ref = str(data.get("candidate_evidence_ref") or "")
     review_plan_ref = str(data.get("review_plan_ref") or "")
     review_consolidation_ref = str(data.get("review_consolidation_ref") or "")
@@ -98,9 +95,9 @@ def produce(data: dict[str, Any]) -> Path | str:
     expected_recovery = contract_section("evidence_fingerprint")["handoff"][
         "recovery_token"
     ]
-    if not intent or not downstream or not owner_identity_ref or not candidate_evidence_ref or not review_plan_ref or not review_consolidation_ref:
+    if not intent or not downstream or not candidate_evidence_ref or not review_plan_ref or not review_consolidation_ref:
         raise HandoffManifestError(
-            "intent、downstream、owner_identity_ref、candidate_evidence_ref、review_plan_ref 与 review_consolidation_ref 必须为非空字符串"
+            "intent、downstream、candidate_evidence_ref、review_plan_ref 与 review_consolidation_ref 必须为非空字符串"
         )
     if recovery_token != expected_recovery:
         raise HandoffManifestError(f"recovery_token 必须为 {expected_recovery}")
@@ -156,10 +153,9 @@ def produce(data: dict[str, Any]) -> Path | str:
     except handoff_consumer.review_dispatch.ReviewDispatchError as exc:
         raise HandoffManifestError(f"{exc.code}: {exc.message}") from exc
 
-    normalized_owner_identity_ref = handoff_consumer.normalize_repo_relative_path(owner_identity_ref, ROOT)
     normalized_candidate_evidence_ref = handoff_consumer.normalize_repo_relative_path(candidate_evidence_ref, ROOT)
-    if normalized_owner_identity_ref != plan["owner_identity"]["ref"] or normalized_candidate_evidence_ref != plan["candidate_evidence_identity"]["ref"]:
-        raise HandoffManifestError("owner/candidate refs 与 plan identity 不一致")
+    if normalized_candidate_evidence_ref != plan["candidate_evidence_identity"]["ref"]:
+        raise HandoffManifestError("candidate ref 与 plan identity 不一致")
     normalized_artifacts: list[str] = []
     for raw in artifacts:
         relative = handoff_consumer.normalize_repo_relative_path(raw, ROOT)
@@ -227,7 +223,6 @@ def produce(data: dict[str, Any]) -> Path | str:
         "downstream": downstream,
         "human_decision_ref": human_decision_ref,
         "human_decision_projection": human_decision_projection,
-        "owner_identity_ref": normalized_owner_identity_ref,
         "candidate_evidence_ref": normalized_candidate_evidence_ref,
         "candidate_closure": candidate_closure,
         "review_plan_ref": plan_ref,

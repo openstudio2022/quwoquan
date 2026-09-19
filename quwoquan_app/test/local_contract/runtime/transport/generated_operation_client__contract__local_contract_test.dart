@@ -136,7 +136,6 @@ void main() {
               'content': <String, Object?>{
                 'postId': 'post-1',
                 'contentType': 'article',
-                'contentIdentity': 'work',
                 'title': '西湖摄影',
                 'likeCount': 3,
               },
@@ -415,7 +414,6 @@ void main() {
         publishIntentId: 'publish-draft-1',
         localDraftId: 'draft-1',
         contentType: ContentType.article,
-        contentIdentity: ContentIdentity.work,
         title: '对象闭环',
         articleMarkdown: '# 对象闭环',
         articleAssetManifest: PostArticleAssetManifestInput(
@@ -442,7 +440,6 @@ void main() {
       'publishIntentId': 'publish-draft-1',
       'localDraftId': 'draft-1',
       'contentType': 'article',
-      'contentIdentity': 'work',
       'title': '对象闭环',
       'mediaAssetIds': <String>['asset-1'],
       'articleMarkdown': '# 对象闭环',

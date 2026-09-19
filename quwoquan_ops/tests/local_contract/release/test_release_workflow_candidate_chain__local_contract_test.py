@@ -133,50 +133,53 @@ class ServiceReleaseImagePlanTest(unittest.TestCase):
             ["quwoquan_service/contracts/metadata/_shared/errors.yaml"]
         )
         self.assertEqual(affected, ALL_SERVICES)
-        self.assertTrue(reasons[0].startswith("shared-change:"))
+        self.assertTrue(reasons[0].startswith("impact-plan-service:"))
 
-    def test_retired_travel_service_is_never_an_image_candidate(self) -> None:
+    def test_spec_only_and_unknown_spec_do_not_guess_runtime_images(self) -> None:
         self.assertNotIn("travel-service", ALL_SERVICES)
+        for path in (
+            "specs/feature-tree/travel-journey/spec.md",
+            "specs/feature-tree/new-domain/new-capability/spec.md",
+            "specs/feature-tree/chat-conversation/realtime-call/spec.md",
+        ):
+            affected, reasons = affected_services([path])
+            self.assertEqual(affected, frozenset())
+            self.assertEqual(reasons, [])
 
-        affected, _ = affected_services(
-            ["specs/feature-tree/travel-journey/spec.md"]
-        )
-
-        self.assertEqual(affected, frozenset({"service-core"}))
-
-    def test_service_contract_change_expands_to_every_consumer(self) -> None:
+    def test_service_contract_is_explicit_crosscutting_node(self) -> None:
         affected, reasons = affected_services(
             ["quwoquan_service/services/chat-service/contracts/message.yaml"]
         )
         self.assertEqual(affected, ALL_SERVICES)
-        self.assertEqual(reasons, ["service-wide-impact:chat-service/contracts"])
+        self.assertEqual(
+            reasons,
+            [f"impact-plan-service:{owner}" for owner in sorted(ALL_SERVICES)],
+        )
 
-    def test_unclassified_service_shared_path_fails_closed_to_all_images(self) -> None:
-        affected, reasons = affected_services(
+    def test_unknown_service_shared_path_is_explicit_crosscutting_node(self) -> None:
+        affected, _ = affected_services(
             ["quwoquan_service/runtime/new-shared-package/runtime.go"]
         )
         self.assertEqual(affected, ALL_SERVICES)
-        self.assertTrue(reasons[0].startswith("unclassified-service-change:"))
 
-    def test_unclassified_feature_owner_fails_closed_to_all_images(self) -> None:
-        affected, reasons = affected_services(
-            ["specs/feature-tree/new-domain/new-capability/spec.md"]
-        )
-        self.assertEqual(affected, ALL_SERVICES)
-        self.assertTrue(reasons[0].startswith("unclassified-feature-owner:"))
-
-    def test_feature_tree_owner_expands_cross_domain_services(self) -> None:
-        affected, _ = affected_services(
-            ["specs/feature-tree/chat-conversation/realtime-call/spec.md"]
-        )
-        self.assertEqual(
-            affected,
-            {
-                "service-core",
-                "realtime-gateway",
-                "rtc-service",
-            },
-        )
+    def test_image_planner_consumes_validated_impact_plan(self) -> None:
+        from quwoquan_ops.ci.impact_planner_core import build_delivery_impact_plan
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            impact_path = root / "impact-plan.json"
+            impact_path.write_text(
+                json.dumps(build_delivery_impact_plan(
+                    ["quwoquan_service/services/chat-service/internal/chat.go"],
+                    source_sha="b" * 40,
+                    base_sha="a" * 40,
+                    source_tree_digest="sha1:" + "c" * 40,
+                )),
+                encoding="utf-8",
+            )
+            plan, reasons = build_plan([], self._previous_manifest(root), impact_path)
+        built = {item["runtime_image_owner"] for item in plan if item["action"] == "build"}
+        self.assertEqual(built, {"service-core"})
+        self.assertTrue(reasons[0].startswith("impact-plan:sha256:"))
 
     def test_missing_previous_evidence_rebuilds_all(self) -> None:
         plan, reasons = build_plan(

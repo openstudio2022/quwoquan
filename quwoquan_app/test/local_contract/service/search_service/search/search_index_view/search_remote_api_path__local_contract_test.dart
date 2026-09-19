@@ -51,7 +51,6 @@ http.Response _responseFor(http.Request request) {
           'content': <String, Object?>{
             'postId': 'post-search-1',
             'contentType': 'article',
-            'contentIdentity': 'work',
             'title': '西湖摄影路线',
             'summary': '晨雾与苏堤的拍摄建议',
             'coverUrl': 'https://cdn.example/search/post-search-1.jpg',

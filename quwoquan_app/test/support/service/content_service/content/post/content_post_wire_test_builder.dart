@@ -29,7 +29,7 @@ List<Map<String, Object?>> contentPostReadModelWireExamples() {
     ),
     (
       id: 'fixture_moment_001',
-      type: 'micro',
+      type: 'article',
       authorId: 'fixture_user_current',
       title: '契约周末早餐',
     ),
@@ -53,13 +53,13 @@ List<Map<String, Object?>> contentPostReadModelWireExamples() {
     ),
     (
       id: 'fixture_moment_002',
-      type: 'micro',
+      type: 'article',
       authorId: 'fixture_user_current',
       title: '午后散步契约动态',
     ),
     (
       id: 'fixture_moment_003',
-      type: 'micro',
+      type: 'article',
       authorId: 'fixture_user_current',
       title: '周末读书契约动态',
     ),
@@ -76,7 +76,6 @@ List<Map<String, Object?>> contentPostReadModelWireExamples() {
     return <String, Object?>{
       'postId': spec.id,
       'contentType': spec.type,
-      'contentIdentity': spec.type == 'micro' ? 'moment' : 'work',
       'authorId': spec.authorId,
       'authorDisplayName': authorName,
       'authorAvatarUrl':

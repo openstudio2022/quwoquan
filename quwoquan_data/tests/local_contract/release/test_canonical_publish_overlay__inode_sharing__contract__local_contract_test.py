@@ -33,6 +33,8 @@ def _snapshot_by_hardlink(publish_root: Path, target: Path) -> dict[Path, tuple[
         if not path.is_file() or path.is_symlink():
             continue
         relative = path.relative_to(publish_root)
+        if relative.parts[0] == ".git":
+            continue
         link = target / relative
         link.parent.mkdir(parents=True, exist_ok=True)
         link.hardlink_to(path)

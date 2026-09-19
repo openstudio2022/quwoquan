@@ -2,11 +2,11 @@
   "schema": "qwq.app-identity-codegen-manifest",
   "generator": "tools/codegen_app_metadata --app-identity-only",
   "source": "_shared/app_artifact_manifest.yaml",
-  "sourceSha256": "sha256:248fb394df0712071c15a508ec3067164183a9a90292ae711658418fba7ee49b",
+  "sourceSha256": "sha256:a31129af4baada7bd862fb43b2a95a9fe3c9cd144cfc91a1e3936ec035126e8a",
   "outputs": [
     {
       "path": "android/app/app_identity.generated.json",
-      "sha256": "sha256:0cdf2f5f67fb6b267e5e7ec1aa7f805d1c823b2ed19e5174f39e910af06d2b02",
+      "sha256": "sha256:ce838b0c7d631a6486c73f53e063896b51b579756f526863cad2437d98bbad14",
       "bytes": 2491
     },
     {
@@ -21,12 +21,12 @@
     },
     {
       "path": "ios/Flutter/Identity/nonprod.xcconfig",
-      "sha256": "sha256:f776dfe6f83a31814092452b3d4ecebfbf1160796664e3ac8aac03885a0c451b",
+      "sha256": "sha256:97eef76544749f348e9f70e455306c8224bc87c2f27784282de683d143f589e8",
       "bytes": 362
     },
     {
       "path": "ios/Flutter/Identity/prod.xcconfig",
-      "sha256": "sha256:e669aae1c10f2f9b7e4b7a14d89732007e094971b99aa80278f4042f269e3816",
+      "sha256": "sha256:b6a96a850f22079e48e4e7db192c17b7511518c005a0b62422debbd0e8f1ca3e",
       "bytes": 348
     },
     {

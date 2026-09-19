@@ -12,7 +12,7 @@ from core.schema import assert_valid
 _DIGEST = "sha256:" + "a" * 64
 
 
-def test_canonical_identity_contracts_freeze_six_states_and_one_action() -> None:
+def test_canonical_identity_contract_freezes_six_states_and_action_advice() -> None:
     projection = {
         "schema": "quwoquan_data.canonical_identity_state_projection",
         "objectType": "homepage",
@@ -20,10 +20,7 @@ def test_canonical_identity_contracts_freeze_six_states_and_one_action() -> None
         "objectRef": "locations/landmark/emei",
         "state": "invalid_record_repairable",
         "deepestError": "DATA.POOL.PAYLOAD_DIGEST_DRIFT",
-        "recoveryAction": {
-            "command": "resolve_invalid_canonical_identity",
-            "action": "record_repair",
-        },
+        "recoveryAction": {"action": "record_repair"},
         "optimisticSnapshotToken": _DIGEST,
         "contentVersion": 1,
         "recordSequence": 1,
@@ -36,29 +33,6 @@ def test_canonical_identity_contracts_freeze_six_states_and_one_action() -> None
         label="canonical identity state projection",
     )
 
-    command = {
-        "schema": "quwoquan_data.resolve_invalid_canonical_identity_command",
-        "objectType": "homepage",
-        "objectId": "entity:landmark:emei",
-        "objectRef": "locations/landmark/emei",
-        "action": "record_repair",
-        "expectedSnapshotToken": _DIGEST,
-        "expectedContentVersion": 1,
-        "expectedRecordSequence": 1,
-        "currentPayloadDigest": "sha256:" + "b" * 64,
-        "evidencePredicate": "same_logical_version",
-        "evidenceBindings": [
-            {"role": "record", "ref": "record-proof.json", "sha256": _DIGEST}
-        ],
-        "terminalReason": None,
-        "terminalNextAction": None,
-    }
-    assert_valid(
-        command,
-        "release",
-        "resolve_invalid_canonical_identity_command",
-        label="resolve invalid canonical identity command",
-    )
 
 
 def test_terminal_fact_is_append_only_identity_fact_not_content_version() -> None:

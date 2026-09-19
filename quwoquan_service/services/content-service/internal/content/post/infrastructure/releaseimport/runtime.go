@@ -660,7 +660,6 @@ type ImportedPostDeletionSnapshot struct {
 	PostID             string    `bson:"_id"`
 	AuthorID           string    `bson:"authorId"`
 	ContentType        string    `bson:"contentType"`
-	ContentIdentity    string    `bson:"contentIdentity"`
 	Status             string    `bson:"status"`
 	LifecycleStatus    string    `bson:"lifecycleStatus"`
 	DeletedByReleaseID string    `bson:"deletedByReleaseId"`
@@ -697,7 +696,7 @@ func MissingImportedPostSnapshots(
 		}
 	}
 	cursor, err := coll.Find(ctx, filter, options.Find().SetProjection(bson.M{
-		"_id": 1, "authorId": 1, "contentType": 1, "contentIdentity": 1,
+		"_id": 1, "authorId": 1, "contentType": 1,
 		"status": 1, "lifecycleStatus": 1, "deletedByReleaseId": 1, "deletedAt": 1,
 	}).SetSort(bson.D{{Key: "_id", Value: 1}}))
 	if err != nil {
@@ -712,17 +711,14 @@ func MissingImportedPostSnapshots(
 		}
 		snapshot.PostID = strings.TrimSpace(snapshot.PostID)
 		snapshot.AuthorID = strings.TrimSpace(snapshot.AuthorID)
-		snapshot.ContentType = strings.TrimSpace(snapshot.ContentType)
 		snapshot.Status = strings.TrimSpace(snapshot.Status)
 		snapshot.LifecycleStatus = strings.TrimSpace(snapshot.LifecycleStatus)
 		snapshot.DeletedByReleaseID = strings.TrimSpace(snapshot.DeletedByReleaseID)
-		contentIdentity, err := canonicalImportedContentIdentity(
-			snapshot.ContentIdentity,
-		)
+		contentType, err := canonicalImportedContentType(snapshot.ContentType)
 		if err != nil {
 			return nil, fmt.Errorf("imported Post %q: %w", snapshot.PostID, err)
 		}
-		snapshot.ContentIdentity = contentIdentity
+		snapshot.ContentType = contentType
 		if snapshot.PostID == "" || snapshot.AuthorID == "" ||
 			snapshot.ContentType == "" || snapshot.Status == "" {
 			return nil, fmt.Errorf(
@@ -900,7 +896,7 @@ func BuildCanonicalImportedPostDocument(
 	lifecycleStatus string,
 ) (bson.M, error) {
 	opts = NormalizeImportOptions(opts)
-	contentIdentity, err := canonicalImportedContentIdentity(post.ContentIdentity)
+	contentType, err := canonicalImportedContentType(post.ContentType)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", post.PostRef, err)
 	}
@@ -922,11 +918,11 @@ func BuildCanonicalImportedPostDocument(
 	}
 	document := bson.M{
 		"_id": postID, "postRef": post.PostRef, "postId": postID,
-		"contentType": post.ContentType, "contentId": post.ContentID,
+		"contentType": contentType, "contentId": post.ContentID,
 		"contentVersion": post.ContentVersion, "poolSourceType": post.PoolSourceType,
 		"variantPurpose": post.VariantPurpose, "admission": post.Admission,
-		"poolStatus": post.PoolStatus, "contentIdentity": contentIdentity,
-		"title": post.Title, "angle": post.Angle, "seq": post.Seq,
+		"poolStatus": post.PoolStatus,
+		"title":      post.Title, "angle": post.Angle, "seq": post.Seq,
 		"entityRefs": runtimeEntityRefs, "tagRefs": post.TagRefs,
 		"intersectionHints": post.IntersectionHints, "semanticMentions": post.SemanticMentions,
 		"entityMentions": post.EntityMentions,

@@ -14,14 +14,14 @@ metadata:
 
 ## 执行
 
-1. PRE 从用户目标、plan/diff 与已知路径确定 exact target；读取最近子树 `AGENTS.md`，运行 `make feature-context TARGET=<exact-path>` 并保存 immutable exact ref（写入前必须持有），再确认 owner、scope、验收、OPEN、依赖和命名 evidence。lane 落后本地 `dev1.0` 超过 `worktree_policy.yaml#resync_reminder_behind_commits` 时先建议 `sync-lane-from-dev`，避免在过时基线上实现。target 含手写源码时只以 `make code-health-hotspots OWNER=<owner-scope>` 加载该 owner 的紧凑热点（`unavailable` 时照常继续），不加载全仓报告。
+1. PRE 从用户目标、plan/diff 与已知路径确定 exact target；读取最近子树 `AGENTS.md`，运行 `make feature-context TARGET=<exact-path>` 并保存 immutable exact ref（写入不依赖），再确认 owner、scope、验收、OPEN、依赖和命名 evidence。lane 落后本地 `dev1.0` 超过 `worktree_policy.yaml#resync_reminder_behind_commits` 时先建议 `sync-lane-from-dev`，避免在过时基线上实现。target 含手写源码时只以 `make code-health-hotspots OWNER=<owner-scope>` 加载该 owner 的紧凑热点（`unavailable` 时照常继续），不加载全仓报告。
 2. metadata/contract 变更先改 authoring source，再 verify/codegen；实现按 Red/Green/Refactor 闭环。DURING 必须 search-before-create、采用最简单可测实现并在同一增量删除被替代旧轨；不因单次复用需求造框架，测试 `spec_ref` 绑定对应验收，不为错误实现保留 shim/fallback。
 3. 执行影响面最小且足够的 `local_contract/api_integration/user_acceptance` 与 gate，分层报告源码、编译、runtime、release 与 UAT。
-4. POST 复用 PRE owner identity ref，从 current exact changed paths 生成 candidate evidence predecessor；手写源码 candidate 必须产出 current `code-health-delta` named evidence；PR_WARN 按 canonical `candidate_review_closure` 逐项给出 fix-now/owner-open/out-of-scope，fix-now 必须后续验证消除原有效 warning，blocker 不得由 OPEN 抵消。声明 replacement 时按同一契约交付旧入口、接替入口、消费者与实现/配置/测试退役或保留依据及扫描/测试证据；无替换不造删除清单，unknown 动态入口不自动删除。报告命名 evidence 命令与退出码，默认零 Reviewer；显式/准出主审将裁决写入现有 result 供 consolidator 对账。
+4. POST 复用 PRE context manifest ref，从 current exact changed paths 生成 candidate evidence predecessor；手写源码 candidate 必须产出 current `code-health-delta` named evidence；PR_WARN 按 canonical `candidate_review_closure` 逐项给出 fix-now/feature-open/out-of-scope，fix-now 必须后续验证消除原有效 warning，blocker 不得由 OPEN 抵消。声明 replacement 时按同一契约交付旧入口、接替入口、消费者与实现/配置/测试退役或保留依据及扫描/测试证据；无替换不造删除清单，unknown 动态入口不自动删除。报告命名 evidence 命令与退出码，默认零 Reviewer；显式/准出主审将裁决写入现有 result 供 consolidator 对账。
 
 ## 完成证据
 
-实现字节、生成物身份、测试/gate 命令与退出码、未执行验证与 OPEN 变化均绑定 current HEAD、脏树指纹与 immutable ref；未评审的增量如实标注"未评审"，不伪称已准出。
+实现字节、生成物身份、测试/gate 命令与退出码、未执行验证与 OPEN 变化均绑定 current HEAD、脏树指纹与 context snapshot；未评审的增量如实标注"未评审"，不伪称已准出。
 
 ## 失败与停止
 

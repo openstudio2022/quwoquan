@@ -65,9 +65,7 @@ void main() {
       surfaceView: ContentSurfaceViewMapper.fromDto(
         ContentPostViewData(
           id: 'moment_1',
-          type: 'micro',
-          identity: 'moment',
-          displayFormat: 'image',
+          type: ContentType.article,
           assistantUsePolicy: AssistantUsePolicy.inherit,
           authorId: 'user_1',
           displayName: '阿宁',
@@ -83,7 +81,6 @@ void main() {
           createdAt: DateTime(2026, 3, 12, 6, 0),
         ),
       ),
-      enableIdentityTemplate: true,
       visibility: 'public',
       publicLinks: testPublicContentLinks,
     );
@@ -124,9 +121,7 @@ void main() {
       surfaceView: ContentSurfaceViewMapper.fromDto(
         ContentPostViewData(
           id: 'moment_action',
-          type: 'micro',
-          identity: 'moment',
-          displayFormat: 'note',
+          type: ContentType.article,
           assistantUsePolicy: AssistantUsePolicy.inherit,
           authorId: 'user_action',
           displayName: '小悠',
@@ -142,7 +137,6 @@ void main() {
           createdAt: DateTime(2026, 3, 12, 10, 0),
         ),
       ),
-      enableIdentityTemplate: true,
       visibility: 'public',
       publicLinks: testPublicContentLinks,
     );
@@ -232,9 +226,7 @@ void main() {
       surfaceView: ContentSurfaceViewMapper.fromDto(
         ContentPostViewData(
           id: 'moment_clipboard',
-          type: 'micro',
-          identity: 'moment',
-          displayFormat: 'note',
+          type: ContentType.article,
           assistantUsePolicy: AssistantUsePolicy.inherit,
           authorId: 'user_clipboard',
           displayName: '阿遥',
@@ -250,7 +242,6 @@ void main() {
           createdAt: DateTime(2026, 3, 12, 11, 0),
         ),
       ),
-      enableIdentityTemplate: true,
       visibility: 'public',
       publicLinks: testPublicContentLinks,
     );
@@ -295,9 +286,7 @@ void main() {
       surfaceView: ContentSurfaceViewMapper.fromDto(
         ContentPostViewData(
           id: 'work_1',
-          type: 'article',
-          identity: 'work',
-          displayFormat: 'note',
+          type: ContentType.article,
           assistantUsePolicy: AssistantUsePolicy.inherit,
           authorId: 'user_2',
           displayName: '洛白',
@@ -320,7 +309,6 @@ void main() {
           'tagRefs': <String>['攻略', '夜景'],
         },
       ),
-      enableIdentityTemplate: true,
       visibility: 'public',
       publicLinks: testPublicContentLinks,
     );
@@ -347,9 +335,7 @@ void main() {
       surfaceView: ContentSurfaceViewMapper.fromDto(
         ContentPostViewData(
           id: 'private_1',
-          type: 'article',
-          identity: 'work',
-          displayFormat: 'note',
+          type: ContentType.article,
           assistantUsePolicy: AssistantUsePolicy.inherit,
           authorId: 'user_3',
           displayName: '周周',
@@ -369,7 +355,6 @@ void main() {
           createdAt: DateTime(2026, 3, 12, 12, 0),
         ),
       ),
-      enableIdentityTemplate: true,
       visibility: 'private',
     );
 
@@ -389,9 +374,7 @@ void main() {
       surfaceView: ContentSurfaceViewMapper.fromDto(
         ContentPostViewData(
           id: 'share_flag_off_1',
-          type: 'micro',
-          identity: 'moment',
-          displayFormat: 'note',
+          type: ContentType.article,
           assistantUsePolicy: AssistantUsePolicy.inherit,
           authorId: 'user_4',
           displayName: '南栀',
@@ -407,7 +390,6 @@ void main() {
           createdAt: DateTime(2026, 3, 12, 9, 0),
         ),
       ),
-      enableIdentityTemplate: false,
       visibility: 'public',
       publicLinks: testPublicContentLinks,
     );
@@ -709,9 +691,7 @@ ContentShareTemplate _publicTemplate(String postId) {
     surfaceView: ContentSurfaceViewMapper.fromDto(
       ContentPostViewData(
         id: postId,
-        type: 'micro',
-        identity: 'moment',
-        displayFormat: 'note',
+        type: ContentType.article,
         assistantUsePolicy: AssistantUsePolicy.inherit,
         authorId: 'share_author',
         displayName: '分享作者',
@@ -727,7 +707,6 @@ ContentShareTemplate _publicTemplate(String postId) {
         createdAt: DateTime.utc(2026, 7, 14),
       ),
     ),
-    enableIdentityTemplate: true,
     publicLinks: testPublicContentLinks,
   );
 }

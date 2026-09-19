@@ -71,20 +71,7 @@
 - 可观察结果：领域边界、上下游依赖、工程映射和服务治理清晰。；evaluation-and-flywheel 的离线 replay、在线 AB 与真实训练晋升规格已登记，且不与训练/推理服务职责混淆。
 - 禁止结果：不得绕过本领域公开 command/query/event 写入其拥有事实。
 
-## 7. 工程归属
-
-- App：`quwoquan_app/lib/service/recommendation_service`
-- App（协作引用，不用于代码归属）：`quwoquan_app/lib/service/content_service`
-- Metadata：`quwoquan_service/contracts/metadata/_vectors`
-- Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/recommendation-service/contracts`
-- Service：`quwoquan_service/services/recommendation-service`
-- Service（协作引用，不用于代码归属）：`quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime`
-- 测试：
-  - `local_contract`：`quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime`
-  - `api_integration`：`quwoquan_service/services/recommendation-service/tests`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
-
-## 8. 开放事项
+## 7. 开放事项
 
 <a id="open-001"></a>
 ### OPEN-001 recommendation platform 领域边界验收

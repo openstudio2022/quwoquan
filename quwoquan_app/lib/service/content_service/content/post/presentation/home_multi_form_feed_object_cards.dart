@@ -1,8 +1,8 @@
 part of 'home_multi_form_feed.dart';
 
-// 混合对象卡（B4 阶段一插卡模式）：服务端随 feed envelope 下发 objectCards，
-// anchorIndex 指示插入在 items[anchorIndex] 之前。本文件承载条目编织与实体
-// 主页卡渲染；对象卡是增强位，缺失/异常时内容主体不受影响。
+// 统一列表项：服务端在同一条有序列表里混排 post 与实体主页，端侧按信封
+// `objectKind` 选投影、按 `openSurface` 导航。anchorIndex 由交付序位派生，
+// 指示插入在 items[anchorIndex] 之前；未知项在解码边界已被隔离，不到这里。
 
 /// 首页 feed 展示条目：内容 post 或混合对象卡。
 sealed class _HomeFeedEntry {
@@ -27,35 +27,34 @@ final class _HomeFeedPostEntry extends _HomeFeedEntry {
 final class _HomeFeedObjectCardEntry extends _HomeFeedEntry {
   const _HomeFeedObjectCardEntry(this.card);
 
-  final FeedObjectCard card;
+  final ContentFeedObjectCard card;
 
   @override
   String get stableIdentity => homeFeedObjectCardEntryIdentity(
-    objectKind: card.objectKind,
+    objectKind: card.objectKind.wireName,
     objectId: card.objectId,
     anchorIndex: card.anchorIndex,
   );
 }
 
-/// 把对象卡按 anchorIndex 编织进内容序列（anchor 越界/非法的卡丢弃）。
+/// 把实体主页项按 anchorIndex 还原回服务端交付序位（anchor 越界的项丢弃）。
 List<_HomeFeedEntry> _weaveObjectCards(
   List<ContentPostViewData> posts,
-  List<FeedObjectCard> cards,
+  List<ContentFeedObjectCard> cards,
 ) {
   if (cards.isEmpty) {
     return <_HomeFeedEntry>[
       for (var i = 0; i < posts.length; i++) _HomeFeedPostEntry(posts[i], i),
     ];
   }
-  final byAnchor = <int, List<FeedObjectCard>>{};
+  final byAnchor = <int, List<ContentFeedObjectCard>>{};
   for (final card in cards) {
-    if (card.objectId.trim().isEmpty || card.title.trim().isEmpty) {
+    if (card.anchorIndex < 0 || card.anchorIndex > posts.length) {
       continue;
     }
-    if (card.anchorIndex <= 0 || card.anchorIndex > posts.length) {
-      continue;
-    }
-    byAnchor.putIfAbsent(card.anchorIndex, () => <FeedObjectCard>[]).add(card);
+    byAnchor
+        .putIfAbsent(card.anchorIndex, () => <ContentFeedObjectCard>[])
+        .add(card);
   }
   final entries = <_HomeFeedEntry>[];
   for (var i = 0; i < posts.length; i++) {
@@ -83,7 +82,7 @@ class _HomeDiscoverableTargetCard extends ConsumerWidget {
     required this.policyDigest,
   });
 
-  final FeedObjectCard card;
+  final ContentFeedObjectCard card;
   final bool isDark;
   final String channelId;
   final String? feedRequestId;
@@ -97,22 +96,17 @@ class _HomeDiscoverableTargetCard extends ConsumerWidget {
           .read(contentBehaviorTrackerProvider)
           .trackVisible(
             card.objectId,
-            contentType: card.objectKind,
+            contentType: card.objectKind.wireName,
             referralSource: ReferralSource.organicFeed,
             feedRequestId: feedRequestId,
             channelId: channelId,
             policyDigest: policyDigest,
-            recallPath: card.recallPath,
           );
     });
     final surface = SettingsSemanticConstants.conversationSheetCardSurface(
       isDark,
     );
-    final displayTags = card.tagRefs
-        .map(_entityCardTagLabel)
-        .where((label) => label.isNotEmpty)
-        .take(3)
-        .toList(growable: false);
+    final subtitle = card.homepage.subtitle?.trim() ?? '';
     return GestureDetector(
       key: ValueKey<String>('home-object-card-${card.objectId}'),
       behavior: HitTestBehavior.opaque,
@@ -138,9 +132,7 @@ class _HomeDiscoverableTargetCard extends ConsumerWidget {
               ),
               alignment: Alignment.center,
               child: Icon(
-                card.objectKind == 'gathering'
-                    ? CupertinoIcons.calendar
-                    : CupertinoIcons.map_pin_ellipse,
+                CupertinoIcons.map_pin_ellipse,
                 size: AppSpacing.iconMedium,
                 color: AppColors.iosAccent(context),
               ),
@@ -152,7 +144,7 @@ class _HomeDiscoverableTargetCard extends ConsumerWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
                   Text(
-                    card.title,
+                    card.homepage.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
@@ -161,10 +153,10 @@ class _HomeDiscoverableTargetCard extends ConsumerWidget {
                       color: AppColors.iosLabel(context),
                     ),
                   ),
-                  if (displayTags.isNotEmpty) ...<Widget>[
+                  if (subtitle.isNotEmpty) ...<Widget>[
                     SizedBox(height: AppSpacing.intraGroupXs),
                     Text(
-                      displayTags.join(' · '),
+                      subtitle,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: TextStyle(
@@ -188,64 +180,36 @@ class _HomeDiscoverableTargetCard extends ConsumerWidget {
     );
   }
 
+  /// 只按云物化的 `openSurface` 导航；不按对象种类或内容类型再选一次目的地。
   void _openObject(BuildContext context, WidgetRef ref) {
-    final target = _intersectionTargetForFeedCard(card);
-    if (target == null ||
-        !const IntersectionTargetNavigator().open(
+    final path = ContentOpenSurfaceNavigation.canOpen(card.openSurface)
+        ? ContentOpenSurfaceNavigation.pathFor(
+            openSurface: card.openSurface,
+            objectId: card.objectId,
+            source: ReferralSource.organicFeed.value,
+            sourceTheme: uiErrorAppearanceRouteValueFor(context),
+          )
+        : null;
+    if (path == null) {
+      unawaited(
+        showContentPresentationUnsupportedTerminal(
           context,
-          target,
-          attribution: IntersectionNavAttribution(
-            sourceRef: card.recallPath ?? '',
-          ),
-        )) {
+          objectId: card.objectId,
+          openSurface: card.openSurface,
+        ),
+      );
       return;
     }
+    context.push(path);
     ref
         .read(contentBehaviorTrackerProvider)
         .trackClick(
           card.objectId,
-          contentType: card.objectKind,
+          contentType: card.objectKind.wireName,
           referralSource: ReferralSource.organicFeed,
           feedRequestId: feedRequestId,
           channelId: channelId,
           policyDigest: policyDigest,
-          recallPath: card.recallPath,
         );
   }
-}
-
-IntersectionTarget? _intersectionTargetForFeedCard(FeedObjectCard card) {
-  final sourceKind = card.objectKind.trim();
-  final objectId = card.objectId.trim();
-  if (sourceKind.isEmpty || objectId.isEmpty) {
-    return null;
-  }
-  // 历史 entity_homepage 展示 kind 只在此边界归一为 metadata 的 entity kind；
-  // Gathering 已直接使用 registry canonical kind。
-  final objectKind = sourceKind == 'entity_homepage' ? 'entity' : sourceKind;
-  final routeId = IntersectionTargetNavigator.routeIdForObjectKindWire(
-    objectKind,
-  );
-  if (routeId.isEmpty) {
-    return null;
-  }
-  return IntersectionTarget(
-    objectType: IntersectionTargetNavigator.objectTypeForTarget(
-      objectKind: objectKind,
-      routeId: routeId,
-    ),
-    objectId: objectId,
-    objectKind: objectKind,
-    routeId: routeId,
-  );
-}
-
-/// 路径制 tagRef 的末段展示名（Topic/旅行/玩法/摄影旅拍 → 摄影旅拍）。
-String _entityCardTagLabel(String tagRef) {
-  final trimmed = tagRef.trim();
-  if (trimmed.isEmpty) {
-    return '';
-  }
-  final segments = trimmed.split('/');
-  return segments.isEmpty ? '' : segments.last.trim();
 }

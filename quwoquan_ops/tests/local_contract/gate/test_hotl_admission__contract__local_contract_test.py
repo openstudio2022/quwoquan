@@ -1,4 +1,4 @@
-"""HOTL contract, CLI, feature owner, and gate wiring local contract.
+"""HOTL contract, CLI, candidate evidence, and gate wiring local contract.
 
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/hotl-expansion-control/spec.md#gwt-001.t1
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/hotl-expansion-control/spec.md#gwt-001.t2

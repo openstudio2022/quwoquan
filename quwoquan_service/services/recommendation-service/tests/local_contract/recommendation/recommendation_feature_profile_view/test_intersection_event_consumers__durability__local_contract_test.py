@@ -228,7 +228,6 @@ def test_behavior_and_post_lifecycle_project_typed_evidence_before_ack() -> None
         "primaryHomepageId": "homepage-001",
         "visitedAt": "2026-08-01T12:00:00Z",
         "contentType": "article",
-        "contentIdentity": "work",
         "title": "公开内容",
         "body": "公开正文",
         "summary": "公开摘要",

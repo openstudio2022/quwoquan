@@ -21,7 +21,7 @@ API = "https://api.alpha.quwoquan.com"
 
 def _post(carrier: str, suffix: str = "1") -> dict[str, Any]:
     return {"postId": carrier + "-" + suffix, "contentType": carrier,
-            "contentIdentity": "work", "mediaAssetId": "asset-shared"}
+            "mediaAssetId": "asset-shared"}
 
 
 def _page(rows: list[dict[str, Any]], *, cursor: str | None = None,

@@ -93,19 +93,7 @@
 - 可观察结果：领域边界、上下游依赖、工程映射和服务治理清晰。
 - 禁止结果：不得绕过本领域公开 command/query/event 写入其拥有事实。
 
-## 7. 工程归属
-
-- App：`quwoquan_app/lib/service/product_ops_service`
-- App（协作引用，不用于代码归属）：`quwoquan_app/lib/service/content_service`、`quwoquan_app/lib/service/assistant_service`
-- Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/product-ops-service/contracts`、`quwoquan_service/services/recommendation-service/contracts`
-- Service：`quwoquan_service/services/product-ops-service`
-- Service（协作引用，不用于代码归属）：`quwoquan_service/services/recommendation-service/internal/recommendation/recommendation_model_release/infrastructure/model_runtime`
-- 测试：
-  - `local_contract`：`quwoquan_service/services/product-ops-service`
-  - `api_integration`：`quwoquan_service/services/product-ops-service`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`、`quwoquan_app/test/user_acceptance/journeys/account_enforcement`、`quwoquan_app/test/user_acceptance/journeys/event_ingestion`、`quwoquan_app/test/user_acceptance/journeys/event_reliability_replay`
-
-## 8. 开放事项
+## 7. 开放事项
 
 <a id="open-001"></a>
 ### OPEN-001 product ops growth 领域边界验收

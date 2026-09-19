@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：[`JNY-008 / SCN-014`](../../../spec.md#scn-014)
 >
-> 设计归属：[L2 DEC-001](../design.md#dec-001)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
@@ -331,7 +331,6 @@
 - lifecycle policy：`quwoquan_data/schema/governance/content_distribution_policy.schema.json`
 - environment readiness：`quwoquan_data/schema/release/environment_release_readiness.schema.json`
 - 下游环境 ship report：`quwoquan_data/schema/release/ship_report.schema.json`（环境 owner 消费契约，非 producer stage）
-- release identity incident：`quwoquan_data/schema/release/release_identity_incident.schema.json`
 - stage receipt：`quwoquan_data/schema/execution/stage_receipt.schema.json`
 - canonical pool record：`quwoquan_data/schema/release/pool_object_record.schema.json`
 - UAT matrix cell binding：契约字段 `required|not_applicable`、repo-relative `spec_ref`、`runner`

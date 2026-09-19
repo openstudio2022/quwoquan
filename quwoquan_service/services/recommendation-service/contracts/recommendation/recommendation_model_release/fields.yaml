@@ -220,7 +220,13 @@ types:
     - name: contentId
       type: string
     - name: contentType
-      type: string
+      type: enum
+      enum_ref: ContentType
+      # 既有模型的类别坐标；与 enum 声明顺序无关，修改编码必须重新发布模型。
+      model_encoding:
+        image: 0
+        video: 1
+        article: 2
     - name: authorId
       type: string
     - name: tagRefs

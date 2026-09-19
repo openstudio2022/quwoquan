@@ -684,6 +684,26 @@ class ManagedRuntimePackageEntryContractTest(unittest.TestCase):
         ):
             self.assertFalse(package_domain.should_manage_runtime_package_cli(args))
 
+    def test_entry_timeout_reports_latest_runtime_stage(self) -> None:
+        args = argparse.Namespace(command="package", kind="runtime")
+
+        def timeout(*_args: object, **kwargs: object) -> object:
+            kwargs["on_stderr"]("[runtime-package-stage] local-oci-images\n")
+            raise subprocess.TimeoutExpired(["stackctl"], 1)
+
+        with (
+            mock.patch.object(package_domain.sys, "argv", ["stackctl.py", "package"]),
+            mock.patch.object(package_domain, "run_managed_subprocess", side_effect=timeout),
+            mock.patch.dict(
+                input_capsule.os.environ,
+                {"QWQ_PACKAGE_DEPENDENCY_LOAD_TIMEOUT_SECONDS": "1"},
+            ),
+        ):
+            payload = package_domain.run_managed_runtime_package_cli(args)
+
+        self.assertEqual(payload["firstBlocker"], package_domain.PACKAGE_ATTEMPT_TIMEOUT_BLOCKER)
+        self.assertEqual(payload["timeoutStage"], "local-oci-images")
+
     def test_entry_normalizes_both_output_format_spellings_to_json(self) -> None:
         args = argparse.Namespace(command="package", kind="runtime")
         for supplied in (

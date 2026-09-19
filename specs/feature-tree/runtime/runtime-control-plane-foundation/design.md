@@ -49,7 +49,6 @@
 - 测试 seam：`local_contract` 锁定 generated decoder 对 unknown/missing/extra/version/card 的闭集拒绝与零 fallback。component/browser 行为证据覆盖四类卡、单 capability 一请求、每个恢复动作、submit 与 seal 独立 readback、outcome_unknown reconciliation、typed 401/403 和行为级 a11y。`api_integration` 绑定真实 provider projection/capability 与 stale/readback。`user_acceptance` 只由真实 screen-reader 与不同 MFA principals 关闭。
 - 理由：角色卡是 provider authority 的限权投影，不是 Portal 对 raw aggregate 的解释。单 task capability、单 command 与 readback reconciliation 让网络未知、角色切换和多实例 provider 在不扩大权限的前提下恢复，并让 UI 无法伪造 seal/finalize。
 - 被否决方案：否决 Portal 解析 raw aggregate、默认 `intake`、本地推导 current role/status/action/recommendation、submit 后顺手 seal、通用 write scope seal、post-check 复用 finalize、401/403 合并、source-regex a11y 准出、旧 wire fallback 与长期双读写。也否决把 role-record-only 错误提升为 distinct-principal。
-- 适用工程根：`quwoquan_ops/portal`；Portal IA authoring metadata 为 `quwoquan_service/contracts/metadata/_control_plane/portal_menu.yaml`，provider wire/capability authoring 位于 `quwoquan_service/control-plane/platform-ops/contracts/platform_ops/human_authority`，generated projection 均只读消费。
 - 关联要求：`human-authority-role-cards/REQ-001` 至 `REQ-005`
 - 影响 Story：[`human-authority-role-cards`](./human-authority-role-cards/spec.md)
 - 关联验收：`GWT-001`、`GWT-002`、`GWT-003`

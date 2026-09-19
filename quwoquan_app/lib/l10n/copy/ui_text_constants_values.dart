@@ -65,7 +65,6 @@ class UITextConstants {
       '$displayName 的视频作品';
   static String shareSeedImageWorkTitle(String displayName) =>
       '$displayName 的图片作品';
-  static String shareSeedMomentTitle(String displayName) => '$displayName 的点滴';
   static String entityEstablishedYearLabel(int year) => '$year 年创立';
   static String entityFollowerCountLabel(String formattedCount) =>
       '$formattedCount ${FoundationText.follow}';

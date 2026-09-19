@@ -108,6 +108,7 @@ class BuildContext(Protocol):
     generation_root: Path
     flutter_identity: Mapping[str, str]
     source_identity: Mapping[str, str]
+    platforms: tuple[str, ...]
     android_gradle_seed_root: Path | None
     progress: Any
     deadline: float
@@ -962,7 +963,7 @@ def _verify_components(
     context: BuildContext,
     projection_root: Path,
     roots: Mapping[str, Path],
-    pod: str,
+    pod: str | None,
     pub_digests: Mapping[str, str],
 ) -> None:
     expected_flutter = _expected_flutter(context)
@@ -980,6 +981,10 @@ def _verify_components(
         ("productionIosPods", IOS_POD_PRODUCTION_HOST),
         ("patrolIosPods", IOS_POD_PATROL_HOST),
     ):
+        if name not in roots:
+            continue
+        if pod is None:
+            raise ValueError("APP.DEPENDENCY.cocoapods_identity_missing")
         ios_root = projection_root / IOS_PODFILE_RELATIVES[host].parent
         load_verified_ios_pod_capsule(
             snapshot_root=roots[name],
@@ -993,12 +998,13 @@ def _verify_components(
             ],
             dependency_host=host,
         )
-    load_android_gradle_component(
-        project_root=context.repo_root,
-        component_root=roots["androidGradle"],
+    if "androidGradle" in roots:
+        load_android_gradle_component(
+            project_root=context.repo_root,
+            component_root=roots["androidGradle"],
         invocations=canonical_android_dependency_bundle_invocations(context.repo_root),
-        upstream_dependency_digests=pub_digests,
-    )
+            upstream_dependency_digests=pub_digests,
+        )
 
 
 def build_dependency_components(
@@ -1009,43 +1015,49 @@ def build_dependency_components(
     validated_trust_root, trust_sensitive_values = _validated_runtime_trust_root(
         trust_root, repo_root=context.repo_root
     )
-    context.progress.begin("toolchain-resolution")
-    pod = resolve_cocoapods_executable(
-        str(os.environ.get("QWQ_COCOAPODS_EXECUTABLE") or "")
-    )
+    pod: str | None = None
+    if "ios" in context.platforms:
+        context.progress.begin("toolchain-resolution")
+        pod = resolve_cocoapods_executable(
+            str(os.environ.get("QWQ_COCOAPODS_EXECUTABLE") or "")
+        )
     context.progress.begin("live-source-seal")
     sealed_sources = resolution_seal(context.repo_root)
     projection_root = context.work_root / "source-projection"
     context.progress.begin("source-projection")
-    project(context.repo_root, projection_root)
+    project(context.repo_root, projection_root, platforms=context.platforms)
     _assert_resolution_seal(projection_root=projection_root, expected=sealed_sources)
     context.progress.begin("pub-resolution-replay")
     roots, pub_replays, pub_digests = _build_pub_components(
         context=context, projection_root=projection_root
     )
-    context.progress.begin("ios-resolution-replay")
-    for name, host in (
-        ("productionIosPods", IOS_POD_PRODUCTION_HOST),
-        ("patrolIosPods", IOS_POD_PATROL_HOST),
-    ):
-        pub_name = "productionPub" if host == IOS_POD_PRODUCTION_HOST else "patrolPub"
-        roots[name] = _build_ios_component(
+    if "ios" in context.platforms:
+        if pod is None:
+            raise ValueError("APP.DEPENDENCY.cocoapods_identity_missing")
+        context.progress.begin("ios-resolution-replay")
+        for name, host in (
+            ("productionIosPods", IOS_POD_PRODUCTION_HOST),
+            ("patrolIosPods", IOS_POD_PATROL_HOST),
+        ):
+            pub_name = "productionPub" if host == IOS_POD_PRODUCTION_HOST else "patrolPub"
+            roots[name] = _build_ios_component(
+                context=context,
+                projection_root=projection_root,
+                pod=pod,
+                host=host,
+                pub_cache=pub_replays[pub_name],
+                upstream_digest=pub_digests[pub_name],
+            )
+    if "android" in context.platforms:
+        context.progress.begin("android-resolution-replay")
+        roots["androidGradle"] = _build_android_component(
             context=context,
             projection_root=projection_root,
-            pod=pod,
-            host=host,
-            pub_cache=pub_replays[pub_name],
-            upstream_digest=pub_digests[pub_name],
+            pub_replays=pub_replays,
+            pub_digests=pub_digests,
+            trust_root=validated_trust_root,
+            trust_sensitive_values=trust_sensitive_values,
         )
-    context.progress.begin("android-resolution-replay")
-    roots["androidGradle"] = _build_android_component(
-        context=context,
-        projection_root=projection_root,
-        pub_replays=pub_replays,
-        pub_digests=pub_digests,
-        trust_root=validated_trust_root,
-        trust_sensitive_values=trust_sensitive_values,
-    )
     context.progress.begin("source-projection-readback")
     _assert_resolution_seal(projection_root=projection_root, expected=sealed_sources)
     context.progress.begin("component-readback")

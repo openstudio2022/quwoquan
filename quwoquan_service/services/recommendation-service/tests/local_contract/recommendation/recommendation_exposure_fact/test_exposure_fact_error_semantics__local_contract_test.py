@@ -65,7 +65,7 @@ def _fields(*, valid_event_name: bool = True) -> dict[bytes, bytes]:
             {
                 "ordinal": 0,
                 "contentId": "post-001",
-                "contentType": "post",
+                "contentType": "article",
                 "featureSnapshotDigest": canonical_snapshot_digest(
                     user_snapshot, item_snapshot
                 ),

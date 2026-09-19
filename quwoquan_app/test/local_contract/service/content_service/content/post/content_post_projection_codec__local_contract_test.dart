@@ -10,9 +10,7 @@ void main() {
     final updatedAt = DateTime.utc(2026, 8, 6, 2, 3, 4);
     final source = ContentPostViewData(
       id: 'post-projection-codec',
-      type: 'video',
-      identity: 'work',
-      displayFormat: 'video',
+      type: ContentType.video,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'persona-projection-codec',
       displayName: 'Canonical author',
@@ -57,7 +55,7 @@ void main() {
 
     expect(wire['postId'], 'post-projection-codec');
     expect(wire['contentType'], 'video');
-    expect(wire['contentIdentity'], 'work');
+    expect(wire, isNot(contains('contentIdentity')));
     expect(wire['authorAvatarAssetId'], 'avatar-asset-1');
     expect(wire['authorAvatarAccessMode'], 'signed_grant');
     final mediaItems = wire['mediaItems']! as List<Object?>;

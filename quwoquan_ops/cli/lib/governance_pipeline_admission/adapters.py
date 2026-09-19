@@ -90,84 +90,11 @@ def _readback(
     }
 
 
-def verify_owner_manifest(
-    *, raw: bytes, receipt_ref: str, candidate_id: str, scope_id: str,
-    verification_time: datetime, contract: Mapping[str, Any],
-) -> tuple[dict[str, Any], dict[str, Any]]:
-    try:
-        manifest = _json(raw, "owner manifest")
-        validate_feature_context_manifest(manifest)
-        feature_context_fingerprint.validate_content_addressed_ref(
-            receipt_ref, raw_bytes=raw, repo_root=REPO_ROOT,
-        )
-    except Exception as error:
-        raise EvidenceAdapterError.schema(str(error) or type(error).__name__) from error
-    source = contract["current_repository_evidence"]
-    target = str(source["owner_manifest_target"])
-    if manifest.get("target") != target or manifest.get("resolved_owner") != target:
-        raise EvidenceAdapterError.identity("owner manifest target/owner mismatch")
-    try:
-        from ..feature_tree.commands import _context_manifest
-        from ..feature_tree.nodes import discover_nodes
-        from ..feature_tree.ownership import resolve_target_details
-
-        nodes = discover_nodes()
-        canonical = _context_manifest(target, resolve_target_details(target, nodes), nodes)
-    except Exception as error:
-        raise EvidenceAdapterError.schema(
-            f"canonical owner manifest could not be resolved: {error}"
-        ) from error
-    for field in (
-        "target",
-        "resolved_owner",
-        "owner_chain",
-        "canonical_contexts",
-        "applicable_agents",
-        "open_items",
-    ):
-        if manifest[field] != canonical[field]:
-            raise EvidenceAdapterError.identity(
-                f"owner manifest {field} differs from canonical feature-tree producer"
-            )
-    chain = manifest["owner_chain"]
-    if not chain or chain[-1].get("path") != manifest["resolved_owner"]:
-        raise EvidenceAdapterError.identity(
-            "owner manifest owner_chain must be non-empty and end at resolved_owner"
-        )
-    try:
-        fingerprint = validate_current_feature_context_fingerprint(
-            manifest, repo_root=REPO_ROOT,
-        )
-    except Exception as error:
-        identity = {key: value for key, value in manifest.items() if key != "evidence_fingerprint"}
-        try:
-            expected = build_feature_context_fingerprint(identity, repo_root=REPO_ROOT)
-            actual = feature_context_fingerprint.resolve_fingerprint_binding(
-                manifest.get("evidence_fingerprint"), repo_root=REPO_ROOT,
-            )
-        except Exception as identity_error:
-            raise EvidenceAdapterError.identity(
-                str(identity_error) or type(identity_error).__name__
-            ) from identity_error
-        if actual.get("digest_payload") != expected.get("digest_payload"):
-            raise EvidenceAdapterError.stale(str(error) or type(error).__name__) from error
-        raise EvidenceAdapterError.identity(str(error) or type(error).__name__) from error
-    readback = _readback(
-        result="pass", provider_kind="local_runtime", release=False,
-        receipt_ref=receipt_ref, raw=raw, provider_timestamp=verification_time.astimezone(timezone.utc).isoformat(timespec="seconds"),
-        candidate_id=candidate_id, scope_id=scope_id,
-        verifier_id=contract["layer_admission"]["owner_manifest"]["verifier_id"],
-        verification_time=verification_time,
-    )
-    return readback, fingerprint
-
-
-def verify_local_readiness(*, level: str, raw: bytes, receipt_ref: str, owner_manifest_ref: str, candidate_evidence_ref: str | None = None, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
+def verify_local_readiness(*, level: str, raw: bytes, receipt_ref: str, candidate_evidence_ref: str | None = None, candidate_id: str, scope_id: str, verification_time: datetime, contract: Mapping[str, Any]) -> dict[str, Any]:
     source = contract["current_repository_evidence"]
     receipt = verify_explicit_receipt_read_only(
         level=level, receipt_path=REPO_ROOT / receipt_ref, exact_bytes=raw,
         paths=list(source["local_readiness_paths"]), mode=str(source["local_readiness_mode"]),
-        owner_manifest_path=REPO_ROOT / owner_manifest_ref,
         candidate_evidence_path=REPO_ROOT / candidate_evidence_ref if candidate_evidence_ref else None,
     )
     return _readback(

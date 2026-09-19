@@ -94,17 +94,7 @@
 - 禁止结果：不得绕过本领域公开 command/query/event 写入其拥有事实。
 - 可观察结果：历史支持 App 对 candidate 云、新 App 对当前 stable 云、以及同版本端云三种组合均通过对应 persisted query/REST command 证据；不存在握手或请求期模型协商。
 
-## 7. 工程归属
-
-- App：`quwoquan_app/lib/service/api_edge`、`quwoquan_app/lib/service/realtime_gateway`
-- Metadata（协作引用，不用于代码归属）：`quwoquan_service/contracts/metadata/_shared`
-- Service：`quwoquan_service/runtime`、`quwoquan_service/services/api-edge`、`quwoquan_service/services/realtime-gateway`
-- 测试：
-  - `local_contract`：`quwoquan_service/runtime`
-  - `api_integration`：`quwoquan_service/runtime`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
-
-## 8. 开放事项
+## 7. 开放事项
 
 <a id="open-001"></a>
 ### OPEN-001 gateway orchestrator foundation 领域边界验收

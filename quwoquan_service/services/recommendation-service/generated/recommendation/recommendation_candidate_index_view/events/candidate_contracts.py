@@ -8,6 +8,78 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from enum import Enum
+from pydantic_core import core_schema
+
+
+class _ContractEnum(str, Enum):
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        return core_schema.no_info_before_validator_function(
+            cls._validate_wire,
+            handler(source_type),
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize_wire),
+        )
+
+    @classmethod
+    def _serialize_wire(cls, value):
+        return cls._validate_wire(value).value
+
+    @classmethod
+    def _validate_wire(cls, value):
+        if isinstance(value, cls):
+            return value
+        if type(value) is not str:
+            raise ValueError("enum wire value must be a string")
+        return cls(value)
+
+
+class ContentType(_ContractEnum):
+    VALUE_IMAGE = "image"
+    VALUE_VIDEO = "video"
+    VALUE_ARTICLE = "article"
+
+
+class HomepageType(_ContractEnum):
+    VALUE_VEHICLE = "vehicle"
+    VALUE_HOTEL = "hotel"
+    VALUE_RESTAURANT = "restaurant"
+    VALUE_SIGHT = "sight"
+    VALUE_UNIVERSITY = "university"
+    VALUE_SCHOOL = "school"
+    VALUE_TRAVEL_PHOTO = "travel_photo"
+    VALUE_MUSEUM = "museum"
+    VALUE_HERITAGE_SITE = "heritage_site"
+    VALUE_ANCIENT_TOWN = "ancient_town"
+    VALUE_RELIGIOUS_SITE = "religious_site"
+    VALUE_CHECK_IN_SPOT = "check_in_spot"
+    VALUE_NATURAL_LANDSCAPE = "natural_landscape"
+    VALUE_PARK = "park"
+    VALUE_HOT_SPRING = "hot_spring"
+    VALUE_THEME_PARK = "theme_park"
+    VALUE_TRANSPORT_HUB = "transport_hub"
+    VALUE_CITY = "city"
+    VALUE_ROUTE = "route"
+    VALUE_PHOTO_SPOT = "photo_spot"
+    VALUE_GEAR = "gear"
+
+
+class ModerationStatus(_ContractEnum):
+    VALUE_PENDING = "pending"
+    VALUE_APPROVED = "approved"
+    VALUE_REJECTED = "rejected"
+
+
+class PostStatus(_ContractEnum):
+    VALUE_PENDING_REVIEW = "pending_review"
+    VALUE_PUBLISHED = "published"
+    VALUE_REJECTED = "rejected"
+    VALUE_DELETED = "deleted"
+
+
+class Visibility(_ContractEnum):
+    VALUE_PUBLIC = "public"
+    VALUE_PRIVATE = "private"
 
 
 class CandidateContentFenceReceipt(BaseModel):
@@ -148,7 +220,7 @@ class ReleaseHomepagePublicSnapshot(BaseModel):
     entityRef: str
     canonicalEntityId: str
     title: str
-    homepageType: str
+    homepageType: HomepageType
     introductionMarkdown: str
     city: str | None = None
     location: GeoPoint | None = None
@@ -168,11 +240,10 @@ class ReleasePostPublicSnapshot(BaseModel):
     authorId: str
     authorDisplayName: str
     authorAvatarUrl: str | None = None
-    contentType: str
-    contentIdentity: str
-    status: str
-    visibility: str
-    moderationStatus: str
+    contentType: ContentType
+    status: PostStatus
+    visibility: Visibility
+    moderationStatus: ModerationStatus
     title: str
     body: str
     summary: str

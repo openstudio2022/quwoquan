@@ -1,11 +1,11 @@
 # quwoquan_app Agent Guide
 
-与根 `AGENTS.md` 同时生效，仅声明 `quwoquan_app/**` 不变量。行为、几何、手势、BACK、文案与验收按 `make feature-context TARGET=<path>` 加载 spec/design/contracts，不在此复制。
+与根 `AGENTS.md` 同时生效，仅声明 `quwoquan_app/**` 不变量。行为与验收按 `make feature-context TARGET=<path>` 加载 spec/design/contracts，不复制。
 
-## 归属与真相源
+## 边界与真相源
 
 - 业务目录为 `lib/service/<service>/<context>/<object>/{domain,application,adapters,presentation}`；分层、participant 与依赖归 [DEC-018/019](../specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md#dec-018)。
-- `lib/runtime/**`、`lib/design_system/**`、`lib/l10n/**` 是横切边界，不得反向拥有业务对象事实。无法唯一归属的代码先修 Feature owner，不靠目录猜测。
+- `lib/runtime/**`、`lib/design_system/**`、`lib/l10n/**` 是横切边界，不得反向拥有业务对象事实。横切代码的 Feature context 可 unresolved 或关联多个节点；写入边界由用户授权、exact-path claim 与 actual diff 决定，不靠目录猜测。
 - Repository、route、surface、operation、字段、枚举、错误码与 decoder context 以服务 contracts/metadata 及 codegen 为真相源；禁止手写第二 DTO/枚举、手改 `.g.dart` 或放宽未知值。
 - 第一方 Dart 跨目录引用使用 `package:quwoquan_app/...`，不用 `../` 相对穿越；路径与标识符按领域语义命名，不绑定产品品牌。generated contract 的业务消费者只读类型化属性，裸 Map key 只允许留在 codegen decoder/factory 边界。
 - 结果状态、模型属性和显式配置判定分别消费 [DEC-025](../specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md#dec-025)、[DEC-030](../specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md#dec-030) 和 [DEC-029](../specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md#dec-029)，不从 Review 角色 reference 间接追链。
@@ -22,7 +22,7 @@
 ## UI、l10n 与可访问性
 
 - UI 不硬编码颜色、间距、字号、交互热区或用户文案；使用 `AppColors`、`AppSpacing`、`AppTypography`、`UITextConstants`/l10n 与所属 Feature 设计 token。
-- 页面变更必须有加载、空、错误/权限、成功终态，满足所属 Story 的手势、焦点、Reduce Motion、热区及弱网验收。
+- 页面须覆盖加载、空、错误/权限、成功终态及 Story 可访问性/弱网验收。
 - ARB 新 key 使用 `<domain>_lowerCamelCase`；横切文案使用 `runtime_` 或 `design_system_`。`app_zh.arb` 与 `app_en.arb` 同 key、同序更新，`@key` 紧跟该 key；不为存量 key 保留别名或双写。文案 key 按领域归属，不得跨域借用语义不同的既有 key。
 - 搬迁/改名页面后用 `python3 quwoquan_service/scripts/contracts/sync_page_object_source_paths.py`
   更新 `_shared/page_object_contract.yaml`；不手改其派生路径，不为了让门禁通过而删减多对象 `object_ids`。

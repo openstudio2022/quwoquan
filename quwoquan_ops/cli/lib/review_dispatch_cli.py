@@ -20,20 +20,10 @@ def _load_json(
 ) -> dict[str, Any] | None:
     if not path:
         return None
-    if label == "owner_identity":
-        from .evidence_fingerprint import normalize_repo_relative_path
-        from .review_owner_manifest import read_owner_manifest_exact_bytes
-        try:
-            relative = normalize_repo_relative_path(path, repo_root)
-            raw = read_owner_manifest_exact_bytes(relative, repo_root=repo_root)
-        except (OSError, ValueError) as exc:
-            refuse("REVIEW.OWNER_MANIFEST_INVALID", str(exc))
-        value = json.loads(raw)
-    else:
-        source = Path(path)
-        if not source.is_file():
-            refuse(f"REVIEW.{label.upper()}_MISSING", f"{label} 不存在：{path}")
-        value = json.loads(source.read_text(encoding="utf-8"))
+    source = Path(path)
+    if not source.is_file():
+        refuse(f"REVIEW.{label.upper()}_MISSING", f"{label} 不存在：{path}")
+    value = json.loads(source.read_text(encoding="utf-8"))
     if not isinstance(value, dict):
         refuse(f"REVIEW.{label.upper()}_INVALID", f"{label} 必须是 JSON object")
     return value
@@ -100,7 +90,6 @@ def main(
     )
     parser.add_argument("--finding-owner", action="append", default=[])
     parser.add_argument("--previous-plan", default=None)
-    parser.add_argument("--owner-identity", default=None)
     parser.add_argument("--candidate-evidence", default=None)
     parser.add_argument("--human-decision-ref", default=None)
     parser.add_argument("--admission-class", choices=("ordinary", "formal_prod"), default="ordinary")
@@ -122,8 +111,6 @@ def main(
             if args.out
             else None
         )
-        if args.context_manifest:
-            refuse("IDENTITY.MIGRATION_REQUIRED", "--context-manifest 已退役；使用 --owner-identity + --candidate-evidence")
         registry = yaml.safe_load(registry_path.read_text(encoding="utf-8")) or {}
         plan = build_plan(
             registry,
@@ -137,9 +124,8 @@ def main(
                 args.previous_plan, label="previous_plan", refuse=refuse, repo_root=repo_root
             ),
             context_manifest=_load_json(
-                args.owner_identity, label="owner_identity", refuse=refuse, repo_root=repo_root
+                args.context_manifest, label="context_manifest", refuse=refuse, repo_root=repo_root
             ),
-            context_manifest_ref=args.owner_identity,
             candidate_evidence_ref=args.candidate_evidence,
             human_decision_ref=args.human_decision_ref,
             admission_class=args.admission_class,

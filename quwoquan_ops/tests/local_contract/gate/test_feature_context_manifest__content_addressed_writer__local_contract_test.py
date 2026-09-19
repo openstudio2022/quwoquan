@@ -78,8 +78,7 @@ def test_two_targets_write_distinct_immutable_refs_without_cross_consumption(
 
     def produce(target: str) -> tuple[str, dict[str, object]]:
         nodes = feature_tree.discover_nodes()
-        resolution = feature_tree.resolve_target_details(target, nodes)
-        manifest = ft_commands._context_manifest(target, resolution, nodes)
+        manifest = ft_commands._context_manifest(target, nodes)
         content = ft_commands.canonical_json_bytes(manifest)
         barrier.wait()
         ref = ft_commands._write_content_addressed_bytes(content)
@@ -261,9 +260,7 @@ def test_content_addressed_filename_uses_manifest_bytes_not_evidence_digest(
     )
     nodes = feature_tree.discover_nodes()
     target = "specs/feature-tree/domain/spec.md"
-    manifest = ft_commands._context_manifest(
-        target, feature_tree.resolve_target_details(target, nodes), nodes
-    )
+    manifest = ft_commands._context_manifest(target, nodes)
     raw = ft_commands.canonical_json_bytes(manifest)
     ref = ft_commands._write_content_addressed_bytes(raw).relative_to(root).as_posix()
     manifest_digest = hashlib.sha256(raw).hexdigest()

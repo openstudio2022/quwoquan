@@ -5,14 +5,12 @@ extension _HomeMultiFormFeedLocalActions on HomeMultiFormFeed {
   Future<void> _copyLink(
     BuildContext context,
     WidgetRef ref,
-    ContentPostViewData post, {
-    required bool enableIdentityTemplate,
-  }) async {
+    ContentPostViewData post,
+  ) async {
     final result = await const DefaultContentShareActionHandler().execute(
       context,
       buildDiscoveryShareTemplate(
         post: post,
-        enableIdentityTemplate: enableIdentityTemplate,
       ),
       ContentShareAction(id: 'copy_link', label: FoundationText.copyLink),
     );

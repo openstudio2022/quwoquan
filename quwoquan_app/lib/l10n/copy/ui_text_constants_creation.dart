@@ -2,7 +2,6 @@ part of 'ui_text_constants.dart';
 
 abstract final class CreationText {
   static const String operationFailed = '操作失败';
-  static const String momentPlaceholder = '这一刻的想法...';
   static const String drafts = '草稿箱';
   static const String createExitConfirmTitle = '保存草稿？';
   static const String createExitConfirmDesc = '如果不保存，当前编辑的内容将会丢失。';
@@ -15,26 +14,16 @@ abstract final class CreationText {
   static const String discard = '放弃';
   static const String saveDraft = '保存草稿';
   static const String createActionGallery = '从相册选择';
-  static const String createActionGalleryHint = '先挑素材，再决定发成点滴还是作品';
   static const String createActionWrite = '写文字';
-  static const String createActionWriteHint = '快速记录当下，也能随时升级成作品';
+  static const String createActionWriteHint = '进长文编辑器，写下完整的一篇';
   static const String createActionContinueFromDraft = '从草稿继续';
   static const String createDraftPickerEmptyTitle = '暂无保存的草稿';
   static const String createDraftPickerPreviewFallback = '继续完善这条内容';
   static const String createActionCapture = '相机';
   static const String createActionCaptureHint = '直接拍照或录视频，立刻开始创作';
-  static const String createIdentityMoment = '点滴';
-  static const String createIdentityWork = '作品';
-  static const String createSwitchToMoment = '切到点滴';
-  static const String createSwitchToWork = '切到作品';
   static const String createWorkFormatImage = '图片';
   static const String createWorkFormatVideo = '视频';
   static const String createWorkFormatNote = '笔记';
-  static const String createSuggestionKeepCurrent = '仍按当前发布';
-  static const String createSuggestionSwitch = '去调整';
-  static const String createSuggestionToWork = '当前内容更适合作为作品发布';
-  static const String createSuggestionToMoment = '这条内容也可以更轻量地作为点滴发布';
-  static const String postMoment = '发点滴';
   static const String postPhoto = '发图片', postVideo = '发视频';
   static const String postArticle = '写笔记', publish = '发表';
   static const String publishAction = '发布';
@@ -145,11 +134,6 @@ abstract final class CreationText {
   static const String publishDestinationTags = '标签';
   static const String publishDestinationLocation = '位置';
   static const String publishDestinationGathering = '关联行动';
-  static const String publishFormLabel = '发布形态';
-  static const String publishFormMicro = '短文字';
-  static const String publishFormArticle = '文章';
-  static const String publishFormSheetTitle = '选择发布形态';
-  static const String publishFormSheetHint = '系统按内容长度给出建议，最终以你的选择为准。';
   static const String whoCanSeeLabel = '谁可以看';
   static const String visibilityPublic = '公开', visibilityPrivate = '私密';
   static const String visibilitySelfOnly = '仅自己可见';
@@ -242,9 +226,6 @@ abstract final class CreationText {
   static const String continueEditing = '继续编辑';
   static const String circleWorksCountSuffix = '件作品';
   static const String selectPublishCirclesLabel = '发布到圈子';
-  static const String circlePublishModeLabel = '圈子内形式';
-  static const String circlePublishModeMoment = '点滴';
-  static const String circlePublishModeWork = '作品';
   static const String noCirclesAvailable = '加入圈子，发现兴趣相近的人';
   static const String locationSearchHint = '搜索地点';
   static const String locationNearbyTitle = '附近位置';

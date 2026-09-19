@@ -6989,8 +6989,10 @@
         ],
         "query": [
           {
-            "field": "identity",
-            "name": "identity",
+            "encoding": "json",
+            "field": "clientPresentationContract",
+            "maxBytes": 8192,
+            "name": "clientPresentationContract",
             "required": false
           },
           {
@@ -16057,6 +16059,7 @@
         "CONTENT.USER.unauthorized",
         "CONTENT.USER.invalid_argument",
         "CONTENT.SYSTEM.feed_capacity_unavailable",
+        "CONTENT.USER.presentation_contract_changed",
         "CONTENT.SYSTEM.storage_read_failed",
         "CONTENT.SYSTEM.required_dependency_unavailable",
         "CONTENT.MIDDLEWARE.upstream_timeout",
@@ -16100,11 +16103,6 @@
         ],
         "query": [
           {
-            "field": "identity",
-            "name": "identity",
-            "required": false
-          },
-          {
             "field": "type",
             "name": "type",
             "required": false
@@ -16140,6 +16138,13 @@
             "required": false
           },
           {
+            "encoding": "json",
+            "field": "clientPresentationContract",
+            "maxBytes": 8192,
+            "name": "clientPresentationContract",
+            "required": false
+          },
+          {
             "field": "limit",
             "name": "limit"
           }
@@ -16168,7 +16173,6 @@
       ],
       "telemetry": {
         "attributes": [
-          "identity",
           "type",
           "sort",
           "outcome"
@@ -16384,6 +16388,7 @@
       "errorCodes": [
         "CONTENT.USER.post_not_found",
         "CONTENT.USER.content_deleted",
+        "CONTENT.USER.presentation_unsupported",
         "CONTENT.USER.invalid_argument",
         "CONTENT.SYSTEM.storage_read_failed",
         "CONTENT.SYSTEM.internal_error"
@@ -16418,6 +16423,15 @@
           {
             "field": "postId",
             "name": "postId"
+          }
+        ],
+        "query": [
+          {
+            "encoding": "json",
+            "field": "clientPresentationContract",
+            "maxBytes": 8192,
+            "name": "clientPresentationContract",
+            "required": false
           }
         ]
       },
@@ -16671,6 +16685,7 @@
       "consistency": null,
       "domain": "content",
       "errorCodes": [
+        "CONTENT.USER.presentation_contract_changed",
         "CONTENT.USER.invalid_argument",
         "CONTENT.SYSTEM.storage_read_failed",
         "CONTENT.SYSTEM.internal_error"
@@ -16712,8 +16727,10 @@
         ],
         "query": [
           {
-            "field": "identity",
-            "name": "identity",
+            "encoding": "json",
+            "field": "clientPresentationContract",
+            "maxBytes": 8192,
+            "name": "clientPresentationContract",
             "required": false
           },
           {
@@ -16758,7 +16775,6 @@
       "telemetry": {
         "attributes": [
           "outcome",
-          "identity",
           "type"
         ],
         "metric": "content_author_posts_list",
@@ -28995,7 +29011,6 @@
       "successStatus": null,
       "surfaceIds": [
         "addContact",
-        "addContactScan",
         "myQrCode",
         "profileEdit"
       ],
@@ -29252,98 +29267,6 @@
           "outcome"
         ],
         "metric": "user_sync_pull",
-        "trace": true
-      },
-      "transport": "json"
-    },
-    {
-      "actorRequirement": "none",
-      "aggregateOwner": "",
-      "authMode": "optional",
-      "canonicalOperationId": "user.user_account.ResolveProfileQrToken",
-      "clientContract": {
-        "dartImport": "../user/user_operation_contracts.g.dart",
-        "responseDecoder": "decodeProfileQrResolveWire",
-        "responseType": "ProfileQrResolveWire"
-      },
-      "commercial": {
-        "explicit": true,
-        "status": "ready"
-      },
-      "concurrency": {},
-      "consistency": null,
-      "domain": "user",
-      "errorCodes": [
-        "USER.PROFILE.qr_token_invalid",
-        "USER.PROFILE.qr_token_expired",
-        "USER.SYSTEM.internal_error",
-        "USER.AUTH.account_deleted",
-        "USER.AUTH.account_security_unavailable",
-        "USER.AUTH.account_suspended",
-        "USER.AUTH.token_stale"
-      ],
-      "facadeMethod": "resolveProfileQrToken",
-      "facet": "PublicProfileQueryFacade",
-      "invariantTarget": "",
-      "kind": "query",
-      "localOperationId": "ResolveProfileQrToken",
-      "method": "GET",
-      "mutationTarget": "",
-      "objectId": "user.user_account",
-      "ownershipPolicy": "public_qr_resolve",
-      "pagination": null,
-      "pathTemplate": "/public/profile/qr/resolve",
-      "permissions": [],
-      "principal": "public",
-      "privacy": {
-        "logPolicy": "metadata_only",
-        "requestClassification": "PUBLIC",
-        "responseClassification": "PUBLIC"
-      },
-      "reliability": {
-        "cancellation": "supported",
-        "idempotency": "none",
-        "maxAttempts": 2,
-        "retryMode": "idempotent",
-        "timeoutMilliseconds": 1500
-      },
-      "requestBindings": {
-        "query": [
-          {
-            "field": "qr",
-            "name": "qr"
-          },
-          {
-            "field": "handle",
-            "name": "handle",
-            "required": false
-          }
-        ]
-      },
-      "requestBodyKind": "none",
-      "requestConstants": null,
-      "requestEntity": "ResolveProfileQrTokenQuery",
-      "responseAdmission": null,
-      "responseBody": "ProfileQrResolveWire",
-      "responseBodyKind": "object",
-      "responseEntity": "ProfileQrResolveWire",
-      "scopes": [],
-      "slo": {
-        "availabilityPercent": 99.9,
-        "latencyP95Milliseconds": 500
-      },
-      "sourcePath": "user/account/user_account/operations.yaml",
-      "streaming": null,
-      "successStatus": null,
-      "surfaceIds": [
-        "addContactScan"
-      ],
-      "telemetry": {
-        "attributes": [
-          "outcome",
-          "error_code"
-        ],
-        "metric": "user_profile_qr_resolve",
         "trace": true
       },
       "transport": "json"
@@ -30102,13 +30025,13 @@
   ],
   "breakingReport": {
     "path": "quwoquan_app/tool/cloud_codegen/contract_graph.breaking.json",
-    "sha256": "fd35abb733c10faa3d9b8abf9afdceb2f6b7eb1c1667f276561421ba55179e08"
+    "sha256": "837d31454c3a28e80e4ed96866336e6a24088c55a4f00ac71646be7ed67406db"
   },
   "contractGraph": {
-    "compilerHash": "sha256:6c9232198cd72cba08ac86793340b26a615f87df5d74b706c056420df16de4e8",
+    "compilerHash": "sha256:ad299d58067f9883f1b71cbe2d3b06dcbb94c1052e4a974b89546d0aed7f25b0",
     "path": "quwoquan_service/generated/contract_graph.json",
-    "sha256": "c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd",
-    "sourceDigestSetSha256": "23ac4e5c08efeeb4626c7686c62edbb0e4f5952d4400586b332e96c55f3dbedd"
+    "sha256": "706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31",
+    "sourceDigestSetSha256": "37e0f1bcdb20f2f2b222d51a5561e348316c0ec3cbc4fa748505c34b95ce9805"
   },
   "generator": "app-cloud-handoff"
 }

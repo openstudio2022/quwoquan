@@ -1,4 +1,7 @@
+// spec_ref: specs/feature-tree/discovery-content/content-display-consistency/spec.md#sit-001
 import 'dart:io';
+
+import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,6 +12,7 @@ import 'package:quwoquan_app/runtime/di/recommendation_presentation_slots.dart'
     show profileRecommendationSlots;
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/profile_mode.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/profile_works_tab.dart';
+
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
@@ -24,7 +28,7 @@ class _ThrowingCapabilityRepository extends RelationshipCapabilityRepository {
   }
 }
 
-Widget _buildApp() {
+Widget _buildApp({bool inlineScroll = false, double? contentWidth}) {
   final posts = [
     contentPostViewDataBuilder(
       postId: 'profile-article',
@@ -55,14 +59,19 @@ Widget _buildApp() {
     child: MaterialApp(
       theme: ThemeData.light(),
       darkTheme: ThemeData.dark(),
-      home: const Scaffold(
-        body: SizedBox(
-          height: 800,
-          child: ProfileWorksTab(
-            recommendationSlots: profileRecommendationSlots,
-            mode: ProfileMode.mine,
-            userId: 'nature_photographer',
-            isDark: false,
+      home: Scaffold(
+        body: Align(
+          alignment: Alignment.topCenter,
+          child: SizedBox(
+            height: 800,
+            width: contentWidth,
+            child: ProfileWorksTab(
+              recommendationSlots: profileRecommendationSlots,
+              mode: ProfileMode.mine,
+              userId: 'nature_photographer',
+              isDark: false,
+              inlineScroll: inlineScroll,
+            ),
           ),
         ),
       ),
@@ -82,6 +91,33 @@ void main() {
   setUp(() {
     HttpOverrides.global = _NoNetworkHttpOverrides();
   });
+
+  for (final inlineScroll in <bool>[false, true]) {
+    testWidgets('主页网格按实际内容区求列数 inlineScroll=$inlineScroll', (tester) async {
+      await tester.binding.setSurfaceSize(const Size(1440, 900));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      for (final width in <double>[390, 720, 1200]) {
+        await tester.pumpWidget(
+          _buildApp(inlineScroll: inlineScroll, contentWidth: width),
+        );
+        await _pumpFrames(tester);
+        final grid = tester.widget<SliverMasonryGrid>(
+          find.byType(SliverMasonryGrid),
+        );
+        final delegate =
+            grid.gridDelegate
+                as SliverSimpleGridDelegateWithFixedCrossAxisCount;
+        expect(
+          delegate.crossAxisCount,
+          width == 390
+              ? 2
+              : width == 720
+              ? 3
+              : 4,
+        );
+      }
+    });
+  }
 
   testWidgets('主页创作容器以内联二级页签暴露 metadata 定义的四个筛选项', (tester) async {
     await tester.pumpWidget(_buildApp());

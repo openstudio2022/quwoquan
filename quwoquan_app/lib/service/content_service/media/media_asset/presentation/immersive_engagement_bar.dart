@@ -24,7 +24,7 @@ import 'package:quwoquan_app/design_system/formatters/compact_count_formatter.da
 /// 布局：`[Avatar][intraSm][作者名区][关注槽位]` + `clusterGap` + `弹性区` + `[赞转评]`。
 ///
 /// **rail**：作者组左锚、动作组右锚；`mediaStage` 与图片/视频全宽对齐；
-/// `textStage`/`feedRail` 可走 `feedMaxContentWidth`。
+/// `feedRail` 可走 `feedMaxContentWidth`。
 ///
 /// **作者名**：最多 12 个 Unicode 字符展示；槽位按断点固定为 4/5/6 个中文字符宽度。
 /// 单行优先（`sm`），超出则两行紧凑（`xs` + 紧凑行高），必要时末尾省略。

@@ -18,9 +18,10 @@ import pytest
 from content.release.canonical.object_transaction_contract import ObjectTransactionError
 from content.release.canonical.object_transaction_delta import apply_forward_delta
 from core.content_library import MEDIA_KIND, admit_library_entry, library_cas_path
+from support.publish_repository_fixture import make_publish_repository
 
 _MEDIA_BODY = b"\xff\xd8\xff\xe0canonical-media-body-under-test"
-_DOCUMENT_BODY = b'{"schema":"quwoquan_data.entity_object"}'
+_DOCUMENT_BODY = (b'{"schema":"quwoquan_data.entity_object","entityRef":"/entity/travel/test/entity-' + b'c' * 64 + b'","version":1}')
 
 
 def _digest(body: bytes) -> str:
@@ -47,7 +48,7 @@ def test_a_media_destination_is_refused_because_the_tree_never_owns_a_body(
 ) -> None:
     publish_root = tmp_path / "publish"
     run_root = tmp_path / "run"
-    publish_root.mkdir()
+    make_publish_repository(publish_root)
     run_root.mkdir()
 
     hex_digest = hashlib.sha256(_MEDIA_BODY).hexdigest()
@@ -74,7 +75,7 @@ def test_a_media_destination_is_refused_because_the_tree_never_owns_a_body(
         )
 
     assert not (publish_root / destination).exists()
-    assert list(publish_root.iterdir()) == []
+    assert {path.name for path in publish_root.iterdir()} == {"repository.json", ".git"}
 
 
 def test_reclaiming_the_run_root_leaves_the_library_owning_the_body(
@@ -100,10 +101,11 @@ def test_reclaiming_the_run_root_leaves_the_library_owning_the_body(
 def test_canonical_documents_stay_outside_the_media_library(tmp_path: Path) -> None:
     publish_root = tmp_path / "publish"
     run_root = tmp_path / "run"
-    publish_root.mkdir()
+    make_publish_repository(publish_root)
     run_root.mkdir()
 
-    destination = "entities/地点/景区/测试/manifest.json"
+    ref = "travel/test/entity-" + "c" * 64
+    destination = f"entities/{ref}/1/manifest.json"
     blob_ref = _stage_blob(run_root, _DOCUMENT_BODY)
 
     apply_forward_delta(

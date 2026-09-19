@@ -12,7 +12,6 @@ ContentPostViewData _decodeView(Map<String, Object?> wire) =>
 Map<String, Object?> _canonicalWire({
   required String postId,
   required String contentType,
-  String? contentIdentity,
   String? authorId = 'author-1',
   String? authorDisplayName = 'Author',
   String? authorAvatarUrl = '',
@@ -36,7 +35,6 @@ Map<String, Object?> _canonicalWire({
 }) => contentPostProjectionFixture(
   postId: postId,
   contentType: contentType,
-  contentIdentity: contentIdentity,
   authorId: authorId,
   authorDisplayName: authorDisplayName,
   authorAvatarUrl: authorAvatarUrl,
@@ -66,7 +64,6 @@ void main() {
         _canonicalWire(
           postId: 'p1',
           contentType: 'image',
-          contentIdentity: 'work',
           authorId: 'auth1',
           authorDisplayName: '摄影师',
           authorAvatarUrl: 'https://example.com/avatar.jpg',
@@ -86,9 +83,7 @@ void main() {
       );
 
       expect(view.id, 'p1');
-      expect(view.type, 'image');
-      expect(view.identity, 'work');
-      expect(view.displayFormat, 'image');
+      expect(view.type, ContentType.image);
       expect(view.authorId, 'auth1');
       expect(view.displayName, '摄影师');
       expect(view.imageUrls, hasLength(2));
@@ -104,7 +99,6 @@ void main() {
         _canonicalWire(
           postId: 'video-portrait',
           contentType: 'video',
-          contentIdentity: 'work',
           videoUrl: 'https://example.com/video.mp4',
           thumbnailUrl: 'https://example.com/thumb.jpg',
           width: 1080,
@@ -115,9 +109,7 @@ void main() {
       );
 
       expect(view.id, 'video-portrait');
-      expect(view.type, 'video');
-      expect(view.identity, 'work');
-      expect(view.displayFormat, 'video');
+      expect(view.type, ContentType.video);
       expect(view.videoUrl, 'https://example.com/video.mp4');
       expect(view.thumbnailUrl, 'https://example.com/thumb.jpg');
       expect(view.imageUrls, isEmpty);
@@ -131,7 +123,6 @@ void main() {
         _canonicalWire(
           postId: 'article-1',
           contentType: 'article',
-          contentIdentity: 'work',
           title: '连续文档标题',
           body: '文章摘要内容',
           coverUrl: 'https://example.com/article.jpg',
@@ -140,9 +131,7 @@ void main() {
         ),
       );
 
-      expect(view.type, 'article');
-      expect(view.identity, 'work');
-      expect(view.displayFormat, 'note');
+      expect(view.type, ContentType.article);
       expect(view.title, '连续文档标题');
       expect(view.normalizedBody, '文章摘要内容');
       expect(view.coverUrl, 'https://example.com/article.jpg');
@@ -150,41 +139,46 @@ void main() {
       expect(view.articleFontPreset, 'handwritten');
     });
 
-    test('micro 按 canonical 媒体事实派生 note、image、video 展示形态', () {
-      final text = _decodeView(
-        _canonicalWire(
-          postId: 'micro-text',
-          contentType: 'micro',
-          contentIdentity: 'moment',
-          body: '一条微趣文字',
-        ),
-      );
-      final image = _decodeView(
-        _canonicalWire(
-          postId: 'micro-image',
-          contentType: 'micro',
-          contentIdentity: 'moment',
-          body: '图文微趣',
-          mediaUrls: const <String>['https://example.com/img.jpg'],
-        ),
-      );
-      final video = _decodeView(
-        _canonicalWire(
-          postId: 'micro-video',
-          contentType: 'micro',
-          contentIdentity: 'moment',
-          body: '视频微趣',
-          videoUrl: 'https://example.com/video.mp4',
-          durationMs: 15000,
-        ),
-      );
+    test('文章增减正文插图始终为 article，不从附件推导类型', () {
+      for (final mediaUrls in <List<String>>[
+        const <String>[],
+        const <String>['https://example.com/figure.jpg'],
+      ]) {
+        final view = _decodeView(
+          _canonicalWire(
+            postId: 'article-media',
+            contentType: 'article',
+            body: '文章正文',
+            mediaUrls: mediaUrls,
+          ),
+        );
 
-      expect(text.displayFormat, 'note');
-      expect(text.hasAnyMedia, isFalse);
-      expect(image.displayFormat, 'image');
-      expect(image.hasImages, isTrue);
-      expect(video.displayFormat, 'video');
-      expect(video.hasVideo, isTrue);
+        expect(view.type, ContentType.article);
+        expect(view.normalizedBody, '文章正文');
+        expect(view.mediaImageUrls, mediaUrls);
+        expect(view.hasImages, mediaUrls.isNotEmpty);
+      }
+    });
+
+    test('图片有无独立配文均为 image，配文不进入图片序列', () {
+      const images = <String>[
+        'https://example.com/first.jpg',
+        'https://example.com/second.jpg',
+      ];
+      for (final caption in <String?>[null, '独立短配文']) {
+        final view = _decodeView(
+          _canonicalWire(
+            postId: 'image-caption',
+            contentType: 'image',
+            body: caption,
+            mediaUrls: images,
+          ),
+        );
+
+        expect(view.type, ContentType.image);
+        expect(view.body, caption);
+        expect(view.mediaImageUrls, images);
+      }
     });
   });
 
@@ -221,6 +215,23 @@ void main() {
       }
     });
 
+    test('退役 identity 与 displayFormat 不成为第二权威轴', () {
+      for (final entry in <String, String>{
+        'identity': 'work',
+        'contentIdentity': 'work',
+        'displayFormat': 'image',
+      }.entries) {
+        final wire = _canonicalWire(
+          postId: 'retired-axis',
+          contentType: 'image',
+        )..[entry.key] = entry.value;
+        expect(
+          () => ContentPostProjection.fromWire(wire),
+          throwsFormatException,
+        );
+      }
+    });
+
     test('canonical round-trip 只输出当前字段并保持尺寸', () {
       final projection = ContentPostProjection.fromWire(
         _canonicalWire(
@@ -241,15 +252,15 @@ void main() {
       expect(wire, isNot(contains('imageUrls')));
     });
 
-    test('未知 contentType 在 App mapper 边界 fail closed', () {
-      final projection = ContentPostProjection.fromWire(
-        _canonicalWire(postId: 'unknown', contentType: 'future-type'),
-      );
-
-      expect(
-        () => ContentPostViewData.fromWire(projection),
-        throwsFormatException,
-      );
+    test('未知或退役 contentType 在 generated decoder 边界 fail closed', () {
+      for (final type in <String>['future-type', 'micro']) {
+        final wire = _canonicalWire(postId: 'unknown', contentType: 'article')
+          ..['contentType'] = type;
+        expect(
+          () => ContentPostProjection.fromWire(wire),
+          throwsFormatException,
+        );
+      }
     });
 
     test('缺少 canonical required fields 不降级为伪对象', () {
@@ -269,25 +280,23 @@ void main() {
   });
 
   group('ContentPostViewData — canonical presentation', () {
-    test('四种内容共享同一个 ViewData 类型，不再按 DTO 子类分轨', () {
+    test('三类内容共享同一个 ViewData 类型，不再按 DTO 子类分轨', () {
       final items = <ContentPostViewData>[
-        for (final type in const <String>['image', 'video', 'article', 'micro'])
+        for (final type in const <String>['image', 'video', 'article'])
           _decodeView(
             _canonicalWire(
               postId: 'post-$type',
               contentType: type,
-              contentIdentity: type == 'micro' ? 'moment' : 'work',
               videoUrl: type == 'video' ? 'https://example.com/v.mp4' : null,
             ),
           ),
       ];
 
       expect(items, everyElement(isA<ContentPostViewData>()));
-      expect(items.map((item) => item.type), <String>[
-        'image',
-        'video',
-        'article',
-        'micro',
+      expect(items.map((item) => item.type), <ContentType>[
+        ContentType.image,
+        ContentType.video,
+        ContentType.article,
       ]);
     });
 
@@ -321,7 +330,6 @@ void main() {
         _canonicalWire(
           postId: 'copy-1',
           contentType: 'article',
-          contentIdentity: 'work',
           title: 'Original',
           body: 'Body',
         ),
@@ -331,7 +339,6 @@ void main() {
       expect(updated.title, 'Updated');
       expect(updated.id, original.id);
       expect(updated.type, original.type);
-      expect(updated.identity, original.identity);
       expect(updated.body, original.body);
     });
   });

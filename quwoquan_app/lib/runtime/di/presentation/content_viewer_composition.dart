@@ -51,7 +51,6 @@ abstract final class ContentViewerComposition {
   static MediaViewerExtra singlePostExtra(
     WidgetRef ref, {
     required ContentPostDetailPayload detail,
-    required String source,
     required ReferralSource referralSource,
     String? feedRequestId,
     MediaViewerCommentContext commentContext =
@@ -60,7 +59,6 @@ abstract final class ContentViewerComposition {
     return buildSinglePostMediaViewerExtra(
       ref,
       detail: detail,
-      source: source,
       referralSource: referralSource,
       feedRequestId: feedRequestId,
       commentContext: commentContext,

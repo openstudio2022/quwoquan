@@ -25,8 +25,8 @@ class DiscoveryFeedSpacing {
   /// 首页推荐竖屏素材最大高度占屏比例。
   static const double homeFeedMediaPortraitMaxHeightFactor = 0.62;
 
-  /// 首页推荐个人记录 1/2 图稀疏网格占宽比例。
-  static const double homeFeedMomentSparseGridWidthFactor = 1 / 3;
+  /// 首页推荐图片内容 1/2 图稀疏网格占宽比例。
+  static const double homeFeedImageSparseGridWidthFactor = 1 / 3;
 
   /// 首页推荐竖屏视频在大屏上的最大宽度，避免竖视频被拉得过宽。
   static const double homeFeedVideoPortraitMaxWidth = 360.0;

@@ -154,7 +154,10 @@ def test_exact_package_replay_restores_media_and_keeps_logical_identity(replay_c
     assert (canonical / "manifest.json").is_file()
     assert not (replay_case["publish_root"] / "posts" / POST_REF).exists()
     assert _tree_digest(source_package) == source_digest
-    assert _tree_digest(canonical) == _tree_digest(Path(result["packageRoot"]) / "object")
+    package_object = Path(result["packageRoot"]) / "object"
+    assert _tree_digest(canonical) != _tree_digest(package_object)
+    assert not any(path.is_file() for path in canonical.glob("media/**/*"))
+    assert (package_object / "media").is_dir()
     repeated = replay_object_transaction_package(**replay_case)
     assert repeated["idempotent"] is True
     assert repeated["canonicalObjectSha256"] == result["canonicalObjectSha256"]
@@ -174,7 +177,7 @@ def test_exact_package_replay_accepts_verified_empty_homepage(replay_case):
     package = read_json(case["source_package_root"] / "object_transaction_package.json")
     result = replay_object_transaction_package(**case)
     assert result["status"] == "applied"
-    assert result["canonicalObjectRef"] == "entities/地点/景区/西湖"
+    assert result["canonicalObjectRef"] == "entities/" + package["target"]["objectRef"]
     assert (case["publish_root"] / package["target"]["objectPath"] / "page.md").is_file()
     assert replay_object_transaction_package(**case)["idempotent"] is True
 

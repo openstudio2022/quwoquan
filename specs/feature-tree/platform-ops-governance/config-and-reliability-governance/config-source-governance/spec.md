@@ -4,7 +4,7 @@
 
 > Journey / Scenario：横切工程能力；由父 L2 spec 参与 AppRoot Journey。
 
-> 设计归属：[L2 DEC-001](../design.md#dec-001)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 

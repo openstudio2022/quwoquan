@@ -17,13 +17,13 @@ func TestListFeedCursorIsOpaqueTamperSafeAndRequestBound(t *testing.T) {
 	posts := []postmodel.Post{
 		{
 			ID: "cursor-security-1", AuthorId: "cursor-author-1",
-			ContentType: "image", ContentIdentity: "work",
-			Status: "published", Visibility: "public", CreatedAt: now, PublishedAt: now,
+			ContentType: "image",
+			Status:      "published", Visibility: "public", CreatedAt: now, PublishedAt: now,
 		},
 		{
 			ID: "cursor-security-2", AuthorId: "cursor-author-2",
-			ContentType: "image", ContentIdentity: "work",
-			Status: "published", Visibility: "public",
+			ContentType: "image",
+			Status:      "published", Visibility: "public",
 			CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute),
 		},
 	}
@@ -91,8 +91,8 @@ func TestListFeedCursorIsOpaqueTamperSafeAndRequestBound(t *testing.T) {
 func TestListFeedCursorScopeIsInjectiveAcrossFieldBoundaries(t *testing.T) {
 	now := time.Now().UTC()
 	posts := []postmodel.Post{
-		{ID: "cursor-scope-1", AuthorId: "cursor-scope-author-1", ContentType: "image", ContentIdentity: "work", Status: "published", Visibility: "public", CreatedAt: now, PublishedAt: now},
-		{ID: "cursor-scope-2", AuthorId: "cursor-scope-author-2", ContentType: "image", ContentIdentity: "work", Status: "published", Visibility: "public", CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute)},
+		{ID: "cursor-scope-1", AuthorId: "cursor-scope-author-1", ContentType: "image", Status: "published", Visibility: "public", CreatedAt: now, PublishedAt: now},
+		{ID: "cursor-scope-2", AuthorId: "cursor-scope-author-2", ContentType: "image", Status: "published", Visibility: "public", CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute)},
 	}
 	service := newTerminalFeedService(
 		newTerminalFeedEngine([]rtrec.ContentCandidate{
@@ -133,19 +133,19 @@ func TestListFeedCursorExpiresAndStopsAtContinuationDepthLimit(t *testing.T) {
 		posts := []postmodel.Post{
 			{
 				ID: "cursor-boundary-1", AuthorId: "cursor-boundary-author-1",
-				ContentType: "image", ContentIdentity: "work",
-				Status: "published", Visibility: "public", CreatedAt: now, PublishedAt: now,
+				ContentType: "image",
+				Status:      "published", Visibility: "public", CreatedAt: now, PublishedAt: now,
 			},
 			{
 				ID: "cursor-boundary-2", AuthorId: "cursor-boundary-author-2",
-				ContentType: "image", ContentIdentity: "work",
-				Status: "published", Visibility: "public",
+				ContentType: "image",
+				Status:      "published", Visibility: "public",
 				CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute),
 			},
 			{
 				ID: "cursor-boundary-3", AuthorId: "cursor-boundary-author-3",
-				ContentType: "image", ContentIdentity: "work",
-				Status: "published", Visibility: "public",
+				ContentType: "image",
+				Status:      "published", Visibility: "public",
 				CreatedAt: now.Add(-2 * time.Minute), PublishedAt: now.Add(-2 * time.Minute),
 			},
 		}

@@ -26,7 +26,7 @@ func TestSubmitPostPublicationReplayReturnsOriginalPost(t *testing.T) {
 			testsupport.FixedPublicationSafetyGate{},
 		),
 	)
-	command := testPublicationCommand("intent-replay", "draft-replay")
+	command := testPublicationCommand(t, "intent-replay", "draft-replay")
 
 	first, err := service.SubmitPostPublication(
 		commandmeta.WithIdempotencyKey(context.Background(), "intent-replay"),
@@ -68,14 +68,14 @@ func TestSubmitPostPublicationNewIntentForPublishedDraftIsIgnored(t *testing.T) 
 	)
 	first, err := service.SubmitPostPublication(
 		commandmeta.WithIdempotencyKey(context.Background(), "intent-original"),
-		testPublicationCommand("intent-original", "draft-once"),
+		testPublicationCommand(t, "intent-original", "draft-once"),
 	)
 	if err != nil {
 		t.Fatal(err)
 	}
 	second, err := service.SubmitPostPublication(
 		commandmeta.WithIdempotencyKey(context.Background(), "intent-accidental"),
-		testPublicationCommand("intent-accidental", "draft-once"),
+		testPublicationCommand(t, "intent-accidental", "draft-once"),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -97,7 +97,7 @@ func TestSubmitPostPublicationConcurrentReplayCreatesOnePost(t *testing.T) {
 			testsupport.FixedPublicationSafetyGate{},
 		),
 	)
-	command := testPublicationCommand("intent-concurrent", "draft-concurrent")
+	command := testPublicationCommand(t, "intent-concurrent", "draft-concurrent")
 
 	const workers = 16
 	results := make(chan PostPublicationReceipt, workers)
@@ -350,15 +350,31 @@ func TestSubmitPostPublicationDistinguishesProcessingFromRejectedMedia(t *testin
 	}
 }
 
-func testPublicationCommand(intentID, draftID string) SubmitPostPublicationCommand {
+func TestSubmitPostPublicationRejectsRetiredContentTypeWithoutWriting(t *testing.T) {
+	store := testsupport.NewPostStore(nil)
+	service := NewPostService(BindDataPorts(store), WithPublicationAdmission(testsupport.AllowPublicationRateGate{}, testsupport.FixedPublicationSafetyGate{}))
+	command := testPublicationCommand(t, "intent-retired-type", "draft-retired-type")
+	command.Content.ContentType = "micro"
+	_, err := service.SubmitPostPublication(commandmeta.WithIdempotencyKey(context.Background(), command.PublishIntentID), command)
+	requirePublicationErrorCode(t, err, "CONTENT.USER.invalid_content_type")
+	if posts, _ := store.ListAll(context.Background()); len(posts) != 0 || len(store.OutboxEvents()) != 0 {
+		t.Fatalf("retired contentType must not persist or emit events: %+v", posts)
+	}
+}
+
+func testPublicationCommand(t *testing.T, intentID, draftID string) SubmitPostPublicationCommand {
+	t.Helper()
 	return SubmitPostPublicationCommand{
 		PublishIntentID: intentID,
 		LocalDraftID:    draftID,
 		AuthorID:        "persona-publication",
 		Content: postmodel.Post{
-			ContentType: "micro",
-			Body:        "first publication",
-			Visibility:  "public",
+			ContentType:      "article",
+			ArticleMarkdown:  "first publication",
+			MarkdownDialect:  "qwq-rich-md",
+			SemanticDocument: semanticfixture.Envelope(t),
+			Body:             "first publication",
+			Visibility:       "public",
 		},
 	}
 }
@@ -385,7 +401,7 @@ func (r *publicationMediaReader) MaterializePublicSlices(
 
 func TestSubmitArticlePublicationRequiresExplicitMarkdownDialect(t *testing.T) {
 	service := NewPostService(BindDataPorts(testsupport.NewPostStore(nil)), WithPublicationAdmission(testsupport.AllowPublicationRateGate{}, testsupport.FixedPublicationSafetyGate{}))
-	command := testPublicationCommand("intent-article-dialect", "draft-article-dialect")
+	command := testPublicationCommand(t, "intent-article-dialect", "draft-article-dialect")
 	command.Content.ContentType = "article"
 	command.Content.ArticleMarkdown = "# 标题\n\n正文"
 	command.Content.SemanticDocument = semanticfixture.Envelope(t)
@@ -398,8 +414,9 @@ func TestSubmitArticlePublicationRequiresExplicitMarkdownDialect(t *testing.T) {
 
 func TestSubmitArticlePublicationBlocksUntilSemanticWireExists(t *testing.T) {
 	service := NewPostService(BindDataPorts(testsupport.NewPostStore(nil)), WithPublicationAdmission(testsupport.AllowPublicationRateGate{}, testsupport.FixedPublicationSafetyGate{}))
-	command := testPublicationCommand("intent-article-timeline", "draft-article-timeline")
+	command := testPublicationCommand(t, "intent-article-timeline", "draft-article-timeline")
 	command.Content.ContentType = "article"
+	command.Content.SemanticDocument = postmodel.Post{}.SemanticDocument
 	command.Content.ArticleMarkdown = "# 标题\n\n:::timeline\n- 08:00 出发\n:::"
 	command.Content.MarkdownDialect = "qwq-rich-md"
 	_, err := service.SubmitPostPublication(commandmeta.WithIdempotencyKey(context.Background(), command.PublishIntentID), command)

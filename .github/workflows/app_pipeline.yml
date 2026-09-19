@@ -42,8 +42,6 @@ on:
       QWQ_ANDROID_RELEASE_KEY_PASSWORD: {required: false}
       QWQ_ANDROID_RELEASE_KEYSTORE_B64: {required: false}
       QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256: {required: false}
-      QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON: {required: false}
-      QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON: {required: false}
       QWQ_APP_RUNTIME_CONFIG_PROD_TRUSTED_PUBLIC_KEYS_JSON: {required: false}
     outputs:
       app_evidence_ref:
@@ -345,8 +343,6 @@ jobs:
           QWQ_ANDROID_RELEASE_KEY_PASSWORD: ${{ secrets.QWQ_ANDROID_RELEASE_KEY_PASSWORD }}
           QWQ_ANDROID_RELEASE_KEYSTORE_B64: ${{ secrets.QWQ_ANDROID_RELEASE_KEYSTORE_B64 }}
           QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256: ${{ secrets.QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256 }}
-          QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON: ${{ secrets.QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON }}
-          QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON: ${{ secrets.QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON }}
           PROD_OPS_OIDC_ISSUER: ${{ vars.PROD_OPS_OIDC_ISSUER }}
           PROD_OPS_OIDC_CLIENT_ID: ${{ vars.PROD_OPS_OIDC_CLIENT_ID }}
           PROD_OPS_OIDC_AUDIENCE: ${{ vars.PROD_OPS_OIDC_AUDIENCE }}
@@ -359,15 +355,10 @@ jobs:
           export QWQ_QUALIFICATION_REQUEST_DIGEST='${{ inputs.qualification_request_digest }}'
           export QWQ_RC_TAG_ADMISSION_REF='${{ inputs.rc_tag_admission_ref }}'
           if [ "${{ matrix.format }}" = apk ]; then
-            FIREBASE_INPUT=QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON
-            if [ "${{ matrix.profile }}" = prod ]; then
-              FIREBASE_INPUT=QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON
-            fi
             python3 quwoquan_ops/gate/require_ci_inputs.py --scope release-signing \
               QWQ_ANDROID_RELEASE_KEYSTORE_B64 QWQ_ANDROID_RELEASE_STORE_PASSWORD \
               QWQ_ANDROID_RELEASE_KEY_ALIAS QWQ_ANDROID_RELEASE_KEY_PASSWORD \
-              QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256 \
-              "$FIREBASE_INPUT"
+              QWQ_ANDROID_EXPECTED_SIGNING_CERTIFICATE_SHA256
           fi
           RESULT="$RUNNER_TEMP/stackctl-app-result.json"
           python3 quwoquan_ops/cli/stackctl.py --output-format json package \

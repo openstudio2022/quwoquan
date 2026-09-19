@@ -124,8 +124,8 @@
 - [`content-display-consistency`](./content-display-consistency/spec.md)：统一文章、圈子流、沉浸式浏览器与作者主页之间的展示和状态交接
 - [`content-service-cloud-production`](./content-service-cloud-production/spec.md)：让经数据生产和审核的文章、图片、视频及主页内容以不可变发布物进入 content-service，并由 App 通过正式远端契约读取。
 - [`content-service-contract-foundation`](./content-service-contract-foundation/spec.md)：内容服务端云一体化契约基础层。将业务对象（Post 及其子类型）的所有横切关注点——接口契约、存储、领域模型、错误码、行为采集与推荐特征、隐私安全、端侧可配置化、三层测试契约——统一纳入以业务对象为中心的元数据目录，并通过 codegen 工具链确保端云双侧代码从同一 YAML 真相源派生，消除人工协调。
-- [`content-type-framework`](./content-type-framework/spec.md)：**定位**：content_feed 场景下对四种媒体类型（微趣 micro、图片 image、视频 video、文章 article）的通用内容模型与按类型扩展的约定，不拆表、不拆场景。
-- [`dual-rail-discovery-redesign`](./dual-rail-discovery-redesign/spec.md)：让用户在“作品”沉浸轨与“点滴”社交轨之间按浏览意图切换，而不是先按图片、视频或文章格式选择入口。
+- [`content-type-framework`](./content-type-framework/spec.md)：三类 Post（图片、视频、文章）共用生命周期，实体主页是独立对象；对象、展示面、面布局与首页可选配方的 canonical 定义归此能力。
+- [`dual-rail-discovery-redesign`](./dual-rail-discovery-redesign/spec.md)：统一内容流与媒体、文章聚焦面衔接，保留宫格、翻页、评论和返回上下文，不再按退役身份分轨。
 - [`exposure-governance`](./exposure-governance/spec.md)：推荐曝光治理的商用成熟度能力：served/impressed 双轨、疲劳、频控、动态预算、复活、活跃度自适应与曝光健康。
 - [`feed-orchestration-recommendation`](./feed-orchestration-recommendation/spec.md)：发现流推荐编排的端云行为、流式体验、交集解释、曝光治理集成边界与推荐 SLO 基线。
 - [`media-processing-helper-read`](./media-processing-helper-read/spec.md)：图片/视频从上传完成事实到 ready/rejected 终态、归一化公开切片与可预览读取的商用闭环。
@@ -143,7 +143,7 @@
 ### REQ-002 为端侧首页与内容详情提供统一发现流与内容读取能力，支持按用户画像和行为进行推荐排序
 
 - 为端侧首页与内容详情提供统一发现流与内容读取能力，支持按用户画像和行为进行推荐排序。
-- **四类内容**（文章、微趣、美图、视频）统一支持全量用户反馈：关注作者、赞、想去（内容锚定到支持想去的实体时，见 `publish-comment-reaction/design.md#dec-002`）、转发、评论，以及不感兴趣、不想看此作者、不想看此类内容、举报；反馈端云契约与推荐过滤逻辑见 `feed-orchestration-recommendation/design.md`。
+- **三类 Post**（文章、图片、视频）统一支持全量用户反馈：关注作者、赞、想去（内容锚定到支持想去的实体时，见 `publish-comment-reaction/design.md#dec-002`）、转发、评论，以及不感兴趣、不想看此作者、不想看此类内容、举报；反馈端云契约与推荐过滤逻辑见 `feed-orchestration-recommendation/design.md`。
 - 端侧 UI 必须遵从语义 token（`AppSpacing`/`AppColors`/`AppTypography`），禁止硬编码视觉值。
 - 发现流与内容列表响应统一 `items` + `nextCursor`。
 - 行为事件必须可被 `product-ops` 消费，且可关联 `traceId/requestId/pageId`。
@@ -239,20 +239,7 @@
 - 可观察结果：随后以相同 release 和期望零修复重放时零写且幂等。
 - 禁止结果：release identity、期望数量、payload 形态、CAS 或事务任一不一致时不得提交部分结果。
 
-## 7. 工程归属
-
-- App：`quwoquan_app/lib/service/content_service`
-- App（翻页几何基础设施）：`quwoquan_app/lib/design_system/pageflip`
-- Contracts：`quwoquan_service/services/content-service/contracts`
-- Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/integration-service/contracts`
-- Service：`quwoquan_data`、`quwoquan_service/services/content-service`
-- Service（协作引用，不用于代码归属）：`quwoquan_service/services/integration-service`
-- 测试：
-  - `local_contract`：`quwoquan_service/services/content-service/tests`、`quwoquan_app/test/local_contract/journeys/viewer_profile_state_sync`
-  - `api_integration`：`quwoquan_service/services/content-service/tests`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`、`quwoquan_app/test/user_acceptance/journeys/home_recommendation`、`quwoquan_app/test/user_acceptance/journeys/home_video_playback`
-
-## 8. 开放事项
+## 7. 开放事项
 
 <a id="open-004"></a>
 ### OPEN-004 producer handoff直接消费尚未完成原子切换

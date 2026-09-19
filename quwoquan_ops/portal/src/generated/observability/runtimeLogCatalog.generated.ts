@@ -34,7 +34,6 @@ export const runtimeLogCatalog = {
     {objectId: "content.post", field: "captureFeatureRefs", classification: "INTERNAL", action: "drop", maskStrategy: "", truncateChars: 0, explicit: false, visibility: []},
     {objectId: "content.post", field: "commentCount", classification: "PUBLIC", action: "drop", maskStrategy: "", truncateChars: 0, explicit: false, visibility: []},
     {objectId: "content.post", field: "contentDigest", classification: "INTERNAL", action: "drop", maskStrategy: "", truncateChars: 0, explicit: false, visibility: []},
-    {objectId: "content.post", field: "contentIdentity", classification: "PUBLIC", action: "drop", maskStrategy: "", truncateChars: 0, explicit: false, visibility: []},
     {objectId: "content.post", field: "contentType", classification: "PUBLIC", action: "drop", maskStrategy: "", truncateChars: 0, explicit: false, visibility: []},
     {objectId: "content.post", field: "contentVertical", classification: "PUBLIC", action: "drop", maskStrategy: "", truncateChars: 0, explicit: false, visibility: []},
     {objectId: "content.post", field: "coverFrameTimeMs", classification: "PUBLIC", action: "drop", maskStrategy: "", truncateChars: 0, explicit: false, visibility: []},

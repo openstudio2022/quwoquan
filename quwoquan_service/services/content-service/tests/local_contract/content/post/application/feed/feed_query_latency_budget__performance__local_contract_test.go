@@ -84,16 +84,15 @@ func budgetSeedSupply() ([]postmodel.Post, []rtrec.ContentCandidate) {
 	for index := 0; index < budgetSeedPostCount; index++ {
 		publishedAt := base.Add(-time.Duration(index) * time.Minute)
 		post := postmodel.Post{
-			ID:              fmt.Sprintf("budget-video-%04d", index),
-			AuthorId:        fmt.Sprintf("budget-author-%02d", index%25),
-			ContentType:     "video",
-			ContentIdentity: "work",
-			Status:          "published",
-			Visibility:      "public",
-			VideoUrl:        fmt.Sprintf("https://media.example.test/budget-%04d.mp4", index),
-			DurationMs:      5000,
-			CreatedAt:       publishedAt,
-			PublishedAt:     publishedAt,
+			ID:          fmt.Sprintf("budget-video-%04d", index),
+			AuthorId:    fmt.Sprintf("budget-author-%02d", index%25),
+			ContentType: "video",
+			Status:      "published",
+			Visibility:  "public",
+			VideoUrl:    fmt.Sprintf("https://media.example.test/budget-%04d.mp4", index),
+			DurationMs:  5000,
+			CreatedAt:   publishedAt,
+			PublishedAt: publishedAt,
 		}
 		posts = append(posts, post)
 		candidates = append(candidates, rtrec.ContentCandidate{

@@ -1,5 +1,6 @@
 read_model: ContentDiscoveryFeedPageSlice
-description: '首页发现流唯一响应 envelope。items 与 objectCards 均为已完成展示投影，
+description: '首页发现流唯一响应 envelope。items 是该页唯一混排序列，不存在与之
+  并存的 objectCards + anchorIndex 插卡旁路；items 为已完成展示投影，
 
   outcome/emptyReason 明确区分内容页与合法空页；分页只使用绑定当前 feed 会话的
 
@@ -17,15 +18,13 @@ description: '首页发现流唯一响应 envelope。items 与 objectCards 均�
 source_entities:
 - Post
 - MediaAsset
-- Homepage
 source_projections:
-- ContentPostProjection
-- FeedObjectCard
+- ContentListItemProjection
 consumers:
 - app
 fields:
 - name: items
-  type: '[]ContentPostProjection'
+  type: '[]ContentListItemProjection'
 - name: outcome
   type: enum
   enum_ref: ContentFeedOutcome
@@ -47,8 +46,6 @@ fields:
 - name: policyDigest
   type: string
   nullable: true
-- name: objectCards
-  type: '[]FeedObjectCard'
 - name: releaseId
   type: string
   nullable: true

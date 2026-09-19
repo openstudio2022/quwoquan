@@ -319,10 +319,6 @@ class TestKeys {
   static const localDraftEmptyState = ValueKey<String>(
     'local_draft_empty_state',
   );
-  static const createIdentityMoment = ValueKey<String>(
-    'create_identity_moment',
-  );
-  static const createIdentityWork = ValueKey<String>('create_identity_work');
   static const createWorkFormatImage = ValueKey<String>(
     'create_work_format_image',
   );

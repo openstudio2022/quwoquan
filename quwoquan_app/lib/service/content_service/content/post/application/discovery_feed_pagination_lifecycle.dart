@@ -99,7 +99,6 @@ abstract class _DiscoveryFeedMapPaginationLifecycle
       final page = await repo.listDiscoveryFeedPage(
         category: query.category,
         channelId: query.channel,
-        identity: query.identity,
         type: query.type,
         sort: kFeedSortRecommend,
         limit: 20,
@@ -358,7 +357,6 @@ abstract class _DiscoveryFeedMapPaginationLifecycle
         final page = await repo.listDiscoveryFeedPage(
           category: query.category,
           channelId: query.channel,
-          identity: query.identity,
           type: query.type,
           sort: kFeedSortRecommend,
           limit: homeFeedPageItemLimit,

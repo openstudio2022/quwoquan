@@ -219,6 +219,12 @@ def _assert_homepage_has_encyclopedia_source(root: Path, target_ref: str, metada
     raise SealError(f"homepage 缺少百科 page 来源（zh.wikipedia/baike）：{target_ref}")
 
 
+AUTHOR_ARTIFACT_SCHEMAS = {
+    "image_work": ("content", "image_work"),
+    "video_script": ("content", "video_script"),
+}
+
+
 def _validate_author_artifact(root: Path, execution_id: str, target_ref: str) -> dict[str, str]:
     """校验单个对象的 carrier 产物硬事实并返回其 frozen ref；任一违规抛 SealError。"""
 
@@ -236,8 +242,11 @@ def _validate_author_artifact(root: Path, execution_id: str, target_ref: str) ->
             "executionId": execution_id,
             "objectRef": target_ref,
         }
+        schema_target = AUTHOR_ARTIFACT_SCHEMAS.get(schema_name)
+        if schema_target is None:
+            raise SealError(f"author JSON artifact schema is not registered: {schema_name}")
         try:
-            assert_valid(completed, "content", schema_name, label=artifact_ref)
+            assert_valid(completed, *schema_target, label=artifact_ref)
             if schema_name == "image_work":
                 image_asset_bindings(completed, _object_source_assets(root, target_ref))
         except ValueError as exc:

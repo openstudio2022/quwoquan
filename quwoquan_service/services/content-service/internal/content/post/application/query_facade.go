@@ -3,9 +3,11 @@ package post
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	rterr "quwoquan_service/runtime/errors"
+	presentation "quwoquan_service/services/content-service/generated/content/feed_delivery_page"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	appports "quwoquan_service/services/content-service/internal/content/post/application/ports"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
@@ -121,7 +123,89 @@ func (f *PostQueryFacade) GetPost(
 			"GetPost target is missing or not visible to viewer",
 		)
 	}
+	// 能力判定排在可见性之后：presentation_unsupported 只描述「可见但这一版渲染
+	// 不了」，不能替代 not_found/content_deleted，也不能泄露不可见对象的存在性。
+	if err := admitPostDetailPresentation(
+		detail,
+		query.ClientPresentationContract(),
+	); err != nil {
+		return postports.PostDetailSlice{}, err
+	}
 	return detail, nil
+}
+
+// postDetailOpenSurface 是某个内容类型在详情面的目的面。它是 Content 自己的
+// 呈现决定：图文/视频进沉浸面，文章进阅读器面。闭集外类型没有目的面。
+func postDetailOpenSurface(
+	contentType postports.ContentType,
+) (presentation.ContentUiSurface, presentation.ContentType, bool) {
+	switch strings.ToLower(strings.TrimSpace(string(contentType))) {
+	case "image":
+		return presentation.ContentUiSurfaceMediaImmersive, presentation.ContentTypeImage, true
+	case "video":
+		return presentation.ContentUiSurfaceMediaImmersive, presentation.ContentTypeVideo, true
+	case "article":
+		return presentation.ContentUiSurfaceArticleReader, presentation.ContentTypeArticle, true
+	default:
+		return "", "", false
+	}
+}
+
+// admitPostDetailPresentation 判定已授权可见的详情能否在客户端声明的能力内打开。
+// contract 为 nil 表示这条读路径不面向客户端渲染（内部 persisted query、SSR），
+// 不做能力裁决；面向客户端的入口必须携带声明，不存在「未声明即全能力」。
+func admitPostDetailPresentation(
+	detail postports.PostDetailSlice,
+	contract *presentation.ClientContentPresentationContract,
+) error {
+	if contract == nil {
+		return nil
+	}
+	if err := admitClientPresentationContract(contract); err != nil {
+		return err
+	}
+	surface, contentType, known := postDetailOpenSurface(detail.ContentType)
+	if !known {
+		return contentgenerated.AppErrorFromPresentationUnsupported(fmt.Sprintf(
+			"GetPost target declares contentType %q, which has no client open surface",
+			detail.ContentType,
+		))
+	}
+	if !declaredMember(contract.ContentTypes, contentType) ||
+		!declaredMember(contract.OpenSurfaces, surface) {
+		return contentgenerated.AppErrorFromPresentationUnsupported(fmt.Sprintf(
+			"GetPost target needs contentType %q on surface %q, which presentation contract %s does not declare",
+			contentType,
+			surface,
+			contract.ContractDigest,
+		))
+	}
+	return nil
+}
+
+// admitClientPresentationContract 服务端独立重算 canonical digest 并与自报值
+// 比较。非法成员、重复成员或伪造摘要都是非法入参，不允许退回固定基线继续读。
+func admitClientPresentationContract(
+	contract *presentation.ClientContentPresentationContract,
+) error {
+	if contract == nil {
+		return nil
+	}
+	if err := presentation.ValidateClientContentPresentationContract(*contract); err != nil {
+		return invalidPostQueryArgument(
+			"client presentation contract is invalid: " + err.Error(),
+		)
+	}
+	return nil
+}
+
+func declaredMember[member comparable](declared []member, value member) bool {
+	for _, candidate := range declared {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
 }
 
 // GetHelperRead 只从具名 Post detail projection 读取公开文章。公开端点必须
@@ -210,10 +294,6 @@ func (f *PostQueryFacade) ListUserPosts(
 	if err != nil {
 		return postports.AuthorPostPageSlice{}, invalidPostQueryArgument(err.Error())
 	}
-	identity, err := normalizePostQueryIdentity(query.Identity())
-	if err != nil {
-		return postports.AuthorPostPageSlice{}, invalidPostQueryArgument(err.Error())
-	}
 	contentType, err := normalizePostQueryContentType(query.ContentType())
 	if err != nil {
 		return postports.AuthorPostPageSlice{}, invalidPostQueryArgument(err.Error())
@@ -257,17 +337,25 @@ func (f *PostQueryFacade) ListUserPosts(
 		}
 	}
 
+	// 有效能力摘要进入 cursor scope：客户端换一份能力声明后旧续页立即失配，
+	// 不会把按另一种能力算出的 keyset 位置当成本次请求的进度。
+	presentationDigest := ""
+	if contract := query.ClientPresentationContract(); contract != nil {
+		if contractErr := admitClientPresentationContract(contract); contractErr != nil {
+			return postports.AuthorPostPageSlice{}, contractErr
+		}
+		presentationDigest = contract.ContractDigest
+	}
 	unpagedRequest := postports.NewAuthorPostReadRequest(
 		query.AuthorPersonaID(),
 		accessScope,
-		identity,
 		contentType,
 		visibility,
 		postports.AuthorPostCursor{},
 		limit,
 		binding.ActiveReleaseID,
 		binding.ManifestDigest,
-	)
+	).WithClientPresentationContractDigest(presentationDigest)
 	if cursor.IsSet() && cursor.Scope() != unpagedRequest.CursorScope() {
 		return postports.AuthorPostPageSlice{}, invalidPostQueryArgument(
 			"ListUserPosts cursor does not match query",
@@ -276,14 +364,13 @@ func (f *PostQueryFacade) ListUserPosts(
 	request := postports.NewAuthorPostReadRequest(
 		query.AuthorPersonaID(),
 		accessScope,
-		identity,
 		contentType,
 		visibility,
 		cursor,
 		limit,
 		binding.ActiveReleaseID,
 		binding.ManifestDigest,
-	)
+	).WithClientPresentationContractDigest(presentationDigest)
 
 	page, err := f.author.ListAuthorPosts(ctx, request)
 	if err != nil {
@@ -534,34 +621,19 @@ func normalizePostQueryLimit(limit int) (int, error) {
 	}
 }
 
-func normalizePostQueryIdentity(
-	value postports.ContentIdentity,
-) (postports.ContentIdentity, error) {
-	switch strings.ToLower(strings.TrimSpace(string(value))) {
-	case "":
-		return "", nil
-	case "moment", "work":
-		return postports.ContentIdentity(strings.ToLower(strings.TrimSpace(string(value)))), nil
-	default:
-		return "", errors.New("content identity is unsupported")
-	}
-}
-
+// normalizePostQueryContentType 只接受 canonical ContentType 闭集。展示别名
+// （photo/note）与退役成员（micro）一律 fail-closed，读侧不翻译第二套词汇。
 func normalizePostQueryContentType(
 	value postports.ContentType,
 ) (postports.ContentType, error) {
-	switch strings.ToLower(strings.TrimSpace(string(value))) {
-	case "":
+	normalized := strings.ToLower(strings.TrimSpace(string(value)))
+	if normalized == "" {
 		return "", nil
-	case "photo":
-		return postports.ContentType("image"), nil
-	case "note":
-		return postports.ContentType("article"), nil
-	case "micro", "image", "video", "article":
-		return postports.ContentType(strings.ToLower(strings.TrimSpace(string(value)))), nil
-	default:
+	}
+	if _, allowed := contentgenerated.AllowedContentTypes[normalized]; !allowed {
 		return "", errors.New("content type is unsupported")
 	}
+	return postports.ContentType(normalized), nil
 }
 
 func normalizePostQueryVisibility(

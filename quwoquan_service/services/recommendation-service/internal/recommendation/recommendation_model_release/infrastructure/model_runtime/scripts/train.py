@@ -36,6 +36,7 @@ except ImportError:
     np = None
     roc_auc_score = None
 
+from generated.recommendation.recommendation_model_release.content_type_encoding import CONTENT_TYPE_MAP
 from diversity_metrics import compute_diversity_metrics
 from features.intersection_feature_encoder import (
     append_intersection_features,
@@ -61,7 +62,6 @@ USER_NUMERIC_FEATURES = [
 CONTEXT_NUMERIC_FEATURES = [
     "requestHour", "requestDayOfWeek",
 ]
-CONTENT_TYPE_MAP = {"image": 0, "video": 1, "article": 2, "micro": 3}
 def _extract_features(sample: dict) -> list[float]:
     """Extract features from a training sample."""
     item = sample.get("itemFeatures") or {}
@@ -76,7 +76,7 @@ def _extract_features(sample: dict) -> list[float]:
     for f in CONTEXT_NUMERIC_FEATURES:
         features.append(float(ctx.get(f, 0) or 0))
 
-    features.append(float(CONTENT_TYPE_MAP.get(item.get("contentType", ""), -1)))
+    features.append(float(CONTENT_TYPE_MAP[item.get("contentType")]))
     # hasCover 已退役（N3-3）：在线不可得，双侧同步移除保持特征向量同构。
     features.append(float(RECALL_PATH_MAP.get(item.get("recallPath", ""), -1)))
 

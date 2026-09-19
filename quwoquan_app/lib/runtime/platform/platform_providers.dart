@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:quwoquan_app/runtime/platform/assistant_device_action_bridge.dart';
@@ -8,7 +6,6 @@ import 'package:quwoquan_app/runtime/platform/contacts/device_contacts_gateway.d
 import 'package:quwoquan_app/runtime/platform/contacts/flutter_contacts_device_contacts_gateway.dart';
 import 'package:quwoquan_app/runtime/platform/device_calendar_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/file_storage_gateway.dart';
-import 'package:quwoquan_app/runtime/platform/firebase_incoming_call_runtime.dart';
 import 'package:quwoquan_app/runtime/platform/incoming_call_native_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/native_bridge.dart';
 import 'package:quwoquan_app/runtime/platform/platform_capabilities.dart';
@@ -213,40 +210,4 @@ final pushEndpointGatewayProvider = Provider<PushEndpointGateway>((ref) {
     return const UnsupportedPushEndpointGateway();
   }
   return PersistentPushEndpointGateway();
-});
-
-final firebasePushMessagingClientProvider =
-    Provider<FirebasePushMessagingClient>((ref) {
-      return const FirebasePluginPushMessagingClient();
-    });
-
-final firebasePushMessagingRuntimeProvider =
-    Provider<FirebasePushMessagingRuntime>((ref) {
-      final platform = ref.watch(platformTargetProvider);
-      final runtime = FirebasePushMessagingRuntime(
-        client: ref.watch(firebasePushMessagingClientProvider),
-        platformReader: () => platform,
-      );
-      ref.onDispose(() {
-        unawaited(runtime.stop());
-      });
-      return runtime;
-    });
-
-/// 来电与通用 tap 路由共享同一 Firebase 初始化 owner，不重复探测配置状态。
-final firebaseIncomingCallRuntimeProvider =
-    Provider<FirebaseIncomingCallRuntime>((ref) {
-      final runtime = FirebaseIncomingCallRuntime(
-        pushEndpointGateway: ref.watch(pushEndpointGatewayProvider),
-        messagingRuntime: ref.watch(firebasePushMessagingRuntimeProvider),
-      );
-      ref.onDispose(() {
-        unawaited(runtime.stop());
-      });
-      return runtime;
-    });
-
-/// 非 Android 平台能力由同一 runtime owner 返回 unsupported；消费方只见中性 intent。
-final pushTapIntentSourceProvider = Provider<PushTapIntentSource?>((ref) {
-  return ref.watch(firebasePushMessagingRuntimeProvider);
 });

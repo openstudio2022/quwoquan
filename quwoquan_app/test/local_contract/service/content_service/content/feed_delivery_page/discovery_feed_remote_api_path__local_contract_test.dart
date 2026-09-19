@@ -39,7 +39,6 @@ http.Response _responseFor(http.Request request) {
       'outcome': 'empty',
       'emptyReason': 'no_eligible_content',
       'feedRequestId': 'feed-request-1',
-      'objectCards': <dynamic>[],
     });
   }
   return remoteApiPathJsonResponse({
@@ -103,13 +102,12 @@ void main() {
       );
     });
 
-    test('listDiscoveryFeedPage 透传 identity/type query', () async {
+    test('listDiscoveryFeedPage 透传 type query，不再发送 identity', () async {
       await repo.listDiscoveryFeedPage(
-        category: 'work',
-        identity: 'work',
+        category: 'article',
         type: 'article',
       );
-      expect(log.last.query['identity'], 'work');
+      expect(log.last.query.containsKey('identity'), isFalse);
       expect(log.last.query['type'], 'article');
     });
 

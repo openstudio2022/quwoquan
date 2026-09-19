@@ -22,7 +22,6 @@ abstract final class PageAccessInternalRoutes {
   static const String profileMediaPickerGallery = 'page_internal_profile_media_gallery';
   static const String commentMediaPickerCamera = 'page_internal_comment_media_camera';
   static const String commentMediaPickerGallery = 'page_internal_comment_media_gallery';
-  static const String addContactScanGallery = 'page_internal_add_contact_scan_gallery';
   static const String globalSurfaceCircleEditCreate = 'page_internal_global_circle_edit_create';
   static const String publishLocationSearch = 'page_internal_publish_location_search';
   static const String chatInputExpandedDraft = 'page_internal_chat_input_expanded_draft';

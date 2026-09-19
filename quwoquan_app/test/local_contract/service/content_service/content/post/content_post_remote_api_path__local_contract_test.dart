@@ -129,7 +129,6 @@ void main() {
       );
       await reader.listUserPosts(
         userId: 'author-1',
-        identity: 'work',
         type: 'article',
         visibility: 'public',
         cursor: 'cursor-1',
@@ -144,12 +143,14 @@ void main() {
         ),
       );
       expect(log.last.query, <String, String>{
-        'identity': 'work',
+        'clientPresentationContract': log.last.query['clientPresentationContract']!,
         'type': 'article',
         'visibility': 'public',
         'cursor': 'cursor-1',
         'limit': '9',
       });
+      expect(log.last.query.containsKey('identity'), isFalse);
+      expect(log.last.query['clientPresentationContract'], isNotEmpty);
       expectRemoteApiPathHeaders(
         log.last.headers,
         clientPageId: ContentRequestPageIds.listUserPosts,

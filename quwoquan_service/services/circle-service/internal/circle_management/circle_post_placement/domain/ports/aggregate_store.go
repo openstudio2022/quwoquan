@@ -134,7 +134,6 @@ type PostLifecycleEvent struct {
 // never a second Post aggregate or an authority for Content mutations.
 type PostFeedItemSnapshot struct {
 	ContentType        string
-	ContentIdentity    string
 	AssistantUsePolicy string
 	AuthorDisplayName  string
 	AuthorAvatarURL    string

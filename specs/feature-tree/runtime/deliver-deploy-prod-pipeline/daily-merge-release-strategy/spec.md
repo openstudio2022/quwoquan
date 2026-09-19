@@ -4,7 +4,7 @@
 
 > Journey / Scenario：横切工程能力；由父 L2 spec 参与应用交付与发布验收。
 
-> 设计归属：[L2 DEC-001](../design.md#dec-001)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
@@ -211,7 +211,7 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：[L2 DEC-014](../design.md#dec-014) 的两段式已有部分源码与历史 local contract 证据，不能据此宣称 current admission 加固、Lane Gate 左移或真实发布已完成：`make accept` 在 lane 工作树终态 `accepted` 并写出 portable acceptance bundle；`make integrate ACCEPTANCE_BUNDLE=…` 只导入 bundle（create-once、digest 复核、keyring 验签、`expectedParent == 远端 before`）后 admit → publish，不再自己跑环境，也不再需要 Data release 输入，因此不会在 `dev1.0` 分支上撞到 ship handoff admission 的 `CANDIDATE.OWNER_DRIFT`。local contract 已覆盖 bundle round-trip、digest/manifest/commit/parent 漂移、缺 bundle 与 acceptance 专用输入的 typed 拒绝、integrate 相位闭集。当前新增的默认 scope/pure prevalidate、no_live 非发布终态、真实多 lane 合并/双候选 CAS、Beta 全链可选与远端 Gamma fencing 仍需 current 证据，GWT-006/GWT-007 与 local CI GWT-008 未取证不称完成；尚缺的是一次真实闭环：同一 candidate 在 lane 工作树 `make accept` 产出 bundle，再由 integration 工作区消费并 fast-forward 发布到远端 `dev1.0`、读回 `after`。
+- 影响或价值：[L2 DEC-014](../design.md#dec-014) 的两段式已有部分源码与历史 local contract 证据，不能据此宣称 current admission 加固、Lane Gate 左移或真实发布已完成：`make accept` 在 lane 工作树终态 `accepted` 并写出 portable acceptance bundle；`make integrate ACCEPTANCE_BUNDLE=…` 只导入 bundle（create-once、digest 复核、keyring 验签、`expectedParent == 远端 before`）后 admit → publish，不再自己跑环境，也不再需要 Data release 输入，因此不会在 `dev1.0` 分支上撞到 ship handoff admission 的 `CANDIDATE.STALE`。local contract 已覆盖 bundle round-trip、digest/manifest/commit/parent 漂移、缺 bundle 与 acceptance 专用输入的 typed 拒绝、integrate 相位闭集。当前新增的默认 scope/pure prevalidate、no_live 非发布终态、真实多 lane 合并/双候选 CAS、Beta 全链可选与远端 Gamma fencing 仍需 current 证据，GWT-006/GWT-007 与 local CI GWT-008 未取证不称完成；尚缺的是一次真实闭环：同一 candidate 在 lane 工作树 `make accept` 产出 bundle，再由 integration 工作区消费并 fast-forward 发布到远端 `dev1.0`、读回 `after`。
 - 完成判定：`GWT-001.t6..t12`——真实 lane `make accept` 的 summary（终态 `accepted`、`acceptanceBundle` 路径）与 integration `make integrate ACCEPTANCE_BUNDLE=… PUBLISH=1` 的 summary（相位 preflight → import-bundle → admit → publish，publish result 读回 `after`，`acceptanceBundle.bundleId` 等于 lane bundle）各一份，且远端 `dev1.0` 读回等于该 candidate。
 - 依赖：[L2 DEC-014](../design.md#dec-014)；[`OPEN-006`](#open-006) 的 Alpha 真实签发。
 

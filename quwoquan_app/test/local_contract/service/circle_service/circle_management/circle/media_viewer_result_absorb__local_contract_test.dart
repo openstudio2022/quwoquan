@@ -13,8 +13,7 @@ void main() {
         post: ContentPostViewData.fromWire(
           ContentPostProjection(
             postId: 'post-1',
-            contentType: 'image',
-            contentIdentity: 'work',
+            contentType: ContentType.image,
             assistantUsePolicy: AssistantUsePolicy.inherit,
             authorId: 'author-1',
             authorDisplayName: '测试作者',
@@ -56,7 +55,6 @@ void main() {
         placementId: 'placement-2',
         postId: 'post-2',
         contentType: 'article',
-        contentIdentity: 'work',
         authorId: 'author-2',
         authorDisplayName: '作者二',
         authorVerified: false,

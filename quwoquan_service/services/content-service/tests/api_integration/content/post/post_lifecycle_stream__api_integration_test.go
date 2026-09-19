@@ -15,8 +15,7 @@ func TestPostOutboxPublishesTypedLifecycleToRealRedisStream(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	ctx := context.Background()
 	created := submitPublishedPostWithAuthor(t, "persona-stream-owner", `{
-		"contentType":"micro",
-		"contentIdentity":"moment",
+		"contentType":"article",
 		"body":"durable stream contract"
 	}`)
 	postID, _ := created["postId"].(string)
@@ -73,7 +72,7 @@ func TestPostOutboxPublishesTypedLifecycleToRealRedisStream(t *testing.T) {
 			t.Fatalf("stream payload identity drift: %#v", payload)
 		}
 		if payload.Status != "published" || payload.Visibility != "public" ||
-			payload.ContentType != "micro" || payload.Body != "durable stream contract" ||
+			payload.ContentType != "article" || payload.Body != "durable stream contract" ||
 			payload.CreatedAt == "" || payload.UpdatedAt == "" || payload.PublishedAt == "" {
 			t.Fatalf("stream payload is not a reconstructable Post snapshot: %#v", payload)
 		}

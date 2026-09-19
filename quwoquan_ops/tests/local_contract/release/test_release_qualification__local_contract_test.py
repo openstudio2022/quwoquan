@@ -58,6 +58,14 @@ def setup(root: Path, targets=None, *, authority_targets=None):
 
 
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-004
+def test_delivery_targets_cannot_shrink_impact_plan_products() -> None:
+    from quwoquan_ops.ci.release_qualification import validate_impact_plan_projection
+
+    assert validate_impact_plan_projection(["app", "service"], ["app", "service"]) == ["app", "service"]
+    with pytest.raises(ReleaseQualificationError, match="shrink ImpactPlan"):
+        validate_impact_plan_projection(["app"], ["app", "service"])
+
+
 def test_request_without_declared_delivery_targets_is_rejected(tmp_path: Path) -> None:
     with pytest.raises(ReleaseQualificationError, match="deliveryTargets"):
         setup(tmp_path, targets=[])

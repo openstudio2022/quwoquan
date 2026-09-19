@@ -48,8 +48,7 @@ ContentPostViewData _photoPost({String id = 'photo-wish-1'}) {
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: id,
-      contentType: 'image',
-      contentIdentity: 'work',
+      contentType: ContentType.image,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author-1',
       authorDisplayName: '摄影师',
@@ -299,8 +298,7 @@ void main() {
     final post = ContentPostViewData.fromWire(
       ContentPostProjection(
         postId: 'article-wish-1',
-        contentType: 'article',
-        contentIdentity: 'work',
+        contentType: ContentType.article,
         assistantUsePolicy: AssistantUsePolicy.inherit,
         authorId: 'author-2',
         authorDisplayName: '路书作者',

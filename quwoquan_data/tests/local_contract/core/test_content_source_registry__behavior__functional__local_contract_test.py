@@ -235,6 +235,16 @@ def test_registry_rejects_retired_keys_even_beside_active_contract():
     assert any("retired contract field commercialAdmissionMatrix" in issue for issue in issues)
 
 
+def test_registry_rejects_retired_works_affinity_prior():
+    data = load_content_source_registry()
+    data["sourceTierSignals"]["bySourceClass"]["microblog"]["worksAffinity"] = "moment"
+    issues = verify_content_source_registry(data)
+    assert any(
+        "bySourceClass.microblog: retired contract field worksAffinity" in issue
+        for issue in issues
+    )
+
+
 def test_lane_prompt_is_rendered_from_registry_policy():
     article_prompt = render_lane_source_prompt(
         "article",

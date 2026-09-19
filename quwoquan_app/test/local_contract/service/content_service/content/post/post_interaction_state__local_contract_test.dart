@@ -26,9 +26,7 @@ ContentPostViewData _confirmedPost(
 }) {
   return ContentPostViewData(
     id: id,
-    type: 'image',
-    identity: 'work',
-    displayFormat: 'image',
+    type: ContentType.image,
     assistantUsePolicy: AssistantUsePolicy.inherit,
     authorId: 'author-1',
     displayName: 'author',

@@ -2,7 +2,7 @@
 
 > 所属领域：[`circle-community`](../spec.md)
 >
-> 设计归属：[L1 DEC-002](../design.md#dec-002)
+> 设计引用：[L1 DEC-002](../design.md#dec-002)
 
 ## 1. 能力目标
 

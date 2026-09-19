@@ -39,7 +39,6 @@ SPEC_SECTIONS = {
         "4. 业务能力",
         "5. 领域要求",
         "6. 领域验收",
-        "7. 工程归属",
     ),
     2: (
         "1. 能力目标",
@@ -91,7 +90,7 @@ DESIGN_SECTIONS = {
 
 SPEC_OPTIONAL_SECTIONS = {
     0: ("6. 开放事项",),
-    1: ("8. 开放事项",),
+    1: ("7. 开放事项",),
     2: ("8. 开放事项",),
     3: ("7. 开放事项",),
 }
@@ -605,7 +604,7 @@ def validate_open_items(review: Review, text: str, node: feature_tree.Node) -> N
     review.open_items = [str(item["id"]) for item in details]
     if not details:
         return
-    expected_heading = {0: "6. 开放事项", 1: "8. 开放事项", 2: "8. 开放事项", 3: "7. 开放事项"}[node.level]
+    expected_heading = {0: "6. 开放事项", 1: "7. 开放事项", 2: "8. 开放事项", 3: "7. 开放事项"}[node.level]
     if expected_heading not in h2_sections(text):
         review.issues.append(f"OPEN 未归入 `{expected_heading}`")
     semantic_items: dict[tuple[str, ...], str] = {}

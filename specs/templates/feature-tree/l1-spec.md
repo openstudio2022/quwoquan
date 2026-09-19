@@ -57,22 +57,7 @@
 
 只验证领域责任、所有权和不变量，测试排列组合留在代码。
 
-## 7. 工程归属
-
-只登记稳定工程根，不列具体实现文件。
-
-- App：`<module-root>`
-- Contracts：`<service-contract-root>`
-- Metadata：`<shared-metadata-root>`；没有跨服务共享协议则删除
-- Service：`<service-or-context-root>`
-- Data：`<data-root>`
-- Ops：`<ops-root>`
-- 测试：
-  - `local_contract`：`<root>`
-  - `api_integration`：`<root>`
-  - `user_acceptance`：`<root>`
-
-## 8. 开放事项
+## 7. 开放事项
 
 仅在存在未完成事项时保留本章。
 

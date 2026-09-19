@@ -208,7 +208,6 @@ CircleDiscoveryFeedPageSlice _hubDiscoveryFeedFixture() {
         placementId: 'fixture-placement-campus-1',
         postId: 'circle_post_campus_1',
         contentType: 'image',
-        contentIdentity: 'work',
         authorId: 'author-campus',
         authorDisplayName: '校园作者',
         body: '校园记录',
@@ -220,7 +219,6 @@ CircleDiscoveryFeedPageSlice _hubDiscoveryFeedFixture() {
         placementId: 'fixture-placement-photo-image-1',
         postId: 'circle_post_image_1',
         contentType: 'image',
-        contentIdentity: 'work',
         authorId: 'author-photo',
         authorDisplayName: '摄影作者',
         body: '山谷晨光',
@@ -232,7 +230,6 @@ CircleDiscoveryFeedPageSlice _hubDiscoveryFeedFixture() {
         placementId: 'fixture-placement-photo-video-1',
         postId: 'circle_post_video_1',
         contentType: 'video',
-        contentIdentity: 'work',
         authorId: 'author-video',
         authorDisplayName: '视频作者',
         body: '城市延时',
@@ -257,7 +254,6 @@ CircleDiscoveryFeedPageSlice _pagedHubDiscoveryFeedFixture({
         placementId: 'page-placement-0',
         postId: 'page-post-0',
         contentType: 'image',
-        contentIdentity: 'work',
       ),
     ...List<CircleFeedItemView>.generate(count, (index) {
       final id = start + index;
@@ -266,7 +262,6 @@ CircleDiscoveryFeedPageSlice _pagedHubDiscoveryFeedFixture({
         placementId: 'page-placement-$id',
         postId: 'page-post-$id',
         contentType: 'image',
-        contentIdentity: 'work',
         body: '第 $id 个游标帖子',
       );
     }),

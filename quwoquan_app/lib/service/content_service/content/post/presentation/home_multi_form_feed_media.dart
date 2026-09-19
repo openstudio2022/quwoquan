@@ -34,7 +34,7 @@ class _HomeImagePostCard extends ConsumerWidget {
       routeId: 'workBrowser',
     );
     final media = _buildMedia(context);
-    final isMomentGrid = _isMomentGridPost(item);
+    final isImageGrid = _isImageGridPost(item);
     final intersectionRow = _buildPostIntersectionRow(
       reason: reason,
       contextObjectName: contextObjectName,
@@ -45,7 +45,7 @@ class _HomeImagePostCard extends ConsumerWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (isMomentGrid) ...[
+        if (isImageGrid) ...[
           if (body.isNotEmpty)
             KeyedSubtree(
               key: const ValueKey('home-relation-card-body'),
@@ -105,17 +105,17 @@ class _HomeImagePostCard extends ConsumerWidget {
   Widget? _buildMedia(BuildContext context) {
     final urls = item.mediaImageUrls;
     final deliveryIndex = _feedImageDeliveryIndex(item);
-    if (_isMomentGridPost(item)) {
-      final visibleCount = _momentGridVisibleCount(urls.length);
+    if (_isImageGridPost(item)) {
+      final visibleCount = _imageGridVisibleCount(urls.length);
       final sparseWidthFactor = urls.length <= 2
-          ? _momentGridColumns(visibleCount) *
-                DiscoveryFeedSpacing.homeFeedMomentSparseGridWidthFactor
+          ? _imageGridColumns(visibleCount) *
+                DiscoveryFeedSpacing.homeFeedImageSparseGridWidthFactor
           : null;
       return _ConstrainedMediaBox(
-        aspectRatio: _momentGridAspectRatio(urls.length),
+        aspectRatio: _imageGridAspectRatio(urls.length),
         fullWidth: sparseWidthFactor == null,
         widthFactor: sparseWidthFactor,
-        child: _HomeMomentGridCard(
+        child: _HomeImageGridCard(
           urls: urls,
           deliveryIndex: deliveryIndex,
           isDark: isDark,
@@ -784,11 +784,11 @@ double _mediaAspectRatio(ContentPostViewData item) {
   );
 }
 
-bool _isMomentGridPost(ContentPostViewData item) {
-  return item.identity == 'moment' && item.mediaImageUrls.isNotEmpty;
+bool _isImageGridPost(ContentPostViewData item) {
+  return item.type == ContentType.image && item.mediaImageUrls.isNotEmpty;
 }
 
-int _momentGridVisibleCount(int total) {
+int _imageGridVisibleCount(int total) {
   if (total <= 0) return 0;
   if (total <= 2) return total;
   if (total == 4) return total;
@@ -797,16 +797,16 @@ int _momentGridVisibleCount(int total) {
   return total.clamp(1, 9).toInt();
 }
 
-int _momentGridColumns(int visibleCount) {
+int _imageGridColumns(int visibleCount) {
   if (visibleCount <= 1) return 1;
   if (visibleCount == 2) return 2;
   if (visibleCount == 4) return 2;
   return 3;
 }
 
-double _momentGridAspectRatio(int total) {
-  final visibleCount = _momentGridVisibleCount(total);
-  final columns = _momentGridColumns(visibleCount);
+double _imageGridAspectRatio(int total) {
+  final visibleCount = _imageGridVisibleCount(total);
+  final columns = _imageGridColumns(visibleCount);
   final rows = ((visibleCount + columns - 1) ~/ columns).clamp(1, 3).toInt();
   return columns / rows;
 }

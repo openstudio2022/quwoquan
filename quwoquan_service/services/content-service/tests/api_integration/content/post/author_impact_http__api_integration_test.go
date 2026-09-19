@@ -56,7 +56,7 @@ func TestAuthorImpactHTTPUsesTheTypedRecommendationBoundary(t *testing.T) {
 					"evidenceId":  "evidence-community",
 					"impactId":    "impact-community",
 					"contentId":   "post-author-impact",
-					"contentType": "post",
+					"contentType": "article",
 					"helpType":    "community",
 					"action":      "join_circle",
 					"occurredAt":  "2026-08-06T10:00:00Z",

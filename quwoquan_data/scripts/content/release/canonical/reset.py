@@ -9,6 +9,7 @@ from typing import Iterable
 from core.io import read_json
 from core.paths import OUTPUT_ROOT, PUBLISH_ROOT, RELEASE_ROOT
 from core.release_layout import payload_file
+from core.publish_repository import REPOSITORY_DIRECTORIES, REPOSITORY_FILES
 from content.release.canonical.canonical_inventory import canonical_inventory_path
 from content.release.canonical.object_transaction_contract import (
     ALLOWED_CANONICAL_ROOTS,
@@ -96,7 +97,7 @@ def reset_canonical_publish(
             unknown_roots = sorted(
                 entry.name
                 for entry in publish_root.iterdir()
-                if entry.name not in ALLOWED_CANONICAL_ROOTS
+                if entry.name not in ALLOWED_CANONICAL_ROOTS | REPOSITORY_DIRECTORIES | REPOSITORY_FILES
             )
             if unknown_roots:
                 raise ValueError(

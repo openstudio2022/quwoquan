@@ -3,7 +3,168 @@
 
 package feeddeliverypage
 
+import (
+	"bytes"
+	"crypto/sha256"
+	"io"
+	"sort"
+)
+
 import "time"
+
+import (
+	"encoding/json"
+	"fmt"
+)
+
+type ContentType string
+
+const (
+	ContentTypeImage   ContentType = "image"
+	ContentTypeVideo   ContentType = "video"
+	ContentTypeArticle ContentType = "article"
+)
+
+func (v ContentType) Validate() error {
+	switch v {
+	case "image", "video", "article":
+		return nil
+	}
+	return fmt.Errorf("invalid ContentType")
+}
+func (v ContentType) MarshalJSON() ([]byte, error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(v))
+}
+func (v *ContentType) UnmarshalJSON(data []byte) error {
+	var wire *string
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire == nil {
+		return fmt.Errorf("invalid ContentType")
+	}
+	next := ContentType(*wire)
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	*v = next
+	return nil
+}
+
+type ContentUiSurface string
+
+const (
+	ContentUiSurfaceHomeFeed       ContentUiSurface = "home_feed"
+	ContentUiSurfaceProfileWorks   ContentUiSurface = "profile_works"
+	ContentUiSurfaceMediaImmersive ContentUiSurface = "media_immersive"
+	ContentUiSurfaceArticleReader  ContentUiSurface = "article_reader"
+	ContentUiSurfaceHomepageDetail ContentUiSurface = "homepage_detail"
+)
+
+func (v ContentUiSurface) Validate() error {
+	switch v {
+	case "home_feed", "profile_works", "media_immersive", "article_reader", "homepage_detail":
+		return nil
+	}
+	return fmt.Errorf("invalid ContentUiSurface")
+}
+func (v ContentUiSurface) MarshalJSON() ([]byte, error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(v))
+}
+func (v *ContentUiSurface) UnmarshalJSON(data []byte) error {
+	var wire *string
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire == nil {
+		return fmt.Errorf("invalid ContentUiSurface")
+	}
+	next := ContentUiSurface(*wire)
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	*v = next
+	return nil
+}
+
+type FeedPresentationRecipe string
+
+const (
+	FeedPresentationRecipeCoverMediaCard      FeedPresentationRecipe = "cover_media_card"
+	FeedPresentationRecipeArticleExcerptCard  FeedPresentationRecipe = "article_excerpt_card"
+	FeedPresentationRecipeHomepageSummaryCard FeedPresentationRecipe = "homepage_summary_card"
+)
+
+func (v FeedPresentationRecipe) Validate() error {
+	switch v {
+	case "cover_media_card", "article_excerpt_card", "homepage_summary_card":
+		return nil
+	}
+	return fmt.Errorf("invalid FeedPresentationRecipe")
+}
+func (v FeedPresentationRecipe) MarshalJSON() ([]byte, error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(v))
+}
+func (v *FeedPresentationRecipe) UnmarshalJSON(data []byte) error {
+	var wire *string
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire == nil {
+		return fmt.Errorf("invalid FeedPresentationRecipe")
+	}
+	next := FeedPresentationRecipe(*wire)
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	*v = next
+	return nil
+}
+
+type ListObjectKind string
+
+const (
+	ListObjectKindPost           ListObjectKind = "post"
+	ListObjectKindEntityHomepage ListObjectKind = "entity_homepage"
+)
+
+func (v ListObjectKind) Validate() error {
+	switch v {
+	case "post", "entity_homepage":
+		return nil
+	}
+	return fmt.Errorf("invalid ListObjectKind")
+}
+func (v ListObjectKind) MarshalJSON() ([]byte, error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(v))
+}
+func (v *ListObjectKind) UnmarshalJSON(data []byte) error {
+	var wire *string
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire == nil {
+		return fmt.Errorf("invalid ListObjectKind")
+	}
+	next := ListObjectKind(*wire)
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	*v = next
+	return nil
+}
 
 const ReadRecommendationReleaseReadinessPath = "/internal/recommendation/release-readiness:query"
 const ReadRecommendationReleaseReadinessMethod = "POST"
@@ -24,57 +185,73 @@ type ReleasePinnedQueryFence struct {
 	Revision int64                    `json:"revision"`
 }
 
+type ClientContentPresentationContract struct {
+	ContentTypes        []ContentType            `json:"contentTypes"`
+	ListObjectKinds     []ListObjectKind         `json:"listObjectKinds"`
+	PresentationRecipes []FeedPresentationRecipe `json:"presentationRecipes"`
+	OpenSurfaces        []ContentUiSurface       `json:"openSurfaces"`
+	ContractDigest      string                   `json:"contractDigest"`
+}
+
 type CreateRankedRecommendationWindowCommand struct {
-	ContentFence   ReleasePinnedQueryFence `json:"contentFence"`
-	IdempotencyKey string                  `json:"idempotencyKey"`
-	SubjectId      string                  `json:"subjectId"`
-	Scenario       string                  `json:"scenario"`
-	Limit          int                     `json:"limit"`
+	ContentFence               ReleasePinnedQueryFence           `json:"contentFence"`
+	IdempotencyKey             string                            `json:"idempotencyKey"`
+	SubjectId                  string                            `json:"subjectId"`
+	Scenario                   string                            `json:"scenario"`
+	ClientPresentationContract ClientContentPresentationContract `json:"clientPresentationContract"`
+	Limit                      int                               `json:"limit"`
 }
 
 type GetRankedRecommendationPageQuery struct {
-	ContentFence ReleasePinnedQueryFence `json:"contentFence"`
-	SubjectId    string                  `json:"subjectId"`
-	WindowId     string                  `json:"windowId"`
-	FromOrdinal  *int                    `json:"fromOrdinal,omitempty"`
-	Limit        *int                    `json:"limit,omitempty"`
+	ContentFence               ReleasePinnedQueryFence           `json:"contentFence"`
+	SubjectId                  string                            `json:"subjectId"`
+	WindowId                   string                            `json:"windowId"`
+	ClientPresentationContract ClientContentPresentationContract `json:"clientPresentationContract"`
+	FromOrdinal                *int                              `json:"fromOrdinal,omitempty"`
+	Limit                      *int                              `json:"limit,omitempty"`
+}
+
+type ListItemPostRef struct {
+	PostId string `json:"postId"`
+}
+
+type ListItemHomepageRef struct {
+	HomepageId string `json:"homepageId"`
+}
+
+type ListItemPresentationEnvelope struct {
+	ObjectKind         ListObjectKind          `json:"objectKind"`
+	ContentType        *ContentType            `json:"contentType,omitempty"`
+	PresentationRecipe *FeedPresentationRecipe `json:"presentationRecipe,omitempty"`
+	OpenSurface        ContentUiSurface        `json:"openSurface"`
+	Post               *ListItemPostRef        `json:"post,omitempty"`
+	Homepage           *ListItemHomepageRef    `json:"homepage,omitempty"`
 }
 
 type RankedRecommendationItem struct {
-	Ordinal               int            `json:"ordinal"`
-	ContentId             string         `json:"contentId"`
-	Score                 float64        `json:"score"`
-	FeatureSnapshotDigest string         `json:"featureSnapshotDigest"`
-	ItemFeatureSnapshot   map[string]any `json:"itemFeatureSnapshot"`
-}
-
-type RecommendationObjectCard struct {
-	ObjectKind string   `json:"objectKind"`
-	ObjectId   string   `json:"objectId"`
-	Title      string   `json:"title"`
-	Subtitle   *string  `json:"subtitle,omitempty"`
-	CoverUrl   *string  `json:"coverUrl,omitempty"`
-	TagRefs    []string `json:"tagRefs"`
-	ReasonKey  string   `json:"reasonKey"`
-	RecallPath string   `json:"recallPath"`
+	Ordinal               int                          `json:"ordinal"`
+	Envelope              ListItemPresentationEnvelope `json:"envelope"`
+	Score                 float64                      `json:"score"`
+	FeatureSnapshotDigest string                       `json:"featureSnapshotDigest"`
+	ItemFeatureSnapshot   map[string]any               `json:"itemFeatureSnapshot"`
 }
 
 type RankedRecommendationPage struct {
-	ContentFence          ReleasePinnedQueryFence    `json:"contentFence"`
-	WindowId              string                     `json:"windowId"`
-	Scenario              string                     `json:"scenario"`
-	ExperimentBucket      string                     `json:"experimentBucket"`
-	ModelBucket           string                     `json:"modelBucket"`
-	ModelChannel          *string                    `json:"modelChannel,omitempty"`
-	ModelReleaseId        *string                    `json:"modelReleaseId,omitempty"`
-	PolicyDigest          string                     `json:"policyDigest"`
-	RankingSnapshotDigest string                     `json:"rankingSnapshotDigest"`
-	FeatureSnapshotAt     time.Time                  `json:"featureSnapshotAt"`
-	UserFeatureSnapshot   map[string]any             `json:"userFeatureSnapshot"`
-	Items                 []RankedRecommendationItem `json:"items"`
-	ObjectCards           []RecommendationObjectCard `json:"objectCards"`
-	NextOrdinal           *int                       `json:"nextOrdinal,omitempty"`
-	ExpiresAt             time.Time                  `json:"expiresAt"`
+	ContentFence               ReleasePinnedQueryFence           `json:"contentFence"`
+	WindowId                   string                            `json:"windowId"`
+	Scenario                   string                            `json:"scenario"`
+	ExperimentBucket           string                            `json:"experimentBucket"`
+	ModelBucket                string                            `json:"modelBucket"`
+	ModelChannel               *string                           `json:"modelChannel,omitempty"`
+	ModelReleaseId             *string                           `json:"modelReleaseId,omitempty"`
+	PolicyDigest               string                            `json:"policyDigest"`
+	RankingSnapshotDigest      string                            `json:"rankingSnapshotDigest"`
+	FeatureSnapshotAt          time.Time                         `json:"featureSnapshotAt"`
+	UserFeatureSnapshot        map[string]any                    `json:"userFeatureSnapshot"`
+	Items                      []RankedRecommendationItem        `json:"items"`
+	ClientPresentationContract ClientContentPresentationContract `json:"clientPresentationContract"`
+	NextOrdinal                *int                              `json:"nextOrdinal,omitempty"`
+	ExpiresAt                  time.Time                         `json:"expiresAt"`
 }
 
 type ReleaseQueryPreparationBinding struct {
@@ -111,8 +288,198 @@ type ReleaseQueryReadinessProof struct {
 }
 
 type CreateRankedRecommendationWindowRequestBody struct {
-	ContentFence ReleasePinnedQueryFence `json:"contentFence"`
-	SubjectId    string                  `json:"subjectId"`
-	Scenario     string                  `json:"scenario"`
-	Limit        int                     `json:"limit"`
+	ContentFence               ReleasePinnedQueryFence           `json:"contentFence"`
+	SubjectId                  string                            `json:"subjectId"`
+	Scenario                   string                            `json:"scenario"`
+	ClientPresentationContract ClientContentPresentationContract `json:"clientPresentationContract"`
+	Limit                      int                               `json:"limit"`
+}
+
+const CompiledContentPresentationContractDigest = "sha256:8ef3b67169b934c19c9ac825b73085c4aa0cdb809ef82429b4b1e1e2d0bfca05"
+
+func CompiledContentPresentationContract() ClientContentPresentationContract {
+	return ClientContentPresentationContract{
+		ContentTypes:        []ContentType{"article", "image", "video"},
+		ListObjectKinds:     []ListObjectKind{"entity_homepage", "post"},
+		OpenSurfaces:        []ContentUiSurface{"article_reader", "home_feed", "homepage_detail", "media_immersive", "profile_works"},
+		PresentationRecipes: []FeedPresentationRecipe{"article_excerpt_card", "cover_media_card", "homepage_summary_card"},
+		ContractDigest:      CompiledContentPresentationContractDigest,
+	}
+}
+
+const MissingDeclarationContentPresentationContractDigest = "sha256:cf070afb148dc07d723c9eb76ec9e87fafcffcd16c07ad6a22f367d393de9281"
+
+func MissingDeclarationContentPresentationContract() ClientContentPresentationContract {
+	return ClientContentPresentationContract{
+		ContentTypes:        []ContentType{"article", "image", "video"},
+		ListObjectKinds:     []ListObjectKind{"post"},
+		OpenSurfaces:        []ContentUiSurface{"article_reader", "media_immersive"},
+		PresentationRecipes: []FeedPresentationRecipe{"article_excerpt_card", "cover_media_card"},
+		ContractDigest:      MissingDeclarationContentPresentationContractDigest,
+	}
+}
+func CanonicalClientContentPresentationContract(c ClientContentPresentationContract) ([]byte, error) {
+	normalized := map[string][]string{}
+	{
+		values := c.ContentTypes
+		if values == nil || len(values) > 32 {
+			return nil, fmt.Errorf("contentTypes: expected bounded non-null array")
+		}
+		allowed := map[string]bool{"article": true, "image": true, "video": true}
+		seen := map[string]bool{}
+		ordered := make([]string, 0, len(values))
+		for _, member := range values {
+			v := string(member)
+			if !allowed[v] || seen[v] {
+				return nil, fmt.Errorf("invalid or duplicate capability member %q", v)
+			}
+			seen[v] = true
+			ordered = append(ordered, v)
+		}
+		sort.Strings(ordered)
+		normalized["contentTypes"] = ordered
+	}
+	{
+		values := c.ListObjectKinds
+		if values == nil || len(values) > 32 {
+			return nil, fmt.Errorf("listObjectKinds: expected bounded non-null array")
+		}
+		allowed := map[string]bool{"entity_homepage": true, "post": true}
+		seen := map[string]bool{}
+		ordered := make([]string, 0, len(values))
+		for _, member := range values {
+			v := string(member)
+			if !allowed[v] || seen[v] {
+				return nil, fmt.Errorf("invalid or duplicate capability member %q", v)
+			}
+			seen[v] = true
+			ordered = append(ordered, v)
+		}
+		sort.Strings(ordered)
+		normalized["listObjectKinds"] = ordered
+	}
+	{
+		values := c.OpenSurfaces
+		if values == nil || len(values) > 32 {
+			return nil, fmt.Errorf("openSurfaces: expected bounded non-null array")
+		}
+		allowed := map[string]bool{"article_reader": true, "home_feed": true, "homepage_detail": true, "media_immersive": true, "profile_works": true}
+		seen := map[string]bool{}
+		ordered := make([]string, 0, len(values))
+		for _, member := range values {
+			v := string(member)
+			if !allowed[v] || seen[v] {
+				return nil, fmt.Errorf("invalid or duplicate capability member %q", v)
+			}
+			seen[v] = true
+			ordered = append(ordered, v)
+		}
+		sort.Strings(ordered)
+		normalized["openSurfaces"] = ordered
+	}
+	{
+		values := c.PresentationRecipes
+		if values == nil || len(values) > 32 {
+			return nil, fmt.Errorf("presentationRecipes: expected bounded non-null array")
+		}
+		allowed := map[string]bool{"article_excerpt_card": true, "cover_media_card": true, "homepage_summary_card": true}
+		seen := map[string]bool{}
+		ordered := make([]string, 0, len(values))
+		for _, member := range values {
+			v := string(member)
+			if !allowed[v] || seen[v] {
+				return nil, fmt.Errorf("invalid or duplicate capability member %q", v)
+			}
+			seen[v] = true
+			ordered = append(ordered, v)
+		}
+		sort.Strings(ordered)
+		normalized["presentationRecipes"] = ordered
+	}
+
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(normalized); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
+}
+
+func DigestClientContentPresentationContract(c ClientContentPresentationContract) (string, error) {
+	raw, err := CanonicalClientContentPresentationContract(c)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(raw)), nil
+}
+
+func ValidateClientContentPresentationContract(c ClientContentPresentationContract) error {
+	digest, err := DigestClientContentPresentationContract(c)
+	if err != nil {
+		return err
+	}
+	if c.ContractDigest != digest {
+		return fmt.Errorf("client presentation contract digest mismatch")
+	}
+	return nil
+}
+
+func DecodeClientContentPresentationContract(raw []byte) (ClientContentPresentationContract, error) {
+	if len(raw) == 0 {
+		return MissingDeclarationContentPresentationContract(), nil
+	}
+	var c ClientContentPresentationContract
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return c, fmt.Errorf("client presentation contract must be an object")
+	}
+
+	d := json.NewDecoder(bytes.NewReader(raw))
+	token, err := d.Token()
+	if err != nil || token != json.Delim('{') {
+		return c, fmt.Errorf("client presentation contract must be an object")
+	}
+	fields := map[string]json.RawMessage{}
+	for d.More() {
+		key, err := d.Token()
+		if err != nil {
+			return c, err
+		}
+		name, ok := key.(string)
+		if !ok {
+			return c, fmt.Errorf("invalid object key")
+		}
+		if _, exists := fields[name]; exists {
+			return c, fmt.Errorf("duplicate capability field %q", name)
+		}
+		switch name {
+		case "contentTypes", "listObjectKinds", "openSurfaces", "presentationRecipes", "contractDigest":
+		default:
+			return c, fmt.Errorf("unknown capability field %q", name)
+		}
+		var value json.RawMessage
+		if err := d.Decode(&value); err != nil {
+			return c, err
+		}
+		fields[name] = value
+	}
+	if _, err := d.Token(); err != nil {
+		return c, err
+	}
+	var extra any
+	if err := d.Decode(&extra); err != io.EOF {
+		return c, fmt.Errorf("trailing capability JSON")
+	}
+	if len(fields) != 5 {
+		return c, fmt.Errorf("expected all capability fields and digest")
+	}
+	strict := json.NewDecoder(bytes.NewReader(raw))
+	strict.DisallowUnknownFields()
+	if err := strict.Decode(&c); err != nil {
+		return c, err
+	}
+	if err := ValidateClientContentPresentationContract(c); err != nil {
+		return c, err
+	}
+	return c, nil
 }

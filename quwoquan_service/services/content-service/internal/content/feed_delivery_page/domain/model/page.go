@@ -16,45 +16,22 @@ import (
 const (
 	TTL                 = 10 * time.Minute
 	MaximumItems        = 20
-	MaximumObjectCards  = 20
 	MaximumPayloadBytes = 64 * 1024
 	// A scope intentionally excludes feedRequestId so an opaque cursor can be
 	// authenticated before its sealed attribution is decoded. The same scope can
 	// therefore own all eight active RankedFeedWindow values, each at the
 	// canonical fifty-page depth.
-	MaximumActivePerScope      = 8 * MaximumDepth
-	MaximumDepth               = 50
-	MaximumFeedRequestIDBytes  = 128
-	MaximumPostIDBytes         = 256
-	MaximumAttributionBytes    = 64
-	MaximumObjectKindBytes     = 64
-	MaximumObjectIDBytes       = 256
-	MaximumObjectTitleBytes    = 512
-	MaximumObjectSubtitleBytes = 1024
-	MaximumObjectCoverURLBytes = 4096
-	MaximumObjectTagRefs       = 20
-	MaximumObjectTagRefBytes   = 256
-	MaximumObjectReasonBytes   = 512
-	MaximumCursorBytes         = 4096
-	MaximumReleaseIDBytes      = 256
-	MaximumDigestBytes         = 128
+	MaximumActivePerScope     = 8 * MaximumDepth
+	MaximumDepth              = 50
+	MaximumFeedRequestIDBytes = 128
+	MaximumPostIDBytes        = 256
+	MaximumAttributionBytes   = 64
+	MaximumCursorBytes        = 4096
+	MaximumReleaseIDBytes     = 256
+	MaximumDigestBytes        = 128
 )
 
 var ErrInvalid = errors.New("feed delivery page is invalid")
-
-// ObjectCard is the short-lived public presentation snapshot that was actually
-// delivered at an anchor. Replays never call object-card recall again.
-type ObjectCard struct {
-	ObjectKind  string   `json:"objectKind"`
-	ObjectID    string   `json:"objectId"`
-	Title       string   `json:"title"`
-	Subtitle    string   `json:"subtitle,omitempty"`
-	CoverURL    string   `json:"coverUrl,omitempty"`
-	TagRefs     []string `json:"tagRefs,omitempty"`
-	ReasonText  string   `json:"reasonText,omitempty"`
-	RecallPath  string   `json:"recallPath,omitempty"`
-	AnchorIndex int      `json:"anchorIndex"`
-}
 
 // PostReference preserves the delivery attribution paired with one stable Post
 // identity. It deliberately excludes mutable Post presentation fields.
@@ -78,7 +55,6 @@ type Page struct {
 	Depth            int             `json:"depth"`
 	PreviousPageID   string          `json:"previousPageId,omitempty"`
 	Items            []PostReference `json:"items"`
-	ObjectCards      []ObjectCard    `json:"objectCards,omitempty"`
 	OutboundCursor   string          `json:"outboundCursor,omitempty"`
 	ReleaseID        string          `json:"releaseId,omitempty"`
 	ManifestDigest   string          `json:"manifestDigest,omitempty"`
@@ -113,7 +89,7 @@ func (p Page) Validate(now time.Time) error {
 		!validHash(p.ScopeHash) || !validBoundedText(p.FeedRequestID, MaximumFeedRequestIDBytes, true) ||
 		p.PageSize <= 0 || p.PageSize > MaximumItems || p.Depth < 0 ||
 		p.Depth > MaximumDepth || len(p.Items) == 0 ||
-		len(p.Items) > p.PageSize || len(p.ObjectCards) > MaximumObjectCards ||
+		len(p.Items) > p.PageSize ||
 		p.CreatedAt.IsZero() || p.ExpiresAt.IsZero() ||
 		!p.ExpiresAt.Equal(p.CreatedAt.Add(TTL)) ||
 		!p.ExpiresAt.After(now.UTC()) {
@@ -154,24 +130,6 @@ func (p Page) Validate(now time.Time) error {
 			return ErrInvalid
 		}
 		seen[postID] = struct{}{}
-	}
-	for _, card := range p.ObjectCards {
-		if !validBoundedText(card.ObjectKind, MaximumObjectKindBytes, true) ||
-			!validBoundedText(card.ObjectID, MaximumObjectIDBytes, true) ||
-			!validBoundedText(card.Title, MaximumObjectTitleBytes, true) ||
-			!validBoundedText(card.Subtitle, MaximumObjectSubtitleBytes, false) ||
-			!validBoundedText(card.CoverURL, MaximumObjectCoverURLBytes, false) ||
-			!validBoundedText(card.ReasonText, MaximumObjectReasonBytes, false) ||
-			!validBoundedText(card.RecallPath, MaximumAttributionBytes, false) ||
-			len(card.TagRefs) > MaximumObjectTagRefs ||
-			card.AnchorIndex < 0 || card.AnchorIndex > len(p.Items) {
-			return ErrInvalid
-		}
-		for _, tagRef := range card.TagRefs {
-			if !validBoundedText(tagRef, MaximumObjectTagRefBytes, true) {
-				return ErrInvalid
-			}
-		}
 	}
 	return nil
 }

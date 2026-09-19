@@ -429,8 +429,8 @@ def test_homepage_review_fidelity_is_a_blocking_contract() -> None:
     }
     review = {
         "schema": "quwoquan_data.content_review", "stage": "5.review", "executionId": EXECUTION_ID,
-        "objectRef": "entities/travel/cn/scenic/1", "decision": "approved",
-        **_review_fields(object_ref="entities/travel/cn/scenic/1", draft_ref="4.draft/page.md"),
+        "objectRef": "entities/travel/cn/entity-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "decision": "approved",
+        **_review_fields(object_ref="entities/travel/cn/entity-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", draft_ref="4.draft/page.md"),
         "dimensions": [{"name": "content", "decision": "approved", "issues": []}],
         "blockingIssues": [], "assetRights": [], "semanticReport": report,
     }

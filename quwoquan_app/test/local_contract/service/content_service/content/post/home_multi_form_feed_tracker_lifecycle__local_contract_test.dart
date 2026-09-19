@@ -13,7 +13,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/pu
 import 'package:quwoquan_app/service/content_service/content/post/application/post_interaction_state.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/home_multi_form_feed.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show AssistantUsePolicy, ContentPostProjection;
+    show AssistantUsePolicy, ContentPostProjection, ContentType;
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
@@ -28,8 +28,7 @@ final class _LifecycleFeedMapNotifier extends DiscoveryFeedMapNotifier {
             ContentPostViewData.fromWire(
               ContentPostProjection(
                 postId: 'post_tracker_lifecycle',
-                contentType: 'micro',
-                contentIdentity: 'moment',
+                contentType: ContentType.article,
                 authorId: 'author_tracker_lifecycle',
                 authorDisplayName: 'Lifecycle Author',
                 authorAvatarUrl: '',
@@ -111,9 +110,8 @@ void main() {
               authSessionControllerProvider.overrideWith(
                 _GuestAuthSessionController.new,
               ),
-              contentFeatureFlagProvider(
-                'enable_article_distribution_profiles',
-              ).overrideWithValue(false),
+              contentFeatureFlagProvider('enable_article_distribution_profiles')
+                  .overrideWithValue(false),
               discoveryFeedMapProvider.overrideWith(
                 _LifecycleFeedMapNotifier.new,
               ),
@@ -136,7 +134,6 @@ void main() {
                 child: HomeMultiFormFeed(
                   isDark: false,
                   channelId: 'recommend',
-                  template: 'single_column_multiform',
                   onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
                 ),
               ),

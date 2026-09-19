@@ -101,15 +101,15 @@ abstract final class DiscoveryText {
       homeCirclesFeedSection = '来自圈子';
   static const String homeCirclesStoryTypeActivity = '活动',
       homeCirclesStoryTypeCreation = '创作';
-  static const String discoveryTabMoment = '点滴', discoveryTabPhoto = '图片';
+  static const String discoveryTabPhoto = '图片';
   static const String discoveryTabVideo = '视频', discoveryTabArticle = '笔记';
   static const String discoveryTabActivity = '动态';
-  static const String discoveryRailMoment = '点滴', discoveryRailWorks = '作品';
+  static const String discoveryRailWorks = '作品';
   static const String discoveryWorksFilterAll = '全部',
       discoveryWorksFilterVideo = '视频';
   static const String discoveryWorksFilterImage = '图片',
       discoveryWorksFilterArticle = '笔记';
-  static const String creationFilterAll = '全部', creationFilterMoment = '点滴';
+  static const String creationFilterAll = '全部';
   static const String creationFilterWork = '作品', workFormatFilterAll = '全部作品';
   static const String workFormatFilterImage = '图片',
       workFormatFilterVideo = '视频';
@@ -133,10 +133,8 @@ abstract final class DiscoveryText {
   static const String discoveryHelperDimensionExplore = '探索推荐';
   static const String discoveryHelperTimelineToday = '今天',
       discoveryHelperTimelineYesterday = '昨天';
-  static const String discoveryHelperTimelineThisWeek = '本周',
-      discoveryHelperExpandMoments = '展开点滴';
+  static const String discoveryHelperTimelineThisWeek = '本周';
   static const String discoveryHelperExpandArticles = '查看笔记列表';
-  static const String discoveryHelperSectionMoments = '点滴';
   static const String discoveryHelperSectionArticles = '笔记';
   static const String discoveryHelperActionReadOriginal = '看原文';
   static const String discoveryHelperActionLater = '稍后处理';

@@ -176,8 +176,17 @@ def _gamma_local_port(name):
 def gamma_local_mongo_uri():
     return f"mongodb://127.0.0.1:{_gamma_local_port('LOCAL_GAMMA_MONGO_PORT')}/?directConnection=true"
 
-def _gamma_local_connection_root():
-    return output_paths.deployment_target_path("gamma-local","secrets","source-allocation-management")
+def _startup_local_target(explicit=""):
+    target = str(explicit or os.environ.get("QWQ_LOCAL_RELEASE_TARGET") or "gamma-local").strip()
+    if target not in contract()["targets"]:
+        raise ValueError(f"startup source allocation producer does not support {target}")
+    return target
+
+
+def _gamma_local_connection_root(target=""):
+    return output_paths.deployment_target_path(
+        _startup_local_target(target), "secrets", "source-allocation-management"
+    )
 
 def _gamma_local_write_secret(root,name,value):
     root.mkdir(mode=0o700,parents=True,exist_ok=True); os.chmod(root,0o700)
@@ -192,9 +201,9 @@ def _gamma_local_read_secret(root,name):
     return _required(root/name).decode()
 
 
-def _gamma_local_prepared_source_target():
+def _gamma_local_prepared_source_target(target=""):
     context, selected, _, _ = _current(
-        "gamma-local", allow_active_startup=True,
+        _startup_local_target(target), allow_active_startup=True,
         management_connections={
             "pg_admin": "prepared", "redis_admin": "prepared",
             "old_pg": "prepared", "old_redis": "prepared",
@@ -219,10 +228,11 @@ def _gamma_local_replace_acl_exact(path, expected, replacement):
         except FileNotFoundError: pass
 
 
-def prepare_gamma_local_redis_acl():
+def prepare_gamma_local_redis_acl(target=""):
     """启动前生成candidate-bound ACL；只恢复可精确识别的本attempt旧布局。"""
-    root = _gamma_local_connection_root()
-    selected = _gamma_local_prepared_source_target()
+    target = _startup_local_target(target)
+    root = _gamma_local_connection_root(target)
+    selected = _gamma_local_prepared_source_target(target)
     base_names = ("redis-admin.key", "redis-probe.key", "redis-runtime.key")
     existing_base = [name for name in base_names if (root / name).exists()]
     if existing_base and len(existing_base) != len(base_names):
@@ -273,13 +283,13 @@ def prepare_gamma_local_redis_acl():
         raise ValueError("gamma local Redis managed ACL differs")
     return {"aclFile": str(acl), "runtimePassword": values["redis-runtime.key"], "sourceTarget": selected}
 
-def _gamma_local_managed_connections(*, create):
-    """只从 canonical gamma local topology派生；caller env URL不参与。"""
+def _gamma_local_managed_connections(*, create, target=""):
+    """只从 canonical local topology派生；caller env URL不参与。"""
     import psycopg, redis
-    root=_gamma_local_connection_root()
+    root=_gamma_local_connection_root(target)
     pg_port=_gamma_local_port("LOCAL_GAMMA_POSTGRES_PORT"); redis_port=_gamma_local_port("LOCAL_GAMMA_REDIS_PORT")
     admin_seed=psycopg.conninfo.make_conninfo(host="127.0.0.1", port=pg_port, dbname="quwoquan", user="quwoquan", password="quwoquan", sslmode="disable")
-    redis_material = prepare_gamma_local_redis_acl() if create else None
+    redis_material = prepare_gamma_local_redis_acl(target) if create else None
     names=("pg-probe.key","redis-admin.key","redis-probe.key","redis-runtime.key","redis-source.key","users.acl")
     if create and not (root / "pg-probe.key").exists():
         pg_key = secrets.token_hex(32)
@@ -313,14 +323,15 @@ def _gamma_local_managed_connections(*, create):
         "old_pg":f"postgresql://qwq_source_old_probe:{quote(pg_key)}@127.0.0.1:{pg_port}/quwoquan?sslmode=disable",
         "old_redis":redis_url("qwq_source_old_probe",redis_probe_key)}
 
-def _gamma_local_source_password():
-    return _gamma_local_read_secret(_gamma_local_connection_root(), "redis-source.key")
+def _gamma_local_source_password(target=""):
+    return _gamma_local_read_secret(_gamma_local_connection_root(target), "redis-source.key")
 
-def gamma_local_user_runtime_postgres_dsn():
+def gamma_local_user_runtime_postgres_dsn(target=""):
     """返回 allocator 创建的 User runtime DSN；仅供锁内 startup Compose 投影。"""
-    path = _source_current_path("gamma-local")
+    target = _startup_local_target(target)
+    path = _source_current_path(target)
     if not path.exists():
-        ensure_source_allocation_for_locked_up("gamma-local")
+        ensure_source_allocation_for_locked_up(target)
     if not path.exists():
         raise ValueError("gamma local source current missing after managed initialization")
     from quwoquan_ops.cli.lib.generated.post_safety_runtime import PostSafetySourceAllocationCurrentDescriptor
@@ -333,7 +344,7 @@ def gamma_local_user_runtime_postgres_dsn():
         raise ValueError("gamma local source PostgreSQL identity differs")
     runtime_credential = _gamma_local_read_secret(root, "postgres-runtime.key")
     import psycopg
-    admin = psycopg.conninfo.conninfo_to_dict(_gamma_local_managed_connections(create=False)["pg_admin"])
+    admin = psycopg.conninfo.conninfo_to_dict(_gamma_local_managed_connections(create=False, target=target)["pg_admin"])
     host_dsn = psycopg.conninfo.make_conninfo(
         host=admin["host"], port=admin["port"], dbname=namespace,
         user=role, password=runtime_credential, sslmode="disable", connect_timeout=3,
@@ -369,11 +380,11 @@ def _publish_source_current(target, selected, binding, root, receipt):
     return descriptor
 
 def ensure_source_allocation_for_locked_up(target, management_connections=None):
-    """gamma-local startup 锁内 ensure；已有只核验，新建复用正式 source allocation。"""
-    if target != "gamma-local": raise ValueError("startup source allocation producer is gamma-local only")
+    """local nonproduction startup 锁内 ensure；已有只核验，新建复用正式 source allocation。"""
+    target = _startup_local_target(target)
     if management_connections is not None: raise ValueError("caller managed connections are forbidden")
     path = _source_current_path(target)
-    connections = _gamma_local_managed_connections(create=not path.exists())
+    connections = _gamma_local_managed_connections(create=not path.exists(), target=target)
     context, selected, binding, initializer = _current(target, allow_active_startup=True, management_connections=connections)
     if path.exists():
         from quwoquan_ops.cli.lib.generated.post_safety_runtime import PostSafetySourceAllocationCurrentDescriptor
@@ -395,7 +406,7 @@ def ensure_source_allocation_for_locked_up(target, management_connections=None):
         return descriptor, selected, binding, connections
     root = output_paths.deployment_target_path(target, "secrets", "source-allocation", selected.candidate_digest.removeprefix("sha256:")[:24])
     receipt = _apply_connections(selected, binding, root, initializer, context["managementConnections"],
-        management_connections=connections, prepared_redis_password_value=_gamma_local_source_password())
+        management_connections=connections, prepared_redis_password_value=_gamma_local_source_password(target))
     return _publish_source_current(target, selected, binding, root, receipt), selected, binding, connections
 
 def command_source_allocation(args):

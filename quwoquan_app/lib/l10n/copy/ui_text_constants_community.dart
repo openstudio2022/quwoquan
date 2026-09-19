@@ -40,7 +40,7 @@ abstract final class CommunityText {
   static const String circleSubAll = '全部', circleSubPhoto = '图片';
   static const String circleSubVideo = '视频', circleSubArticle = '笔记';
   static const String circleSubLikes = '赞', circleSubComments = '评论';
-  static const String circleSubMicro = '点滴', circleSortLatest = '最新';
+  static const String circleSortLatest = '最新';
   static const String circleSortHot = '最热', circleSortFeatured = '精选';
   static const String circleNoCreations = '暂无创作内容';
   static const String circleCreationsLoadMore = '加载更多';

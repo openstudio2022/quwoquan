@@ -10,6 +10,29 @@ _SELF = Path(__file__).resolve()
 
 RETIRED_PATHS = (
     "quwoquan_data/control_plane/_shared/catalogs/bounded_execution_authority_policy.json",
+    "quwoquan_data/control_plane/_shared/catalogs/review_policy.yaml",
+    "quwoquan_data/control_plane/_shared/catalogs/works_classification.yaml",
+    "quwoquan_data/schema/content/gate_verdict.schema.json",
+    "quwoquan_data/schema/content/works_classification.schema.json",
+    "quwoquan_data/schema/release/content_release_stage_receipt.schema.json",
+    "quwoquan_data/schema/release/pool_append_batch.schema.json",
+    "quwoquan_data/schema/release/release_manifest.schema.json",
+    "quwoquan_data/schema/source/article_source_classification.schema.json",
+    "quwoquan_data/schema/source/source_candidate.schema.json",
+    "quwoquan_data/schema/source/source_plan.schema.json",
+    "quwoquan_data/schema/source/source_screen.schema.json",
+    "quwoquan_data/schema/source/source_unit_meta.schema.json",
+
+    "quwoquan_data/schema/_common/stage_envelope.schema.json",
+    "quwoquan_data/schema/governance/cleanup_report.schema.json",
+    "quwoquan_data/schema/governance/review_policy.schema.json",
+    "quwoquan_data/schema/release/content_item_version_view.schema.json",
+    "quwoquan_data/schema/release/release_identity_incident.schema.json",
+    "quwoquan_data/schema/release/release_identity_recovery_provenance.schema.json",
+    "quwoquan_data/schema/release/resolve_invalid_canonical_identity_command.schema.json",
+    "quwoquan_data/schema/release/supply_chain_drill_receipt.schema.json",
+    "quwoquan_data/schema/source/host_source_review_request.schema.json",
+    "quwoquan_data/schema/source/host_source_review_result_input.schema.json",
     "quwoquan_data/schema/_common/zero_qualified_reason.schema.json",
     "quwoquan_data/schema/governance/canonical_gc_apply.schema.json",
     "quwoquan_data/schema/governance/canonical_gc_execution_tombstone.schema.json",
@@ -42,6 +65,7 @@ RETIRED_PATHS = (
     "quwoquan_data/scripts/content/review",
     "quwoquan_data/scripts/content/source/research",
     "quwoquan_data/scripts/core/article_commercial_policy.py",
+    "quwoquan_data/scripts/content/release/canonical/handler_identity_cli.py",
     "quwoquan_data/scripts/content/release/canonical/handler_object_transaction_cli.py",
     "quwoquan_data/scripts/content/release/canonical/publish_execution.py",
     "quwoquan_data/scripts/content/release/canonical/pool_precheck.py",
@@ -112,11 +136,33 @@ FORBIDDEN_TOKENS = (
     "_shared/semantic_tasks",
     "pool-inspect",
     "pool-precheck",
+    "quwoquan_data.stage_envelope",
+    "quwoquan_data.coverage_cleanup_audit",
+    "quwoquan.gate_verdict",
+    "quwoquan_data.works_classification",
+    "quwoquan.content_release_stage_receipt",
+    "quwoquan_data.pool_append_batch",
+    "quwoquan_data.release_manifest",
+    "quwoquan_data.article_source_classification",
+    "quwoquan_data.source_candidate",
+    "quwoquan_data.source_plan",
+
+    "quwoquan_data.content_item_version_view",
+    "quwoquan_data.release_identity_incident",
+    "quwoquan_data.release_identity_recovery_provenance",
+    "quwoquan_data.resolve_invalid_canonical_identity_command",
+    "quwoquan_data.supply_chain_drill_receipt",
+    "quwoquan_data.host_source_review_request",
+    "quwoquan_data.host_source_review_result_input",
 )
 
 _ALLOWED_NEGATIVE_TESTS = {
     DATA_ROOT / "tests/local_contract/execution/test_six_step_seal__kernel__contract__local_contract_test.py",
 }
+_RETIRED_TOKEN_COMPANION = (
+    DATA_ROOT
+    / "tests/local_contract/core/test_script_architecture_retirement__contract__local_contract_test.py"
+)
 def _production_files() -> list[Path]:
     files: list[Path] = []
     for root in PRODUCTION_ROOTS:
@@ -131,7 +177,7 @@ def _production_files() -> list[Path]:
 
 
 def _token_allowed(path: Path, token: str) -> bool:
-    if path == _SELF or path.name == "verify_public_cli_live_import_zero.py":
+    if path in {_SELF, _RETIRED_TOKEN_COMPANION, DATA_ROOT / "control_plane/_shared/schema_retirement_tombstones.json"} or path.name == "verify_public_cli_live_import_zero.py":
         return True
     if token in {"_shared/execution_state.json", "_shared/semantic_tasks"}:
         return path in _ALLOWED_NEGATIVE_TESTS

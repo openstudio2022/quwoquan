@@ -1,9 +1,7 @@
-// readiness_case: update-post-settings-api
 // readiness_case: delete-post-api
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/spec.md#sit-002
 // readiness_case: get-post-api
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-005
-// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
 // readiness_case: submit-post-publication-api
 // L2 契约测试：Post 业务对象 — 正常 CRUD 操作
 //
@@ -33,13 +31,13 @@ func TestSubmitPostPublicationCreatesPublishedPost(t *testing.T) {
 	result := submitPublishedPostWithAuthor(
 		t,
 		"user_test_001",
-		`{"body":"golden hour photography","contentType":"micro"}`,
+		`{"body":"golden hour photography","contentType":"article"}`,
 	)
 	if result["postId"] == nil {
 		t.Error("response missing _id field")
 	}
-	if result["contentType"] != "micro" {
-		t.Errorf("expected contentType=micro, got %v", result["contentType"])
+	if result["contentType"] != "article" {
+		t.Errorf("expected contentType=article, got %v", result["contentType"])
 	}
 	if result["authorId"] != "user_test_001" {
 		t.Errorf("expected authorId=user_test_001, got %v", result["authorId"])
@@ -59,7 +57,7 @@ func TestSubmitPostPublicationAllTypes(t *testing.T) {
 	}{
 		{"image", `"body":"image publication"`},
 		{"video", `"body":"video publication"`},
-		{"micro", `"body":"quick thought"`},
+		{"article", `"body":"纯文字文章"`},
 		{"article", `"title":"Deep work tips","articleMarkdown":"# Deep work tips\n\nFocus is a skill","markdownDialect":"qwq-rich-md","articleAssetManifest":{"schema":"article-asset-manifest","assets":[]}`},
 	}
 	for _, tc := range cases {
@@ -99,7 +97,6 @@ func TestSubmitPostPublicationReturnsStablePublishedPost(t *testing.T) {
 
 	published := submitPublishedPostWithAuthor(t, "publish_author", `{
 		"contentType":"article",
-		"contentIdentity":"work",
 		"title":"待发布作品",
 		"body":"原子发布",
 		"visibility":"public",
@@ -125,7 +122,6 @@ func TestSubmitPostPublicationOutboxProjectionCommercialChain(t *testing.T) {
 
 	published := submitPublishedPostWithAuthor(t, "commercial_chain_author", `{
 		"contentType":"article",
-		"contentIdentity":"work",
 		"title":"端云对象闭环",
 		"articleMarkdown":"# 端云对象闭环\n\nDurable outbox first.",
 		"markdownDialect":"qwq-rich-md",
@@ -185,8 +181,7 @@ func TestDeletePostContract(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := submitPublishedPostWithAuthor(t, "delete_author", `{
-		"contentType":"micro",
-		"contentIdentity":"moment",
+		"contentType":"article",
 		"body":"准备删除的点滴"
 	}`)
 	postID, _ := created["postId"].(string)
@@ -266,8 +261,7 @@ func TestGetDeletedPostAfterServiceRestartStillReturnsTombstone(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := submitPublishedPostWithAuthor(t, "delete_restart_author", `{
-		"contentType":"micro",
-		"contentIdentity":"moment",
+		"contentType":"article",
 		"body":"准备删除后重启再读取"
 	}`)
 	postID, _ := created["postId"].(string)
@@ -377,7 +371,7 @@ func TestGetPostNotFound(t *testing.T) {
 func TestUpdatePostSettingsForbidden(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := submitPublishedPostWithAuthor(t, "user_owner", `{"contentType":"micro","body":"owner post"}`)
+	created := submitPublishedPostWithAuthor(t, "user_owner", `{"contentType":"article","body":"owner post"}`)
 	postID, _ := created["postId"].(string)
 
 	patchReq := httptest.NewRequest(
@@ -403,7 +397,7 @@ func TestPostPublishedEventPublished(t *testing.T) {
 
 	eventSpy.Reset()
 
-	submitPublishedPost(t, `{"contentType":"micro","body":"event spy test post"}`)
+	submitPublishedPost(t, `{"contentType":"article","body":"event spy test post"}`)
 
 	events := eventSpy.EventsOfType("PostPublished")
 	if len(events) == 0 {
@@ -416,8 +410,8 @@ func TestPostPublishedEventPublished(t *testing.T) {
 	if ev.AggregateID == "" {
 		t.Error("expected AggregateID to be set")
 	}
-	if ev.Payload["contentType"] != "micro" {
-		t.Errorf("expected payload.contentType=micro, got %v", ev.Payload["contentType"])
+	if ev.Payload["contentType"] != "article" {
+		t.Errorf("expected payload.contentType=article, got %v", ev.Payload["contentType"])
 	}
 	if ev.EventID == "" {
 		t.Error("expected durable outbox event identity")

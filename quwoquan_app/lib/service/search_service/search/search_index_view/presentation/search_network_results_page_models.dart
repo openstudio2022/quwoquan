@@ -158,7 +158,7 @@ class _NetworkResultCardModel {
           ? item.subCategory!.trim()
           : SearchText.searchNetworkResults,
       likeCount: item.likeCount,
-      showVideoBadge: item.contentType == 'video',
+      showVideoBadge: item.contentType == ContentType.video,
     );
   }
 }

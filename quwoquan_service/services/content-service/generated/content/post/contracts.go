@@ -34,8 +34,6 @@ const (
 	RouteListUserPostsPath                           = "/content/personas/{personaId}/posts"
 	RoutePreparePostReleaseQueriesMethod             = "POST"
 	RoutePreparePostReleaseQueriesPath               = "/internal/content/release-queries:prepare"
-	RoutePromotePostToWorkMethod                     = "POST"
-	RoutePromotePostToWorkPath                       = "/content/posts/{postId}:promoteToWork"
 	RouteReadActiveReleaseFenceMethod                = "GET"
 	RouteReadActiveReleaseFencePath                  = "/internal/content/active-release-fence"
 	RouteReadContentReleaseCommitReceiptMethod       = "POST"
@@ -55,6 +53,37 @@ const (
 var AllowedContentTypes = map[string]struct{}{
 	"image":   {},
 	"video":   {},
-	"micro":   {},
 	"article": {},
+}
+
+// AllowedListObjectKinds 是混排列表信封 objectKind 的 canonical 闭集。读侧按它
+// 判定一项是什么对象；未登记的成员必须 fail-closed，不得回落成 post。
+var AllowedListObjectKinds = map[string]struct{}{
+	"post":            {},
+	"entity_homepage": {},
+}
+
+// RetiredEnumValue 把一个退役取值与它离开的 enum 绑定在同一条记录里，退役取值
+// 因此不会单独作为字面量存在。
+type RetiredEnumValue struct {
+	Enum         string
+	RetiredValue string
+}
+
+// RetiredContentTypeValues 是 _shared/types.yaml retired_enum_values 里 ContentType
+// 的 canonical 投影：这些取值曾被持久化、现已不在 AllowedContentTypes 内，只供一次性
+// 存量迁移识别 exact 退役输入，不是 wire 兼容通道。
+var RetiredContentTypeValues = []RetiredEnumValue{
+	{Enum: "ContentType", RetiredValue: "micro"},
+}
+
+// IsRetiredContentType 判定 value 是否为已声明退役的 ContentType 取值。未声明的
+// 取值一律不是退役输入，调用方必须按未知类型 fail-closed，不得按媒体猜测。
+func IsRetiredContentType(value string) bool {
+	for _, declared := range RetiredContentTypeValues {
+		if declared.RetiredValue == value {
+			return true
+		}
+	}
+	return false
 }

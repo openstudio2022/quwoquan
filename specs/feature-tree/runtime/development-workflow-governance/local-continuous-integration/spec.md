@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：本 Story 为横切工程能力，不直接承接用户 Journey。
 >
-> 设计归属：[L2 DEC-007](../design.md#dec-007)
+> 设计引用：[L2 DEC-007](../design.md#dec-007)
 
 ## 1. 用户价值
 
@@ -42,7 +42,7 @@
 ### REQ-002 精确输入身份、缓存和互斥
 
 - 规划、运行、缓存与回执必须复用 canonical EvidenceFingerprint，覆盖 tracked、untracked、deleted、renamed 与 symlink 的实际内容身份。
-- source、lockfile、toolchain、command 或 owner manifest 任一变化都必须 cache miss；运行期间输入漂移必须使本次结果失效。
+- source、lockfile、toolchain、command 或 context manifest 任一变化都必须 cache miss；运行期间输入漂移必须使本次结果失效。
 - PASS cache 只可按 exact-input 复用；同一资源的执行必须持有本地锁，不能以并发成功覆盖失败或漂移。
 - deferred queue 必须持久化且可检查；在真实宿主 producer 与消费 SLO 闭合前，contract 将 `exact-pending` 与 `foreign-pending` 都标为 advisory，二者必须出现在 receipt/inspect 中但不得阻断显式 `scope`/`release`。显式 readiness 的 required checks 与 Review admission 仍 fail-closed。
 
@@ -58,6 +58,9 @@
 - push readiness（包括 `level=fast`）的 code-health 必须以 actual push before/after 精确 OID 执行 canonical `full` 报告；不可用 capsule 的 HEAD/index/dev1.0 自比较或 `auto` 代替。staged 仍以 HEAD→index 执行 `fast`。报告与 receipt 必须绑定同一 base/head/tree、完整 changed paths 与执行 mode；非空源码变化不得空扫描，纯非源码变化可以有零生产源码计量，但必须保留真实变化范围。
 - 公共 source fact producer 必须读取真实 readiness receipt，核对自身终态、exact candidate base/head/tree/paths、全部 required check 与内嵌 code-health 子报告（含 digest、终态与 full 模式）；调用方传入 `status=passed` 不构成证据。失败回执、伪 passed wrapper、错 candidate、漏范围、缺健康子结果或空源码扫描均拒绝签发 passed fact。
 - 已有 ops `local_contract` companion、仅依赖源码字节、无需网络/编译器/设备/环境、fail-closed 且不增长豁免、实测可容纳于现有 L0 预算的晚发现扫描，必须左移到显式 L0，并由同一 check id/命令进入 local readiness；不扩大 Git hook 职责，不把 code-health 快判的 30 秒目标解释成整套 L0 预算。`retired_terms_zero` 在`quwoquan_app/`、`quwoquan_service/`、`quwoquan_data/`、`quwoquan_ops/` 四棵工程树变更时选中，扫描范围与检测语义仍归现有扫描器；fast/scope/release 在编译前消费相同检查，失败不生成 PASS。`gate_repo.sh` 在合法 scope/phase 参数校验后、重型治理/测试和工具链检查前执行一次该扫描，不再放在 `run_app`；该 companion 随 Lane Gate 检查集合在 accept 执行，hosted 只验 exact 结果，不新增第二个 hosted 扫描入口。
+- Feature Tree 只表达需求、设计与验收，不授予 mutation 权限，也不冻结实现文件清单或测试 scope。每次 current actual changed paths 增减都必须重算 exact-path claim 冲突与 ImpactPlan；测试与 gate 选择只由 canonical path normalization 后的 actual diff、普通代码影响和契约 dependency closure 派生。无 context 或多 context 均不阻断 mutation。
+- Data schema、Data loader/dispatch、Service contract/importer、App contract/generated consumer、Ops typed reader 或统一闭包检查器自身发生变化时，L0 必须选择同一 `contract_closure` 静态检查。触发面只含真实 authority、显式 consumer binding、生成/验证入口及规则自身，任意 Service/App/Ops 文件或整棵 `cli/lib`、`ci`、`gate` 不得因物理归属被纳入。该检查只读源码字节、无网络/编译器/设备/环境依赖，现场派生 authority/consumer 双向边并复用现有 ContractGraph source freshness、App handoff lock 与 generated manifest 判据；不得等到 context 全套、merge、Delivery 或 Alpha 才首判。无生产消费者、无唯一 authority、悬空/循环引用、重复身份、跨树 binding 漂移或 stale generation 任一失败都阻断 `fast_green`；修复只能在同一变更接线或原子退役，不能以候选、deferred 或 OPEN 放行。
+
 
 <a id="req-004"></a>
 ### REQ-004 App 可编译、可启动、内容可访问是 `app` scope 的基础准入事实
@@ -93,7 +96,7 @@
 - GIVEN 当前 staged 范围已有 `scope_ready` 回执。
 - WHEN 已标记为 M 的文件内容继续变化而 Git status 文本保持相同。
 - THEN 回执校验判定旧回执 stale，任何消费者（Skill 报告、交接、PR 说明）都不得再引用它。
-- AND exact-input cache 对 source、lockfile、toolchain、command 与 owner manifest 的变化全部 miss。
+- AND exact-input cache 对 source、lockfile、toolchain、command 与 context manifest 的变化全部 miss。
 
 <a id="gwt-002"></a>
 ### GWT-002 deferred 与执行失败不能升级就绪
@@ -144,6 +147,18 @@
 - THEN 根级文档不选择此扫描，spec 变更仍保留 Feature Tree 检查，Git hooks 的 staged/branch boundary 不变。
 - THEN `gate_repo.sh` 在合法 scope/phase 校验后、工具链检查与重型测试前恰调用一次扫描，`run_app` 不再重复；扫描失败时后续阶段不执行。
 
+
+<a id="gwt-009"></a>
+### GWT-009 跨树契约漂移在 L0 同一闭包首判
+
+- GIVEN Data schema 与 Data/Service/App/Ops 的现役 producer、reader、dispatch、生成物形成可派生契约图。
+- WHEN 任一相关侧单独变更，并执行显式 L0 或 fast/scope/release local readiness。
+- THEN current actual changed paths 每次改变都重取 exact-path claim，并以 canonical impact planner 的 path normalization 与 dependency closure 重算；context manifest 只提供非授权验收上下文，不裁剪或扩张测试。
+- THEN selector 与 readiness plan 对真实 contract surfaces 恰好包含一次同 id/同命令的 `contract_closure`，对普通 Service/App/Ops 文件不选择；检查在编译、context 全套、环境与合并前执行，失败不产生 source readiness PASS。
+- THEN 新增无消费者 schema、删除仍被消费 schema、悬空或越界 `$ref`、重复 `$id`/逻辑身份、任意动态目标、Service/App/Ops binding 漂移及 stale ContractGraph/handoff/generated manifest 各有行为负例并稳定失败；合法 supporting `$ref`、同变更接线与原子退役通过。
+- THEN 检查器不写 tracked inventory、不自动删除、不维护第二字段清单；测试/文档引用不能把无生产绑定 schema 判为现役，OPEN/deferred 不能抵消失败。
+
+
 <a id="gwt-007"></a>
 ### GWT-007 干净 push capsule 与 source fact 不得空 delta 假绿
 
@@ -164,7 +179,7 @@
 ## 6. 依赖
 
 - 前置要求：canonical EvidenceFingerprint 可用，Git 可读取 staged 与 push update identity。
-- 上游事实：changed paths、owner manifest、命令与工具链版本。
+- 上游事实：changed paths、context manifest、命令与工具链版本。
 - 下游结果：本地 readiness queue、exact-input cache 与 typed receipt。
 - 父级设计：`DEC-007`。
 

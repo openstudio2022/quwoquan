@@ -144,8 +144,8 @@ class ProductionReleaseArtifactContractTest(unittest.TestCase):
             "QWQ_ANDROID_GAMMA_GOOGLE_SERVICES_JSON",
         ):
             self.assertNotIn(retired, workflow)
-        self.assertIn("QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON", workflow)
-        self.assertIn("QWQ_ANDROID_PROD_GOOGLE_SERVICES_JSON", workflow)
+        self.assertNotIn("GOOGLE_SERVICES_JSON", workflow)
+        self.assertNotIn("google-" + "services.json", workflow)
         self.assertIn("collect_stackctl_app_shard.py", workflow)
         self.assertIn("app_candidate_evidence.Dockerfile", workflow)
         self.assertIn("app_evidence_ref", workflow)

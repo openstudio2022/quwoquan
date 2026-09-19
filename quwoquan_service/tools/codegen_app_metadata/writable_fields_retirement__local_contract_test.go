@@ -74,27 +74,6 @@ func TestOperationRequestContractsReplaceWritableFieldsSingleTrack(t *testing.T)
 				"visibility",
 			},
 		},
-		{
-			operationsPath: "content/content/post/operations.yaml",
-			operation:      "PromotePostToWork",
-			requestEntity:  "PromotePostToWorkRequest",
-			bodyFields: []string{
-				"articleAssetManifest",
-				"articleMarkdown",
-				"articleRenderProfile",
-				"assistantUsePolicy",
-				"contentType",
-				"coverUrl",
-				"markdownDialect",
-				"primaryHomepageId",
-				"primaryHomepageSnapshot",
-				"primaryHomepageType",
-				"semanticMentions",
-				"summary",
-				"title",
-				"visibility",
-			},
-		},
 	}
 
 	for _, expectation := range expectations {
@@ -183,6 +162,22 @@ func TestOperationRequestContractsReplaceWritableFieldsSingleTrack(t *testing.T)
 			}
 		})
 	}
+
+	// spec_ref: specs/feature-tree/discovery-content/content-type-framework/spec.md#sit-003
+	t.Run("PromotePostToWorkRetired", func(t *testing.T) {
+		for _, operation := range activeMetadataSource.Graph().Operations {
+			if operation.LocalID == "PromotePostToWork" || operation.RequestEntity == "PromotePostToWorkRequest" {
+				t.Fatalf("retired promotion operation/request remains reachable: %s", operation.ID)
+			}
+		}
+		fields, err := readFields(filepath.Join(metadataDir, "content/content/post/fields.yaml"))
+		if err != nil {
+			t.Fatalf("read post fields: %v", err)
+		}
+		if _, exists := fields.Entities["PromotePostToWorkRequest"]; exists {
+			t.Fatal("retired PromotePostToWorkRequest remains in canonical post fields")
+		}
+	})
 }
 
 func TestWritableFieldsConfigurationAndGeneratorsCannotReturn(t *testing.T) {

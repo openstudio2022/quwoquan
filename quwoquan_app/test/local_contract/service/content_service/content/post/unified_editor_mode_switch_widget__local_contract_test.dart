@@ -215,7 +215,7 @@ void main() {
     );
     expect(counterFinder, findsOneWidget);
     expect(
-      find.text('0 / ${ContentPublicationPolicy.microBodyMaxRunes}'),
+      find.text('0 / ${ContentPublicationPolicy.articleBodyMaxRunes}'),
       findsOneWidget,
       reason: '剩余量以「当前/契约上限」常显，上限来自 codegen 单一真相',
     );
@@ -226,7 +226,7 @@ void main() {
     final notifier = container.read(createEditorProvider.notifier);
     // 接近上限（≥90%）时计数转警示色，提示用户即将到达契约边界。
     notifier.updateMediaBody(
-      '长' * (ContentPublicationPolicy.microBodyMaxRunes * 9 ~/ 10 + 1),
+      '长' * (ContentPublicationPolicy.articleBodyMaxRunes * 9 ~/ 10 + 1),
     );
     await tester.pump();
 

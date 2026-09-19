@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：不直接参与用户 Journey；证明各层 UAT/DOM/SIT/GWT 是否真实达成
 >
-> 设计归属：[L2 DEC-001](../design.md#dec-001) 与 [DEC-003](../design.md#dec-003)
+> 设计引用：[L2 DEC-001](../design.md#dec-001) 与 [DEC-003](../design.md#dec-003)
 
 ## 1. 用户价值
 

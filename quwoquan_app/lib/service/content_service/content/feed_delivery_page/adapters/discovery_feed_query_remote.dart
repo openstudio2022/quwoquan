@@ -1,9 +1,11 @@
+import 'package:quwoquan_app/runtime/transport/generated/client_content_presentation_contract.g.dart';
 import 'package:quwoquan_app/runtime/transport/generated/content/content_request_page_ids.g.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/generated/content_feed_delivery_category_policy.g.dart';
-import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_projection_mapper.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_list_item_decoder.dart';
+import 'package:quwoquan_app/service/content_service/content/post/application/public/content_list_item_skew_observer.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     as contracts;
 
@@ -20,19 +22,20 @@ final class RemoteContentDiscoveryFeedQuery
     required this.client,
     required this.invocationContext,
     required this.blockedKeywordsLoader,
-    this.projectionMapper = const ContentPostProjectionMapper(),
+    this.listItemDecoder = const ContentListItemDecoder(),
+    this.skewObserver = const ContentListItemSkewObserver(),
   });
 
   final contracts.GeneratedCloudOperationClient client;
   final ContentDiscoveryFeedInvocationContextFactory invocationContext;
   final Future<List<String>> Function() blockedKeywordsLoader;
-  final ContentPostProjectionMapper projectionMapper;
+  final ContentListItemDecoder listItemDecoder;
+  final ContentListItemSkewObserver skewObserver;
 
   @override
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = contracts.ContentDiscoveryFeedQuery.defaultLimit,
@@ -52,10 +55,6 @@ final class RemoteContentDiscoveryFeedQuery
     );
     final resolvedChannelId = channelId?.trim() ?? '';
     final channelRouted = resolvedChannelId.isNotEmpty;
-    final resolvedIdentity = channelRouted
-        ? null
-        : (identity ??
-              DiscoveryFeedRouteRegistry.identityForCategory(category));
     final resolvedType = channelRouted
         ? null
         : _normalizeFeedType(
@@ -80,10 +79,9 @@ final class RemoteContentDiscoveryFeedQuery
     final normalizedFeedRequestId = feedRequestId?.trim();
     final response = await client.contentPostGetFeed(
       contracts.ContentDiscoveryFeedQuery(
-        identity: resolvedIdentity,
-        type: resolvedIdentity == 'moment' && (type == null || type.isEmpty)
-            ? null
-            : resolvedType,
+        // 能力闭集与端侧编译期真实支持同源生成；不手写数组或摘要。
+        clientPresentationContract: compiledContentPresentationContract,
+        type: resolvedType,
         sort: sort,
         cursor: cursor,
         subCategory: subCategory,
@@ -117,11 +115,17 @@ final class RemoteContentDiscoveryFeedQuery
       manifestDigest: response.manifestDigest,
       emptyReason: response.emptyReason,
     );
+    // 逐项解码：未知或不支持项就地隔离并留观测，已知项保持交付序位继续渲染。
+    final decoding = listItemDecoder.decode(response.items);
+    skewObserver.record(
+      decoding.isolated,
+      operationId: contracts.AppCloudOperationIds.contentPostGetFeed,
+    );
     return DiscoveryFeedPage(
-      items: response.items.map(projectionMapper.toDto).toList(growable: false),
+      items: decoding.posts,
       outcome: response.outcome,
       emptyReason: response.emptyReason,
-      objectCards: response.objectCards,
+      objectCards: decoding.objectCards,
       nextCursor: response.nextCursor,
       previousCursor: response.previousCursor,
       paginationExpiresAt: response.paginationExpiresAt,
@@ -138,8 +142,6 @@ final class RemoteContentDiscoveryFeedQuery
         return null;
       case 'photo':
         return 'image';
-      case 'note':
-        return 'article';
       default:
         return normalized;
     }

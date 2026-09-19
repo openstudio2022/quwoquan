@@ -4,7 +4,9 @@ package local_contract
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,14 +15,16 @@ import (
 
 	rtauth "quwoquan_service/runtime/auth"
 	runtimeoperation "quwoquan_service/runtime/operation"
+	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 	postgraphql "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/graphql"
 	postapp "quwoquan_service/services/content-service/internal/content/post/application"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
+	"quwoquan_service/services/content-service/tests/support/semanticfixture"
 )
 
 const (
 	testContractGraphDigest = "72046cb9d49a8a0e05e57b9c75261d8f5e153f2fed51b6afd1a43f28ee9d62dc"
-	testPersistedQueryHash  = "7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7"
+	testPersistedQueryHash  = "6d1f340a4caedf270c46377b1b3a8ae48e3d669f3f7709ec81b3efcf2f6d9820"
 
 	testArticleMarkdownDigest = "sha256:bc18f7068971a44e264848ecd54b72b02d38216abb8ce3c3d2148e37e8a12398" // sha256("markdown")
 	testArticleDocumentDigest = "sha256:43cc23fa52b87b4cc1d02b5b114154151d6adddb17c9fddc06b027fa99e24008" // sha256("document")
@@ -49,8 +53,8 @@ func TestInternalPersistedGetPostExecutesExactOwnerReadSlice(t *testing.T) {
 			OriginalCreatorName: "摄影师甲", Platform: "Wikimedia Commons",
 			SourcePostURL: "https://example.com/source", OriginalAssetURL: "https://example.com/image.jpg",
 			AttributionText: "摄影师甲 / CC BY 4.0", RightsBasis: "CC BY 4.0",
-			CommercialAuthorizationStatus: "unverified", PublicationAdmission: "production_release",
-			DerivedModifications: []string{"crop", "resize"}, WatermarkKind: "author_signature",
+			CommercialAuthorizationStatus: "unverified",
+			DerivedModifications:          []string{"crop", "resize"}, WatermarkKind: "author_signature",
 			WatermarkNote: "保留作者签名", WatermarkStatus: "present", AudioRightsStatus: "no_audio",
 			ModelReleaseStatus: "not_required", PropertyReleaseStatus: "not_required",
 			CollectedAt: time.Date(2026, 8, 11, 0, 0, 0, 0, time.UTC), TakedownPolicy: "notice_and_takedown",
@@ -85,7 +89,7 @@ func TestInternalPersistedGetPostExecutesExactOwnerReadSlice(t *testing.T) {
 	if detail["postId"] != "post-1" || detail["authorDisplayName"] != "Creator" {
 		t.Fatalf("GraphQL data=%v", detail)
 	}
-	if len(detail) != 33 {
+	if len(detail) != 32 {
 		t.Fatalf("selected GraphQL fields=%v", detail)
 	}
 	if detail["authorAvatarAssetId"] != "avatar-asset-1" || detail["authorAvatarAccessMode"] != "signed_grant" {
@@ -98,11 +102,16 @@ func TestInternalPersistedGetPostExecutesExactOwnerReadSlice(t *testing.T) {
 	modifications := attribution["derivedModifications"].([]any)
 	if len(modifications) != 2 || modifications[0] != "crop" || modifications[1] != "resize" ||
 		attribution["watermarkKind"] != "author_signature" || attribution["watermarkNote"] != "保留作者签名" ||
-		attribution["commercialAuthorizationStatus"] != "unverified" || attribution["publicationAdmission"] != "production_release" {
+		attribution["commercialAuthorizationStatus"] != "unverified" {
 		t.Fatalf("GraphQL source attribution facts drifted: %v", attribution)
 	}
-	if _, exists := attribution["riskAcceptanceId"]; exists {
-		t.Fatal("retired source attribution field leaked")
+	for _, field := range []string{"riskAcceptanceId", "publicationAdmission"} {
+		if _, exists := attribution[field]; exists {
+			t.Fatalf("retired source attribution field %q leaked", field)
+		}
+	}
+	if _, exists := detail["contentIdentity"]; exists {
+		t.Fatal("retired contentIdentity leaked into base read slice")
 	}
 	if strings.Contains(response.Body.String(), "moderationStatus") {
 		t.Fatalf("owner-only field leaked: %s", response.Body.String())
@@ -119,6 +128,9 @@ func TestInternalPersistedGetPostRejectsIdentityAndBindingDriftBeforeOwnerRead(t
 		{name: "mutation text", body: withPayloadField(validInternalGraphQLPayload(), "query", "mutation ContentPostDetailBase { deletePost(postId: \"post-1\") }")},
 		{name: "operation drift", body: mutatePayload(validInternalGraphQLPayload(), func(body map[string]any) { body["operationName"] = "OtherQuery" })},
 		{name: "hash drift", body: mutatePayload(validInternalGraphQLPayload(), func(body map[string]any) { persistedDescriptor(body)["sha256Hash"] = strings.Repeat("a", 64) })},
+		{name: "retired publication admission query hash", body: mutatePayload(validInternalGraphQLPayload(), func(body map[string]any) {
+			persistedDescriptor(body)["sha256Hash"] = "eba3ff56ddbac07ac0cf1755ad0f41516b4391533d8e64f33b8613b0e08ef2bb"
+		})},
 		{name: "online APQ registration", body: mutatePayload(validInternalGraphQLPayload(), func(body map[string]any) { persistedDescriptor(body)["register"] = true })},
 		{name: "extra variable", body: mutatePayload(validInternalGraphQLPayload(), func(body map[string]any) { body["variables"].(map[string]any)["extra"] = true })},
 		{name: "graph digest drift", body: validInternalGraphQLPayload(), mutate: func(request *http.Request) {
@@ -154,6 +166,79 @@ func TestInternalPersistedGetPostRejectsIdentityAndBindingDriftBeforeOwnerRead(t
 	}
 }
 
+func TestInternalPersistedSemanticDocumentPreservesCanonicalEnvelope(t *testing.T) {
+	for _, contentType := range []postports.ContentType{"article", "image", "video"} {
+		t.Run(string(contentType), func(t *testing.T) {
+			doc := semanticfixture.Envelope(t)
+			// typed tree 直接往返，保留 children、attributes、sourceMap 和 identity。
+			doc.Nodes = []semantic.SemanticNode{{
+				NodeID: "section-1", Kind: semantic.NodeKindSection,
+				Disposition:          semantic.ProcessingDispositionPreserved,
+				RequiredCapabilities: semantic.NodeRegistry[semantic.NodeKindSection].RequiredCapabilities,
+				Children: []semantic.SemanticNode{{NodeID: "paragraph-1", Kind: semantic.NodeKindParagraph,
+					Attributes: map[string]any{"text": "原始 canonical 内容"}}},
+			}}
+			doc.RequiredCapabilities = doc.Nodes[0].RequiredCapabilities
+			// 按既有 envelope canonical JSON 身份规则更新 fixture，不伪造旧指纹。
+			raw, err := json.Marshal(doc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var canonical map[string]any
+			if err := json.Unmarshal(raw, &canonical); err != nil {
+				t.Fatal(err)
+			}
+			delete(canonical, "semanticFingerprint")
+			delete(canonical, "canonicalDigest")
+			raw, err = json.Marshal(canonical)
+			if err != nil {
+				t.Fatal(err)
+			}
+			doc.SemanticFingerprint = fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
+			canonical["semanticFingerprint"] = doc.SemanticFingerprint
+			raw, err = json.Marshal(canonical)
+			if err != nil {
+				t.Fatal(err)
+			}
+			doc.CanonicalDigest = fmt.Sprintf("sha256:%x", sha256.Sum256(raw))
+			reader := &recordingPostDetailReader{detail: postports.PostDetailSlice{
+				PostID: "post-1", ContentType: contentType, SemanticDocument: &doc,
+				Status: "published", Visibility: "public", ModerationStatus: "approved",
+				ArticleMarkdown: "不得用于重建 semanticDocument",
+			}}
+			payload := validInternalGraphQLPayload()
+			payload["operationName"] = "ContentPostDetailSemantic"
+			persistedDescriptor(payload)["sha256Hash"] = "8f01162d0d879ffbdc5e96c93145b5c005b7b03582e52dfaa8c390424c62debd"
+			response := httptest.NewRecorder()
+			newInternalGraphQLHandler(t, reader).ServeHTTP(response, trustedInternalGraphQLRequest(t, payload))
+			if response.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+			}
+			var envelope struct {
+				Data map[string]struct {
+					Document json.RawMessage `json:"semanticDocument"`
+				} `json:"data"`
+			}
+			if err := json.Unmarshal(response.Body.Bytes(), &envelope); err != nil {
+				t.Fatal(err)
+			}
+			want, err := json.Marshal(doc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(want, envelope.Data["contentPostDetailSemantic"].Document) {
+				t.Fatal("GraphQL 改写或丢失了 canonical semantic document")
+			}
+			reader.detail.SemanticDocument.SchemaVersion = "999.0.0"
+			invalid := httptest.NewRecorder()
+			newInternalGraphQLHandler(t, reader).ServeHTTP(invalid, trustedInternalGraphQLRequest(t, payload))
+			if invalid.Code < 400 {
+				t.Fatal("不兼容 semantic envelope 必须 fail closed")
+			}
+		})
+	}
+}
+
 func TestInternalPersistedGetPostExecutesEveryTypeAwareBundleSlice(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -166,17 +251,20 @@ func TestInternalPersistedGetPostExecutesEveryTypeAwareBundleSlice(t *testing.T)
 	}{
 		{
 			name: "semantic", operationName: "ContentPostDetailSemantic",
-			hash:        "b425b396c13494d91b0e970d0e9c2328d07d549c492bd76537dace26ea74aa04",
+			hash:        "8f01162d0d879ffbdc5e96c93145b5c005b7b03582e52dfaa8c390424c62debd",
 			root:        "contentPostDetailSemantic",
 			operationID: "content.post.GetPostSemantic",
 			detail: postports.PostDetailSlice{
-				PostID: "post-1", ContentType: "micro", TagRefs: []string{"tag-1"},
+				PostID: "post-1", ContentType: "article", TagRefs: []string{"tag-1"},
 				EntityRefs: []string{"entity-1"}, SemanticMentions: []postports.PostSemanticMentionSlice{{
 					MentionID: "mention-1", Kind: "tag", Surface: "旅行", Location: "body",
 					RangeStart: 0, RangeEnd: 2, Status: "published", TargetRef: "tag-1",
 				}},
 			},
 			assert: func(t *testing.T, data map[string]any) {
+				if value, exists := data["semanticDocument"]; !exists || value != nil {
+					t.Fatalf("nullable canonical slot missing or rebuilt: %v", data)
+				}
 				if len(data["semanticMentions"].([]any)) != 1 || data["tagRefs"].([]any)[0] != "tag-1" {
 					t.Fatalf("semantic data=%v", data)
 				}
@@ -282,8 +370,8 @@ func TestInternalPersistedGetPostRejectsOversizedOwnerListsWithoutTruncation(t *
 		name, operationName, hash string
 		detail                    postports.PostDetailSlice
 	}{
-		{name: "semantic", operationName: "ContentPostDetailSemantic", hash: "b425b396c13494d91b0e970d0e9c2328d07d549c492bd76537dace26ea74aa04",
-			detail: postports.PostDetailSlice{PostID: "post-1", ContentType: "micro", TagRefs: make([]string, 31)}},
+		{name: "semantic", operationName: "ContentPostDetailSemantic", hash: "8f01162d0d879ffbdc5e96c93145b5c005b7b03582e52dfaa8c390424c62debd",
+			detail: postports.PostDetailSlice{PostID: "post-1", ContentType: "article", TagRefs: make([]string, 31)}},
 		{name: "media", operationName: "ContentPostDetailMedia", hash: "9d8916aa9564bd99f990ab00b32d79d70dc860d05108a5e6f30f07df43b2a25f",
 			detail: postports.PostDetailSlice{PostID: "post-1", ContentType: "image", MediaAssetIDs: make([]string, 21)}},
 		{name: "article assets", operationName: "ContentPostDetailArticleRenderAssets", hash: "119359eb546ba50284ad676377ca69138129ca01d605688310292ca156848b38",

@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：本 Story 为横切工程能力，不直接承接用户 Journey。
 >
-> 设计归属：[L2 DEC-014](../design.md#dec-014)
+> 设计引用：[L2 DEC-014](../design.md#dec-014)
 
 ## 1. 用户价值
 

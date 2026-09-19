@@ -22,11 +22,11 @@ import 'package:quwoquan_app/runtime/platform/storage/cache/cache_read_result.da
 import 'package:quwoquan_app/runtime/platform/storage/cache/cache_telemetry_sink.dart';
 import 'package:quwoquan_app/runtime/observability/app_exception_telemetry_service.dart';
 import 'package:quwoquan_app/runtime/platform/storage/cache/object_cache_store.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_feed_object_card.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
     show
         ContentFeedEmptyReason,
         ContentFeedOutcome,
-        FeedObjectCard,
         CloudOperationCancelledException,
         isCanonicalSha256Digest;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -214,7 +214,7 @@ class ContentQuerySnapshot {
     this.outcome = ContentFeedOutcome.content,
     this.emptyReason,
     this.activationIdentity,
-    this.objectCards = const <FeedObjectCard>[],
+    this.objectCards = const <ContentFeedObjectCard>[],
   }) {
     for (final card in objectCards) {
       if (card.anchorIndex < 0 || card.anchorIndex >= items.length) {
@@ -239,7 +239,7 @@ class ContentQuerySnapshot {
 
   final String key;
   final List<ContentPostViewData> items;
-  final List<FeedObjectCard> objectCards;
+  final List<ContentFeedObjectCard> objectCards;
   final String? nextCursor;
   final String? previousCursor;
   final DateTime? paginationExpiresAt;
@@ -292,7 +292,7 @@ class ContentQuerySnapshot {
       'key': key,
       'items': items.map(_postSnapshotMap).toList(growable: false),
       'objectCards': objectCards
-          .map((card) => card.toWire())
+          .map((card) => card.toSnapshotMap())
           .toList(growable: false),
       'nextCursor': nextCursor,
       'previousCursor': previousCursor,
@@ -323,8 +323,9 @@ class ContentQuerySnapshot {
       }
       final cards = rawCards
           .map(
-            (card) =>
-                FeedObjectCard.fromWire(Map<String, Object?>.from(card as Map)),
+            (card) => ContentFeedObjectCard.fromSnapshotMap(
+              Map<String, Object?>.from(card as Map),
+            ),
           )
           .toList(growable: false);
       final items = rawItems
@@ -351,7 +352,7 @@ class ContentQuerySnapshot {
       return ContentQuerySnapshot(
         key: key,
         items: List<ContentPostViewData>.unmodifiable(items),
-        objectCards: List<FeedObjectCard>.unmodifiable(cards),
+        objectCards: List<ContentFeedObjectCard>.unmodifiable(cards),
         fetchedAt: DateTime.parse(rawFetchedAt).toLocal(),
         nextCursor: map['nextCursor']?.toString(),
         previousCursor: map['previousCursor']?.toString(),
@@ -835,7 +836,7 @@ class ContentQuerySnapshotStore {
   void put({
     required String key,
     required List<ContentPostViewData> items,
-    List<FeedObjectCard> objectCards = const <FeedObjectCard>[],
+    List<ContentFeedObjectCard> objectCards = const <ContentFeedObjectCard>[],
     String? nextCursor,
     String? previousCursor,
     DateTime? paginationExpiresAt,
@@ -864,7 +865,7 @@ class ContentQuerySnapshotStore {
     _snapshots[normalized] = ContentQuerySnapshot(
       key: normalized,
       items: List<ContentPostViewData>.unmodifiable(items),
-      objectCards: List<FeedObjectCard>.unmodifiable(objectCards),
+      objectCards: List<ContentFeedObjectCard>.unmodifiable(objectCards),
       nextCursor: nextCursor,
       previousCursor: previousCursor,
       paginationExpiresAt: paginationExpiresAt,
@@ -1071,7 +1072,6 @@ Map<String, String> _queryKeyParts(String key) {
 String contentFeedQueryKey({
   required String category,
   String? channelId,
-  String? identity,
   String? type,
   String? subCategory,
   String? cursor,
@@ -1082,7 +1082,6 @@ String contentFeedQueryKey({
     'surface=discoveryFeed',
     'category=${category.trim()}',
     'channelId=${(channelId ?? '').trim()}',
-    'identity=${(identity ?? '').trim()}',
     'type=${(type ?? '').trim()}',
     'subCategory=${(subCategory ?? '').trim()}',
     'cursor=${(cursor ?? '').trim()}',
@@ -1094,7 +1093,6 @@ String contentFeedQueryKey({
 
 String contentUserPostsQueryKey({
   required String userId,
-  String? identity,
   String? type,
   String? visibility,
   String? cursor,
@@ -1103,7 +1101,6 @@ String contentUserPostsQueryKey({
   final parts = <String>[
     'surface=userPosts',
     'userId=${userId.trim()}',
-    'identity=${(identity ?? '').trim()}',
     'type=${(type ?? '').trim()}',
     'visibility=${(visibility ?? '').trim()}',
     'cursor=${(cursor ?? '').trim()}',
@@ -1120,9 +1117,14 @@ String _resolvePostVersion(ContentPostViewData post) {
 }
 
 Map<String, dynamic> _postSnapshotMap(ContentPostViewData post) {
-  return Map<String, dynamic>.from(
-    contentPostProjectionFromViewData(post).toWire(),
-  );
+  return <String, dynamic>{
+    ...contentPostProjectionFromViewData(post).toWire(),
+    // 列表信封的展示轴不在 Post 投影里；快照回放必须保留，否则命中缓存的项
+    // 会丢失云物化目的面。
+    if (post.openSurface != null) 'openSurface': post.openSurface!.wireName,
+    if (post.presentationRecipe != null)
+      'presentationRecipe': post.presentationRecipe!.wireName,
+  };
 }
 
 Map<String, dynamic> _normalizePostSnapshotMap(Map<dynamic, dynamic> raw) {
@@ -1134,10 +1136,6 @@ Map<String, dynamic> _normalizePostSnapshotMap(Map<dynamic, dynamic> raw) {
   final contentType = map['contentType'];
   if (contentType != null) {
     map['contentType'] = contentType.toString();
-  }
-  final identity = map['contentIdentity'];
-  if (identity != null) {
-    map['contentIdentity'] = identity.toString();
   }
   return map;
 }

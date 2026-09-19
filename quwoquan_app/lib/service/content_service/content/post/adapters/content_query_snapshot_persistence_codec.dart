@@ -92,7 +92,7 @@ void _writeSnapshotJson(
   _writeJsonField(
     writer,
     'objectCards',
-    snapshot.objectCards.map((card) => card.toWire()),
+    snapshot.objectCards.map((card) => card.toSnapshotMap()),
   );
   writer.writeRaw(',');
   _writeJsonField(

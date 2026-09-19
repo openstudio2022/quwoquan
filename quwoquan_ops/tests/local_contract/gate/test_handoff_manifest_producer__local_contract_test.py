@@ -30,7 +30,6 @@ from lib.evidence_fingerprint import canonical_json_bytes  # noqa: E402
 from lib.candidate_evidence import build_candidate_evidence  # noqa: E402
 from lib.feature_tree.content_addressed_writer import _write_content_addressed_bytes  # noqa: E402
 from lib.feature_tree.commands import _context_manifest, discover_nodes  # noqa: E402
-from lib.feature_tree.ownership import resolve_target_details  # noqa: E402
 
 REGISTRY_PATH = ROOT / ".agents/skills/review/references/registry.yaml"
 GATE_PATH = ROOT / "quwoquan_ops/gate/verify_handoff_manifest.py"
@@ -53,9 +52,7 @@ class HandoffManifestProducerTest(unittest.TestCase):
             "agent-skill-review-context-organization/spec.md"
         )
         nodes = discover_nodes()
-        manifest = _context_manifest(
-            target, resolve_target_details(target, nodes), nodes
-        )
+        manifest = _context_manifest(target, nodes)
         manifest["open_items"] = [
             {
                 "path": target,
@@ -80,9 +77,7 @@ class HandoffManifestProducerTest(unittest.TestCase):
         manifest_ref = manifest_path.relative_to(ROOT).as_posix()
 
         changed_paths = [target]
-        candidate = build_candidate_evidence(
-            manifest_ref, changed_paths, repo_root=ROOT
-        )
+        candidate = build_candidate_evidence(changed_paths, repo_root=ROOT)
         candidate_bytes = canonical_json_bytes(candidate)
         candidate_path = ROOT / (
             ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
@@ -166,7 +161,6 @@ class HandoffManifestProducerTest(unittest.TestCase):
                 None,
                 changed_paths,
                 context_manifest=manifest,
-                context_manifest_ref=manifest_ref,
                 candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
             )
             receipt = evidence_runner.run_plan(
@@ -270,7 +264,6 @@ class HandoffManifestProducerTest(unittest.TestCase):
             "artifacts": [artifact.relative_to(ROOT).as_posix()],
             "pending_dispositions": [],
             "downstream": "plan-next",
-            "owner_identity_ref": plan["owner_identity"]["ref"],
             "candidate_evidence_ref": plan["candidate_evidence_identity"]["ref"],
             "review_plan_ref": plan_path.relative_to(ROOT).as_posix(),
             "evidence_receipt_refs": [receipt_ref],
@@ -381,7 +374,6 @@ class HandoffManifestProducerTest(unittest.TestCase):
 
     def test_rejects_owner_plan_result_and_consolidation_ref_rename(self) -> None:
         for field in (
-            "owner_identity_ref",
             "candidate_evidence_ref",
             "review_plan_ref",
             "reviewer_result_refs",

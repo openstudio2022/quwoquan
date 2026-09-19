@@ -19,9 +19,11 @@ import conftest as isolation_gate
 
 def _isolated_env(root: Path) -> dict[str, str]:
     return {
+        "XDG_DATA_HOME": str(root / "xdg-data"),
         "QWQ_DATA_ROOT": str(root),
         "QWQ_OUTPUT_ROOT": str(root / "output"),
         "QWQ_PUBLISH_ROOT": str(root / "publish"),
+        "QWQ_LIBRARY_ROOT": str(root / "content-library"),
         "QWQ_CARRIED_MEDIA_ROOT": str(root / "carried-media"),
     }
 
@@ -36,6 +38,8 @@ def _paths_module(root: Path) -> SimpleNamespace:
         DATA_ROOT=root,
         OUTPUT_ROOT=root / "output",
         PUBLISH_ROOT=root / "publish",
+        LIBRARY_ROOT=root / "content-library",
+        default_carried_media_root=lambda: root / "carried-media",
         carried_media_root=lambda: root / "carried-media",
     )
 

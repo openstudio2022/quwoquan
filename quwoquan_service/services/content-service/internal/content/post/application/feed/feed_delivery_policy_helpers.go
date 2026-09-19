@@ -135,29 +135,13 @@ func normalizeFeedSort(sortValue string) string {
 	}
 }
 
-func mapContentTypeToViewType(contentType string) string {
-	switch strings.TrimSpace(contentType) {
-	case "micro":
-		return "moment"
-	case "image":
-		return "image"
-	case "video":
-		return "video"
-	case "article":
-		return "article"
-	default:
-		return "image"
-	}
-}
-
+// normalizeRequestType 只承认频道 token 与 canonical ContentType 闭集。
+// 频道 token 不是内容类型过滤条件，归一为空；其余取值原样进入 ContentType
+// 校验，未知值由 application 拒绝，不在这里翻译成别名。
 func normalizeRequestType(t string) string {
 	switch strings.TrimSpace(strings.ToLower(t)) {
 	case "", "recommended", "following", "travel", "travel_photography", "premium", "similar", "featured", "immersive", "精品", "旅行", "旅游":
 		return ""
-	case "photo":
-		return "image"
-	case "note":
-		return "article"
 	default:
 		return strings.TrimSpace(strings.ToLower(t))
 	}
@@ -305,26 +289,6 @@ func postVerticalTokens(post *postports.PostFeedItemSlice) []string {
 	tokens = append(tokens, post.TagRefs...)
 	tokens = append(tokens, post.EntityRefs...)
 	return tokens
-}
-
-func normalizeRequestedIdentity(identity string) string {
-	switch strings.TrimSpace(strings.ToLower(identity)) {
-	case "moment", "work":
-		return strings.TrimSpace(strings.ToLower(identity))
-	default:
-		return ""
-	}
-}
-
-func ResolvedContentIdentity(contentType, contentIdentity string) string {
-	normalized := strings.TrimSpace(strings.ToLower(contentIdentity))
-	if normalized == "moment" || normalized == "work" {
-		return normalized
-	}
-	if strings.TrimSpace(strings.ToLower(contentType)) == "micro" {
-		return "moment"
-	}
-	return "work"
 }
 
 func toLowerSet(items []string) map[string]struct{} {

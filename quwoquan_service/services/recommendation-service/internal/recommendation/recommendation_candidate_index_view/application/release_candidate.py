@@ -72,7 +72,7 @@ def validate_prepared(event: PostReleaseCandidatePrepared):
         identity = post.identity
         if (not post.postRef or not post.authorId or not post.authorDisplayName or not post.deepLink
                 or post.status != "published" or post.visibility != "public" or post.moderationStatus != "approved"
-                or post.contentType not in {"article", "image", "video", "micro"} or post.contentIdentity not in {"work", "moment"}
+                or post.contentType not in {"article", "image", "video"}
                 or min(post.width, post.height, post.durationMs) < 0):
             raise ReleaseCandidateError("invalid canonical Post source")
         if (identity.objectType != "content.post" or not identity.objectId or identity.sourceVersion <= 0

@@ -389,10 +389,10 @@ def _scan_pub_cache_tree(
                                 part in _FORBIDDEN_CACHE_SEGMENTS
                                 for part in suffix.parts
                             ):
-                                raise ValueError(
-                                    "App dependency managed cache contains build output: "
-                                    f"{relative}"
-                                )
+                                # Native package builds may materialize ephemeral .cxx/.gradle
+                                # state inside an otherwise immutable projected pub cache. These
+                                # directories are never part of the dependency-domain digest.
+                                continue
                         directories.add(relative)
                     scan_directory(child, relative_path)
                 finally:

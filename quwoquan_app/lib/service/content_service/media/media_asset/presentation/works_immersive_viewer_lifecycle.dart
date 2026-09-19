@@ -525,8 +525,10 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
 
   // ── 行为追踪辅助 ──────────────────────────────────────────────
 
-  String _immersiveChannelId() =>
-      WorksImmersiveViewerObservability.immersiveChannelId(widget.source);
+  // 外部列表的来源只读行为归因；内部流仍由 source 选择 premium/browse。
+  String _immersiveChannelId() => _usesExternalFeed
+      ? widget.referralSource.value
+      : WorksImmersiveViewerObservability.immersiveChannelId(widget.source);
 
   ({String? feedRequestId, String? policyDigest}) _feedAttributionForPost(
     ContentPostViewData post,
@@ -541,7 +543,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
         ? 'premium'
         : _isVideoLikePost(post)
         ? 'video'
-        : _isArticleLikePost(post) || _isTextOnlyMomentPost(post)
+        : _isArticleLikePost(post)
         ? 'article'
         : 'photo';
     final feed = _readFeedState(tabId);
@@ -580,7 +582,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     _pageEnterTime = DateTime.now();
     _contentBehaviorTracker.trackImpression(
       post.id,
-      contentType: post.type,
+      contentType: post.type.wireName,
       referralSource: attribution.referralSource,
       feedRequestId: attribution.feedRequestId,
       // 沉浸流逐条曝光携带页序位（B7）：与首页 feed 同口径的 position 归因。
@@ -612,7 +614,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     _articleReaderObservability.trackReaderOpen(
       postId: post.id,
       durationMs: DateTime.now().difference(_viewerOpenedAt).inMilliseconds,
-      source: widget.source,
+      source: _usesExternalFeed ? widget.referralSource.value : widget.source,
       template: article.template.name,
       fontPreset: article.fontPreset.name,
       pageCount: article.pages.length.clamp(1, 99),
@@ -870,7 +872,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
           settleMs: event.settleDuration.inMilliseconds,
           reducedMotion: event.reducedMotion,
           committed: event.committed,
-          contentType: post.type,
+          contentType: post.type.wireName,
           referralSource: widget.referralSource,
           feedRequestId: feedAttribution.feedRequestId,
           position: _attributedPosition(_currentPage),
@@ -906,7 +908,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
     _contentBehaviorTracker.trackDwell(
       post.id,
       durationSeconds: durationSec,
-      contentType: post.type,
+      contentType: post.type.wireName,
       referralSource: attribution.referralSource,
       feedRequestId: attribution.feedRequestId,
       position: attribution.position,
@@ -919,7 +921,7 @@ extension _WorksImmersiveViewerLifecycle on _WorksImmersiveViewerState {
       _contentBehaviorTracker.trackSkip(
         post.id,
         dwellSeconds: durationSec,
-        contentType: post.type,
+        contentType: post.type.wireName,
         referralSource: attribution.referralSource,
         feedRequestId: attribution.feedRequestId,
         position: attribution.position,

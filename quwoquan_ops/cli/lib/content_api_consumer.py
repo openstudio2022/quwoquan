@@ -509,7 +509,6 @@ def _direct_probe(
             if (
                 observation.payload.get("postId") != sample.runtime_object_id
                 or observation.payload.get("contentType") != sample.carrier
-                or observation.payload.get("contentIdentity") != "work"
             ):
                 raise ContentApiConsumerError(
                     f"direct/{sample.carrier} imported post identity drifted"

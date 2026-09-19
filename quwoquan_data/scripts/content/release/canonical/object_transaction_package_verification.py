@@ -181,6 +181,10 @@ def verify_package(
                 )
     if not set(creator_objects).issubset(creator_refs):
         raise ObjectTransactionError("creatorObjects 不得包含 creatorRefs 之外的对象")
+    if object_kind == "entities":
+        creator_profile_id = str(object_manifest.get("creatorProfileId") or "").strip()
+        if creator_profile_id and creator_profile_id not in creator_refs:
+            raise ObjectTransactionError("entity_creator_closure_missing")
     for tag_ref in tag_refs:
         if not _tag_exists(tag_ref):
             raise ObjectTransactionError(f"tag closure 不可解析：{tag_ref}")

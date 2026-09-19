@@ -218,7 +218,7 @@
 <a id="dec-018"></a>
 ### DEC-018 App 以能力驱动的对象纵切承接端云业务模型
 
-- 决策：App 业务实现的 canonical 位置是 `lib/service/<service>/<context>/<object>/{domain,application,adapters,presentation}`；`<service>` 是拥有该 context 的云侧服务名的 snake_case 形式，context/object 取自 ContractGraph 与 L1 稳定工程归属，`runtime`、`design_system`、`l10n` 只承接横切能力。
+- 决策：App 业务实现的 canonical 位置是 `lib/service/<service>/<context>/<object>/{domain,application,adapters,presentation}`；`<service>` 是拥有该 context 的云侧服务名的 snake_case 形式，context/object 取自 ContractGraph 与服务本地领域契约，`runtime`、`design_system`、`l10n` 只承接横切能力。
 - 决策：目录层不是固定四层脚手架。对象存在 App-exposed operation 时要求 application/adapters，被页面对象契约认领时要求 application/presentation，只有 App 自己维护不变式或状态机时要求 domain；纯云对象没有端侧能力时不创建 App 对象目录，append-only fact 不直接拥有 presentation。
 - 理由：用云侧 kind 无条件要求全部 App 层会生成空 facade 和占位实现，而继续按 `ui/cloud/core` 技术大桶组织又无法从路径反向定位对象、规格和测试 owner；能力事实驱动的纵切同时避免两种失真。
 - 被否决方案：为每个云对象生成四个空 App 层、按页面或网络/缓存技术类型建顶层大桶、以文件名或手工映射表推测 owner、保留旧目录作为长期兼容入口。
@@ -369,7 +369,7 @@
 - 决策：组网配置逻辑面契约预制、物理面环境注入，两者都不进配置中心。逻辑组网（服务存在性、名称、依赖、逻辑端口）变化是部署事件，必须携带 Composition/Topology 身份与整体回滚语义（[deliver-deploy-prod-pipeline DEC-003](../deliver-deploy-prod-pipeline/design.md#dec-003)）；物理组网（实际地址、URI、凭据、容量）只由环境装配注入。
 - 决策：服务名由 Builder 入参单点声明，与 `composition.yaml`、compose service name、specs 同一字面值；跨服务调用键名由 `Identity.ServiceBaseURL` 统一派生 `<TOKEN>_SERVICE_BASE_URL`，值仍由部署面或宿主注入。
 - 决策：代码内 magic 兜底（硬编码监听端口、`mongodb://localhost:27017`、数据库名）随迁移移除，监听地址与数据库名缺失即启动失败；本地便利由 alpha `config.yaml` 默认值承担，默认值归 `config/schema.yaml` 与环境入口，不归代码。
-- 决策：`quwoquan_service/runtime/servicekit` 的代码工程归属按 `quwoquan_service/runtime` 前缀归 [gateway-orchestrator-foundation](../../gateway-orchestrator-foundation/spec.md) L1（其工程归属段直接认领该路径），跨横切工程规范的设计裁决归本 DEC。反查路径为「代码路径查 gateway-orchestrator-foundation spec 工程归属、装配规范查本 DEC」，与 [DEC-022](#dec-022) 裁决 `runtime/auth` 的归属分离形态同型。
+- 决策：`quwoquan_service/runtime/servicekit` 的 Feature context 可引用 [gateway-orchestrator-foundation](../../gateway-orchestrator-foundation/spec.md)，跨横切工程规范的设计裁决归本 DEC。代码影响按 actual diff 与 dependency closure 推导，装配规范查本 DEC，与 [DEC-022](#dec-022) 裁决 `runtime/auth` 的归属分离形态同型。
 - 理由：进程级相位机与组合宿主已单轨存在，但 14 个 Go 服务的 bootstrap 各自复制身份解析（8 份）、env 校验（9 份字节级相同）、消息传输模板（13 份）、生命周期实现体（约 200–240 行 × 11 份）与观测/auth 装配（每服务 100+ 行）。样板漂移已经产生三种 config sync 签名与多处 magic 兜底，收敛到装配套件是消除第二真相源，不是新增抽象层。
 - 理由：servicekit 不依赖 generated 产物才能保持「顶层 host 只消费薄 bootstrap、横切库不反向穿透服务内部」的既有方向；generated 输入以值对象传入使服务差异（domain 名、binding、rootID）留在唯一知道它们的 bootstrap。
 - 被否决方案：继续逐服务复制样板，或把模块装配并入 servicehost——后者混淆进程相位与模块装配两种变更频率。
@@ -495,10 +495,18 @@
 - 约束与影响：大迁移只有在混入无关 owner/目的、无法绑定唯一验收切片或无法独立测试时才以 `CANDIDATE.SPLIT_REQUIRED` 阻断；纯删除、codegen、fixture regeneration 与机械 rename 单列。误报只能修分类器/规则并以 `superseded_measure` 留下旧口径实测，不能豁免路径。
 - 失败与恢复：policy、Git range、工具身份或 candidate 字节不完整时 fail-closed 且不写 PASS；外部分析器缺失时只将对应 advisory 指标标记 unavailable，不得吞掉首日 blocker。误报率、耗时或交付失败率超标时回退该规则的 enforcement 到 advisory，但保留观测。
 - 观测：记录 delta p95、confirmed false-positive、Agent 修复轮次、手写 churn、Top 20 hotspot、Delivery calendar critical path、change failure/recovery/rework；Delivery 关键路径增长超过 5% 或 60 秒、交付 lead time/失败率恶化超过 10% 时触发 rollout 回退。
-- 适用工程根：`quwoquan_ops/policies/code_health_policy.yaml`、`quwoquan_ops/gate/code_health_delta`、`quwoquan_ops/gate/verify_incremental_code_health.py`、`quwoquan_ops/tests/local_contract/gate/test_incremental_code_health__gate__local_contract_test.py`、`quwoquan_ops/gate/run_code_health_calibration.py`、`quwoquan_ops/gate/report_code_health_weekly.py`、`quwoquan_ops/gate/report_code_health_hotspots.py`、`quwoquan_ops/ci/verify_code_health_integration.py`、`quwoquan_ops/ci/code_health_evidence.py`、`.github/workflows/code-health-integration.yml`、`.github/workflows/code-health-weekly.yml`
 - 关联要求：`REQ-001`、`REQ-002`、`REQ-003`
 - 影响 Story：[`incremental-code-health-governance`](./incremental-code-health-governance/spec.md)
 - 关联验收：`GWT-001`、`GWT-002`、`GWT-003`
+
+<a id="dec-033"></a>
+### DEC-033 跨 Data、Service、App、Ops 的契约身份以派生双向闭包保持单轨
+
+- 决策：字段、枚举、wire shape 与公开 JSON Pointer 只由所属 authoring schema/contract 拥有；Data schema、Service importer/ContractGraph、App generated client/decoder 与 Ops typed reader 都是同一契约图中的 producer/consumer 节点。检查器从当前 authoring tree、根内 `$ref`、生产 loader/dispatch 和现役跨树 binding 现场派生边，不建立 tracked schema/consumer registry、候选 inventory 或第二份字段清单。
+- 决策：闭包同时验证 schema→schema、identity→schema、consumer→schema 与 schema→consumer。悬空/越界/循环 `$ref`、重复 `$id` 或逻辑身份、消费者无唯一 authority、非 supporting schema 无生产消费者、手写镜像偏离 canonical contract、生成输入/输出过期任一成立即 fail-closed；测试、文档和历史输出不能单独证明生产消费。动态 resolver 必须由现役代码声明可枚举闭集，任意字符串目标不算绑定。
+- 决策：退出是同一变更内的原子动作。已非现役协议必须同时删除 authority、生产 reader/writer、配置实例、生成物与仅服务旧协议的测试，并由现有退役反向门防回流；仍现役则必须在同一变更接入真实校验。不得把失败降为候选、分批清理或登记 OPEN 后放行，工具只报告和阻断，不自动删除。
+- 理由：既有 ContractGraph source freshness、App handoff lock/generated manifest 已证明“authoring 摘要 + 反向输入对账”能发现 stale 生成物，但 Data schema 与 Service/App/Ops 手写 reader 的触发不对称，漂移会延迟到 context 全套或合并后才暴露。一个仅依赖源码字节的统一闭包可复用该判据并在 L0 首判；环境 package/import/readback/UAT 仍只证明运行链，不替代源码契约闭包。
+- 约束与影响：跨语言 parity 使用 canonical vectors 或生成类型，不复制字段白名单；现有 ContractGraph freshness、handoff 与 generated manifest 摘要算法继续由各自 owner 实现，统一闭包只调用/消费其结果。任一侧独立变化都必须选择同一 check id/命令，失败不得生成 source readiness PASS。
 
 <a id="dec-032"></a>
 ### DEC-032 存储引擎按业务不变量裁决，逻辑端口与物理绑定分层

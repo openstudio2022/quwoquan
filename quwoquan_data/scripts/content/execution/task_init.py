@@ -178,6 +178,13 @@ def _read_regular_at(root_fd: int, ref: str, *, label: str) -> bytes:
         os.close(descriptor)
 
 
+_SUBMITTED_DOCUMENT_SCHEMAS = {
+    "round_spec": ("execution", "round_spec"),
+    "carrier_demand": ("execution", "carrier_demand"),
+    "immutable_candidate_bindings": ("execution", "immutable_candidate_bindings"),
+}
+
+
 def _load_submitted_document(path: Path, *, schema_name: str) -> dict[str, Any]:
     """读取 AI 提交的输入：任意路径、任意 JSON 排版；只要求是对象且过 schema。"""
     raw = _assert_regular_bytes(path, label=f"{schema_name} 输入")
@@ -187,7 +194,10 @@ def _load_submitted_document(path: Path, *, schema_name: str) -> dict[str, Any]:
         raise TaskInitError(f"{schema_name} 必须是合法 JSON") from exc
     if not isinstance(value, dict):
         raise TaskInitError(f"{schema_name} 必须是 JSON 对象")
-    assert_valid(value, "execution", schema_name, label=f"task init {schema_name}")
+    schema_target = _SUBMITTED_DOCUMENT_SCHEMAS.get(schema_name)
+    if schema_target is None:
+        raise TaskInitError(f"未登记 task init schema：{schema_name}")
+    assert_valid(value, *schema_target, label=f"task init {schema_name}")
     return value
 
 

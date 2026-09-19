@@ -13,8 +13,7 @@ void main() {
         post: ContentPostViewData.fromWire(
           ContentPostProjection(
             postId: 'discovery-share-post',
-            contentType: 'image',
-            contentIdentity: 'work',
+            contentType: ContentType.image,
             authorId: 'author-1',
             authorDisplayName: '作者',
             authorAvatarUrl: '',
@@ -27,7 +26,6 @@ void main() {
             createdAt: DateTime.utc(2026, 7, 15),
           ),
         ),
-        enableIdentityTemplate: true,
         visibility: 'public',
         tags: const <String>['travel'],
         publicLinks: testPublicContentLinks,

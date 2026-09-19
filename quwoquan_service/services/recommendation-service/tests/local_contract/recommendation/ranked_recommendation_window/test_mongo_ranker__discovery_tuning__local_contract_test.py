@@ -12,6 +12,7 @@ import hashlib
 import json
 
 import pytest
+from tests.support.presentation import presentation_contract
 from generated.recommendation.ranked_recommendation_window.models.request_response import ReleasePinnedQueryFence
 from prometheus_client import REGISTRY
 
@@ -69,15 +70,15 @@ class _Candidates:
     def __init__(self, documents: list[dict]) -> None:
         self.documents = documents
 
-    def list_for_ranking(self, *, subject_id: str, scenario: str, limit: int):
+    def list_for_ranking(self, *, subject_id: str, scenario: str, limit: int, eligible_content_types):
         return list(self.documents)
 
     def list_for_ranking_by_content_ids(
-        self, *, scenario: str, content_ids: tuple, limit: int
+        self, *, scenario: str, content_ids: tuple, limit: int, eligible_content_types
     ):
         return []
 
-    def list_object_card_candidates(self, *, limit: int):
+    def list_homepage_candidates(self, *, limit: int):
         return []
 
 
@@ -189,6 +190,7 @@ def _ranker(
 def _rank(ranker: MongoCandidateRanker):
     return ranker.rank(
         content_fence=ReleasePinnedQueryFence(release=None, revision=0),
+        client_presentation_contract=presentation_contract(),
         subject_id=SUBJECT,
         scenario="content_feed",
         session_id="window-tuning",
@@ -214,7 +216,7 @@ def test_new_content_boost_promotes_fresh_candidates() -> None:
     scoring = _FixedScoring({"post-old": 0.6, "post-fresh": 0.5})
 
     neutral = _rank(_ranker(scoring, documents, tuning=DiscoveryRankingTuning.neutral()))
-    assert [item.content_id for item in neutral.candidates] == ["post-old", "post-fresh"]
+    assert [item.envelope.post.postId for item in neutral.candidates] == ["post-old", "post-fresh"]
 
     boosted = _rank(
         _ranker(
@@ -227,7 +229,7 @@ def test_new_content_boost_promotes_fresh_candidates() -> None:
             ),
         )
     )
-    assert [item.content_id for item in boosted.candidates] == ["post-fresh", "post-old"]
+    assert [item.envelope.post.postId for item in boosted.candidates] == ["post-fresh", "post-old"]
     assert boosted.candidates[0].score == pytest.approx(0.75)
     assert boosted.candidates[1].score == pytest.approx(0.6)
 
@@ -252,7 +254,7 @@ def test_author_diversity_weight_demotes_repeat_authors() -> None:
         )
     )
     # Second post-a item decays to 0.8 * 0.5 = 0.4 and falls behind post-b1.
-    assert [item.content_id for item in result.candidates] == [
+    assert [item.envelope.post.postId for item in result.candidates] == [
         "post-a1",
         "post-b1",
         "post-a2",
@@ -278,7 +280,7 @@ def test_whitelist_keeps_canonical_release_supply_only() -> None:
             ),
         )
     )
-    assert [item.content_id for item in result.candidates] == ["post-canonical"]
+    assert [item.envelope.post.postId for item in result.candidates] == ["post-canonical"]
 
 
 def test_whitelist_never_bypasses_hard_filters() -> None:

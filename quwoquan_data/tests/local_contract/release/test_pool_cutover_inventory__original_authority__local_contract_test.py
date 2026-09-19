@@ -12,7 +12,7 @@ from content.release.canonical import pool_cutover_inventory as subject
 from content.release.canonical.object_transaction_contract import _digest_file, _read_json, _tree_digest
 from core import paths
 from local_contract.release.test_pool_cutover__exact_cas__contract__local_contract_test import (
-    CREATOR, HOME, _execution, _publish, _write,
+    CREATOR, HOME, PROCESS_HOME, _execution, _publish, _write,
 )
 
 
@@ -63,7 +63,7 @@ def test_conversion_never_fills_missing_rights_facts() -> None:
 @pytest.fixture
 def original(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict:
     execution = _execution(tmp_path, monkeypatch)
-    active, package = _publish(tmp_path, execution)
+    active, package = _publish(tmp_path, execution, monkeypatch)
     return {"execution": execution, "active": active, "tmp": tmp_path, "package": package,
             "authority": paths.CONTROL_PLANE_CREATOR_POOL_ROOT / "evidence/system_builtin_author_admission.json"}
 
@@ -116,7 +116,7 @@ def test_inventory_does_not_requalify_drift_or_missing_authority(original: dict,
     if fault == "canonical_payload":
         _write(root / "page.md", "unreviewed canonical replacement")
     elif fault == "execution_draft":
-        _write(execution / HOME / "4.draft/page.md", "unreviewed draft replacement")
+        _write(execution / PROCESS_HOME / "4.draft/page.md", "unreviewed draft replacement")
     elif fault == "review_identity":
         review = _read_json(root / "content_review.json")
         review["executionId"] = "other-execution"
@@ -167,11 +167,11 @@ def test_text_conversion_preserves_original_review_and_validates_current_record(
 
 def _install_legacy_classification(original: dict, *, invalid_scope: str | None = None) -> None:
     root, execution = original["active"] / HOME, original["execution"]
-    review_path = execution / HOME / "5.review/content_review.json"
+    review_path = execution / PROCESS_HOME / "5.review/content_review.json"
     review_digest = _digest_file(review_path)
     receipt_path = execution / "_shared/receipts/003-5.review.json"
     receipt = _read_json(receipt_path)
-    binding = {"scope": "execution", "ref": HOME + "/5.review/content_review.json", "digest": review_digest}
+    binding = {"scope": "execution", "ref": PROCESS_HOME + "/5.review/content_review.json", "digest": review_digest}
     receipt["resultRefs"] = [binding if row.get("ref") == binding["ref"] else row for row in receipt["resultRefs"]]
     _write(receipt_path, receipt)
 
@@ -182,15 +182,22 @@ def _install_legacy_classification(original: dict, *, invalid_scope: str | None 
     manifest.update(variantPurpose="commercial_variant")
     manifest["sourceAttribution"]["publicationAdmission"] = publication
     _write(root / "manifest.json", manifest)
-    entity = _read_json(root / "_entity.json")
+    entity_path = root / "_entity.json"
+    entity = _read_json(entity_path) if entity_path.is_file() else dict(manifest)
     entity["sourceAttribution"]["publicationAdmission"] = publication
-    _write(root / "_entity.json", entity)
+    _write(entity_path, entity)
+    rights_path = root / "rights.json"
+    if not rights_path.is_file():
+        _write(rights_path, {"schema": "quwoquan_data.asset_rights_closure", "publishMediaMode": "text_only", "assets": []})
 
-    record_path = root / "_pool/versions/1.json"
+    record_path = root / "records/1.json"
     record = _read_json(record_path)
     record.update(usageScope="commercial", sourceAttribution=manifest["sourceAttribution"],
-                  evidenceDigest=review_digest, rightsAuthorityDigest=review_digest,
-                  payloadDigest=subject.original_pool_payload_digest(root))
+                  evidenceDigest=review_digest, rightsAuthorityDigest=review_digest)
+    _write(record_path, record)
+    from content.release.canonical.content_pool_record import pool_payload_digest
+    record["payloadDigest"] = pool_payload_digest(root)
+    record["canonicalObjectDigest"] = record["payloadDigest"]
     _write(record_path, record)
 
 
@@ -216,18 +223,18 @@ def test_legacy_text_conversion_removes_only_known_classification(original: dict
     result = convert_text_object(object_root=root, execution_root=original["execution"], object_ref=HOME)
     successor = json.loads(result[Path("manifest.json")])
     successor_review = json.loads(result[Path("content_review.json")])
-    successor_rights = json.loads(result[Path("rights.json")])
-    successor_record = json.loads(result[Path("_pool/versions/1.json")])
+    assert Path("rights.json") not in result
+    successor_record = json.loads(result[Path("records/1.json")])
 
     assert _tree_digest(root) == before_digest
     assert {path.relative_to(root): path.read_bytes() for path in root.rglob("*") if path.is_file()} == before_bytes
     assert successor["version"] == before_manifest["version"] + 1
     assert successor_record["contentVersion"] == successor["version"]
-    assert successor_record["payloadDigest"] != _read_json(root / "_pool/versions/1.json")["payloadDigest"]
+    assert successor_record["payloadDigest"] != _read_json(root / "records/1.json")["payloadDigest"]
     assert _without_classification(successor) == _without_classification({**before_manifest, "version": successor["version"]})
     assert _without_classification(successor_review) == _without_classification(before_review)
-    assert _without_classification(successor_rights) == _without_classification(before_rights)
-    for document in (successor, successor_review, successor_rights, successor_record):
+    assert before_rights["publishMediaMode"] == "text_only" and before_rights["assets"] == []
+    for document in (successor, successor_review, successor_record):
         encoded = json.dumps(document, ensure_ascii=False)
         assert not any(field in encoded for field in ("publicationAdmission", "distributionDecision", "variantPurpose"))
     assert "usageScope" not in successor.get("admission", {})
@@ -401,6 +408,8 @@ def test_converted_text_passes_existing_staging_validator_without_new_execution(
             destination = root / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             destination.write_bytes(raw)
+    from content.release.canonical.canonical_inventory import canonical_inventory_path
+    canonical_inventory_path(stage).unlink(missing_ok=True)
     for root in (stage / "creators" / CREATOR, package / "creator_objects" / CREATOR):
         profile = subject.convert_creator_profile(_read_json(root / "profile.json"), original["authority"])
         _write(root / "profile.json", profile)
@@ -408,9 +417,9 @@ def test_converted_text_passes_existing_staging_validator_without_new_execution(
     for row in document["closure"]["creatorObjects"]:
         row["treeDigest"] = _tree_digest(package / row["packageRef"])
     document["objectClosureDigest"] = _closure_digest(
-        object_root=package / "object", object_kind="entities", object_ref=HOME.removeprefix("entities/"),
+        object_root=package / "object", object_kind="entities", object_ref=document["target"]["objectRef"],
         target_schema="quwoquan_data.entity_object", source_policy_revision=document["sourcePolicyRevision"],
-        closure=document["closure"], cas_rows=document["closure"]["casRefs"], review=_review_binding(package / "object", document))
+        closure=document["closure"], cas_rows=[], review=_review_binding(package / "object", document))
     _write(package / "object_transaction_package.json", document)
     after = {row["objectRef"]: row for row in pool_cutover.snapshot_pool(stage)["objects"]}
     actions = []

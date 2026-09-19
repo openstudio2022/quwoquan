@@ -315,7 +315,6 @@ void main() {
         publishIntentId: 'publish-intent-1',
         localDraftId: 'draft-1',
         contentType: ContentType.image,
-        contentIdentity: ContentIdentity.work,
         title: '图片发布单轨',
         mediaAssetIds: const <String>['image-asset-1'],
         visibility: Visibility.public,
@@ -336,7 +335,7 @@ void main() {
         expect(request.body['publishIntentId'], 'publish-intent-1');
         expect(request.body['localDraftId'], 'draft-1');
         expect(request.body['contentType'], 'image');
-        expect(request.body['contentIdentity'], 'work');
+        expect(request.body, isNot(contains('contentIdentity')));
         expect(request.body['title'], '图片发布单轨');
         expect(request.body['mediaAssetIds'], const <Object?>['image-asset-1']);
         expect(request.body, isNot(contains('articleMarkdown')));

@@ -35,6 +35,7 @@ def deployment_input_roots(
     *,
     release_attestation: str = "",
     rollback_release_attestation: str = "",
+    candidate_evidence: str = "",
 ) -> list[str]:
     """Return the declared source closure actually read by runtime packaging."""
 
@@ -109,6 +110,15 @@ def deployment_input_roots(
         normalized = str(value or "").strip()
         if normalized:
             roots.add(str(Path(normalized).expanduser().absolute()))
+    normalized_candidate = str(candidate_evidence or "").strip()
+    if normalized_candidate:
+        from quwoquan_ops.cli.lib.candidate_evidence import validate_candidate_ref
+
+        ref, _raw, payload, _fingerprint = validate_candidate_ref(
+            normalized_candidate, repo_root=_pkg.ROOT
+        )
+        roots.add(ref)
+        roots.add(str(payload["path_set_identity"]["ref"]))
     return sorted(roots)
 
 
@@ -116,6 +126,7 @@ def deployment_input_digest(
     roots: Sequence[str],
     *,
     timeout_seconds: float | None = None,
+    platforms: tuple[str, ...] = ("android", "ios"),
 ) -> tuple[str, int]:
     """Digest tracked/untracked bytes in the declared package source closure."""
 
@@ -135,7 +146,7 @@ def deployment_input_digest(
         if dependency_required(_pkg.ROOT, _normalized_roots):
             if deadline is not None and time.monotonic() >= deadline:
                 raise TimeoutError("deployment input currentness check timed out")
-            snapshots = load_managed_dependency_snapshots(repo_root=_pkg.ROOT)
+            snapshots = load_managed_dependency_snapshots(repo_root=_pkg.ROOT, platforms=platforms)
             yield from dependency_bundle_digest_entries(snapshots)
 
     return _digest_record(entries())
@@ -145,6 +156,7 @@ def workspace_snapshot(
     *,
     deployment_roots: Sequence[str],
     timeout_seconds: float | None = None,
+    platforms: tuple[str, ...] = ("android", "ios"),
 ) -> dict[str, object]:
     """Return one identity bound only to the declared deployment closure."""
 
@@ -184,6 +196,7 @@ def workspace_snapshot(
     input_digest, input_count = _pkg.deployment_input_digest(
         normalized_roots,
         timeout_seconds=timeout_seconds,
+        platforms=platforms,
     )
     status_digest = "sha256:" + hashlib.sha256(status.stdout).hexdigest()
     identity_payload = {

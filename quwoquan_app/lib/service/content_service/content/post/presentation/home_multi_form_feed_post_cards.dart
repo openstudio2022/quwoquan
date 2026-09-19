@@ -273,7 +273,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                   ),
                   const SizedBox(height: AppSpacing.intraGroupSm),
                 ],
-                if (item.isArticleLike)
+                if (item.type == ContentType.article)
                   _HomeArticlePostCard(
                     item: item,
                     isDark: isDark,
@@ -296,7 +296,7 @@ class _HomeRelationPostCardState extends ConsumerState<_HomeRelationPostCard>
                             feedHostTarget,
                           ),
                   )
-                else if (item.isVideoLike && hasPlayableVideo)
+                else if (item.type == ContentType.video && hasPlayableVideo)
                   _HomeFeedVideoAutoPlayGate(
                     videoId: item.id,
                     scrollSignal: widget.videoScrollSignal,
@@ -624,7 +624,9 @@ class _FollowingArticleCard extends StatelessWidget {
   }
 
   String get _articleTemplateLabel {
-    final templateId = item.type == 'article' ? item.articleTemplate : '';
+    final templateId = item.type == ContentType.article
+        ? item.articleTemplate
+        : '';
     return articleTemplatePresetFromString(templateId).label;
   }
 

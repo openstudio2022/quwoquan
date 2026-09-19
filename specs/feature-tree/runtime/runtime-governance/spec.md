@@ -2,7 +2,7 @@
 
 > 所属领域：[`runtime`](../spec.md)
 >
-> 设计归属：[L1 DEC-001](../design.md#dec-001)
+> 设计引用：[L1 DEC-001](../design.md#dec-001)
 
 ## 1. 能力目标
 
@@ -126,7 +126,7 @@
 - 优先级：`P2`
 - 准出影响：`track`
 - 影响或价值：当前本能力描述的治理装置实现位于 `quwoquan_service/runtime/governance`，该路径的代码归属是 gateway L1，而本节点连同其唯一 Story 位于 runtime L1，描述与代码归属分处两个 L1。
-- 归属本身没有歧义：gateway L1 的工程归属把 `quwoquan_service/runtime` 列为 Service 代码归属，runtime L1 把同一路径显式标注为协作引用且不用于代码归属，所以不一致只发生在规格节点的落点上。
+- Feature context 本身不授予工程写权限：gateway 与 runtime 节点都可引用 `quwoquan_service/runtime`；实际工程影响由 current diff 与 dependency closure 推导。
 - 后果是双向反查断裂，从治理代码反查规格会落到 gateway L1 的节点集合，而治理行为要求写在 runtime L1，两侧无法互相定位。
 - 本 OPEN 只如实记录该错配，不触发结构重划。
 - 在落点被裁定前不得把本能力或其 Story 移到 gateway L1，也不得把 `quwoquan_service/runtime/governance` 改写进 runtime L1 的代码归属，任一单侧改动都会制造第二个归属声明。

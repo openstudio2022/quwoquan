@@ -18,7 +18,11 @@ List<ContentPostViewData> _suitePosts() => <ContentPostViewData>[
     contentType: 'video',
     videoUrl: testContentVideoUrl,
   ),
-  contentPostViewDataBuilder(postId: 'repository-micro', contentType: 'micro'),
+  contentPostViewDataBuilder(
+    postId: 'repository-plain-article',
+    contentType: 'article',
+    body: '无标题的纯文字文章',
+  ),
   contentPostViewDataBuilder(
     postId: 'repository-article',
     contentType: 'article',
@@ -47,7 +51,7 @@ void main() {
         for (final post in posts)
           post.id: contentPostDetailPayloadBuilder(
             post: post,
-            articleMarkdown: post.isArticleLike
+            articleMarkdown: post.type == ContentType.article
                 ? '# ${post.title}\n\nSuite-local detail.'
                 : null,
           ),
@@ -68,20 +72,120 @@ void main() {
       expect(page.items, hasLength(posts.length));
       expect(
         page.items.map((post) => post.type),
-        containsAll(<String>['image', 'video', 'micro', 'article']),
+        containsAll(<ContentType>[
+          ContentType.image,
+          ContentType.video,
+          ContentType.article,
+        ]),
       );
     });
 
-    test('feed query 支持 identity/type 过滤', () async {
+    test('feed query 仅按 canonical type 筛选文章', () async {
       final page = await feedQuery.listDiscoveryFeedPage(
-        category: 'work',
-        identity: 'work',
+        category: 'article',
         type: 'article',
       );
 
       expect(page.items, isNotEmpty);
-      expect(page.items.every((post) => post.identity == 'work'), isTrue);
-      expect(page.items.every((post) => post.isArticleLike), isTrue);
+      expect(
+        page.items.every((post) => post.type == ContentType.article),
+        isTrue,
+      );
+    });
+
+    test('显式类型与类型 category 精确筛选，photo 仅作为 surface 别名', () async {
+      for (final type in ContentType.values) {
+        final expected = posts
+            .where((post) => post.type == type)
+            .map((post) => post.id);
+        final explicit = await feedQuery.listDiscoveryFeedPage(
+          category: 'all',
+          type: type.wireName,
+          limit: 0,
+        );
+        final category = await feedQuery.listDiscoveryFeedPage(
+          category: type.wireName,
+          limit: 0,
+        );
+        expect(explicit.items.map((post) => post.id), expected);
+        expect(category.items.map((post) => post.id), expected);
+        expect(explicit.items, isNotEmpty);
+      }
+      final photo = await feedQuery.listDiscoveryFeedPage(category: 'photo');
+      expect(photo.items.map((post) => post.id), ['repository-image']);
+    });
+
+    test('非类型推荐 category 不误筛成空列表，channel 路由忽略类型筛选', () async {
+      for (final category in ['', 'all', 'recommend', 'following', 'travel']) {
+        final page = await feedQuery.listDiscoveryFeedPage(
+          category: category,
+          limit: 0,
+        );
+        expect(page.items.map((post) => post.id), posts.map((post) => post.id));
+      }
+      final page = await feedQuery.listDiscoveryFeedPage(
+        category: 'article',
+        channelId: 'recommend',
+        type: 'article',
+        limit: 0,
+      );
+      expect(page.items.map((post) => post.id), posts.map((post) => post.id));
+    });
+
+    test('精品池仍只返回明确登记的对象，不按类型替代精品资格', () async {
+      final premiumQuery = InMemoryContentDiscoveryFeedQuery(
+        store,
+        premiumPostIds: {'repository-image', 'repository-article'},
+      );
+      final page = await premiumQuery.listDiscoveryFeedPage(
+        category: 'premium',
+      );
+      expect(page.items.map((post) => post.id), [
+        'repository-image',
+        'repository-article',
+      ]);
+    });
+
+    test('显式未知和退役类型失败，不用别名降级或空列表伪装', () async {
+      for (final type in ['micro', 'photo', 'note', 'future-type']) {
+        await expectLater(
+          feedQuery.listDiscoveryFeedPage(category: 'all', type: type),
+          throwsFormatException,
+        );
+        await expectLater(
+          authorPostsReader.listUserPosts(
+            userId: posts.first.authorId,
+            type: type,
+          ),
+          throwsFormatException,
+        );
+      }
+    });
+
+    test('作者类型过滤保留匹配对象与分页顺序', () async {
+      final authorId = posts.first.authorId;
+      final expected = posts
+          .where(
+            (post) =>
+                post.authorId == authorId && post.type == ContentType.article,
+          )
+          .toList();
+      expect(expected, hasLength(2));
+      final first = await authorPostsReader.listUserPosts(
+        userId: authorId,
+        type: 'article',
+        limit: 1,
+      );
+      final second = await authorPostsReader.listUserPosts(
+        userId: authorId,
+        type: 'article',
+        cursor: first.nextCursor,
+        limit: 1,
+      );
+      expect(first.items.single.id, expected.first.id);
+      expect(first.nextCursor, '1');
+      expect(second.items.single.id, expected.last.id);
+      expect(second.nextCursor, isNull);
     });
 
     test('feed query 分页并回显权威 feedRequestId', () async {
@@ -105,7 +209,9 @@ void main() {
     });
 
     test('detail reader 对已知对象返回 typed payload', () async {
-      final article = posts.firstWhere((post) => post.isArticleLike);
+      final article = posts.firstWhere(
+        (post) => post.type == ContentType.article,
+      );
       final detail = await detailReader.getPost(postId: article.id);
 
       expect(detail.post.id, article.id);
@@ -120,18 +226,14 @@ void main() {
       );
     });
 
-    test('author posts reader 只返回指定作者并支持 identity', () async {
+    test('author posts reader 只返回指定作者，不按旧身份分轨', () async {
       final page = await authorPostsReader.listUserPosts(
         userId: 'nature_photographer',
-        identity: 'work',
       );
 
       expect(page.items, isNotEmpty);
       expect(
-        page.items.every(
-          (post) =>
-              post.authorId == 'nature_photographer' && post.identity == 'work',
-        ),
+        page.items.every((post) => post.authorId == 'nature_photographer'),
         isTrue,
       );
     });
@@ -183,7 +285,7 @@ void main() {
 
     test('空 category 不崩溃', () async {
       final page = await feedQuery.listDiscoveryFeedPage(category: '');
-      expect(page.items, isList);
+      expect(page.items.map((post) => post.id), posts.map((post) => post.id));
     });
   });
 }

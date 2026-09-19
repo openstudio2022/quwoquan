@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: 706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31
 
 part of '../../../ops/ops_operation_contracts.g.dart';
 
@@ -48,7 +48,7 @@ List<Object?> _generatedRequestList(Object? value, String path) {
   throw FormatException('$path must be a list');
 }
 
-// Derived from product_ops/event_record/event_catalog.yaml; source SHA256: a8031bc17eea2ed1de787042f7984646539be2e444c639cf554fb8b2b1256d8b.
+// Derived from product_ops/event_record/event_catalog.yaml; source SHA256: e48b3ae7ac35146603d50ed42077427b4bf8c1c6b101b04da4ea1402e539e743.
 final class EventRecord {
   EventRecord({
     required String logType,
@@ -80,7 +80,7 @@ final class EventRecord {
     String? chatSource,
     int? connectTimeMs,
     String? consentState,
-    String? contentIdentityOutcome,
+    String? contentReleaseIdentityOutcome,
     String? contentType,
     String? copyKey,
     String? correlationHash,
@@ -207,7 +207,7 @@ final class EventRecord {
        chatSource = chatSource,
        connectTimeMs = connectTimeMs,
        consentState = consentState,
-       contentIdentityOutcome = contentIdentityOutcome,
+       contentReleaseIdentityOutcome = contentReleaseIdentityOutcome,
        contentType = contentType,
        copyKey = copyKey,
        correlationHash = correlationHash,
@@ -912,7 +912,7 @@ final class EventRecord {
         allowed: const <String>{
           "buildMode",
           "buildNumber",
-          "contentIdentityOutcome",
+          "contentReleaseIdentityOutcome",
           "devicePlatform",
           "distributionClass",
           "environment",
@@ -1420,7 +1420,8 @@ final class EventRecord {
       if (this.chatSource != null) "chatSource",
       if (this.connectTimeMs != null) "connectTimeMs",
       if (this.consentState != null) "consentState",
-      if (this.contentIdentityOutcome != null) "contentIdentityOutcome",
+      if (this.contentReleaseIdentityOutcome != null)
+        "contentReleaseIdentityOutcome",
       if (this.contentType != null) "contentType",
       if (this.copyKey != null) "copyKey",
       if (this.correlationHash != null) "correlationHash",
@@ -1663,22 +1664,21 @@ final class EventRecord {
         'unsupported event extension value',
       );
     }
-    if (this.contentIdentityOutcome != null &&
+    if (this.contentReleaseIdentityOutcome != null &&
         !const <String>{
           "bound",
           "absent",
           "protocol_failure",
           "unavailable",
-        }.contains(this.contentIdentityOutcome)) {
+        }.contains(this.contentReleaseIdentityOutcome)) {
       throw ArgumentError.value(
-        this.contentIdentityOutcome,
-        "contentIdentityOutcome",
+        this.contentReleaseIdentityOutcome,
+        "contentReleaseIdentityOutcome",
         'unsupported event extension value',
       );
     }
     if (this.contentType != null &&
         !const <String>{
-          "micro",
           "article",
           "image",
           "video",
@@ -2036,7 +2036,7 @@ final class EventRecord {
   final String? chatSource;
   final int? connectTimeMs;
   final String? consentState;
-  final String? contentIdentityOutcome;
+  final String? contentReleaseIdentityOutcome;
   final String? contentType;
   final String? copyKey;
   final String? correlationHash;
@@ -2169,7 +2169,7 @@ final class EventRecord {
       "chatSource",
       "connectTimeMs",
       "consentState",
-      "contentIdentityOutcome",
+      "contentReleaseIdentityOutcome",
       "contentType",
       "copyKey",
       "correlationHash",
@@ -2378,11 +2378,12 @@ final class EventRecord {
       consentState: map["consentState"] == null
           ? null
           : _generatedRequestString(map["consentState"], '$path.consentState'),
-      contentIdentityOutcome: map["contentIdentityOutcome"] == null
+      contentReleaseIdentityOutcome:
+          map["contentReleaseIdentityOutcome"] == null
           ? null
           : _generatedRequestString(
-              map["contentIdentityOutcome"],
-              '$path.contentIdentityOutcome',
+              map["contentReleaseIdentityOutcome"],
+              '$path.contentReleaseIdentityOutcome',
             ),
       contentType: map["contentType"] == null
           ? null
@@ -2839,8 +2840,8 @@ final class EventRecord {
     if (this.chatSource != null) "chatSource": this.chatSource!,
     if (this.connectTimeMs != null) "connectTimeMs": this.connectTimeMs!,
     if (this.consentState != null) "consentState": this.consentState!,
-    if (this.contentIdentityOutcome != null)
-      "contentIdentityOutcome": this.contentIdentityOutcome!,
+    if (this.contentReleaseIdentityOutcome != null)
+      "contentReleaseIdentityOutcome": this.contentReleaseIdentityOutcome!,
     if (this.contentType != null) "contentType": this.contentType!,
     if (this.copyKey != null) "copyKey": this.copyKey!,
     if (this.correlationHash != null) "correlationHash": this.correlationHash!,

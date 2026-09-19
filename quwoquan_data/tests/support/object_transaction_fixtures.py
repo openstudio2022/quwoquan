@@ -14,7 +14,7 @@ RELEASE_ID = "release-one"
 SOURCE_POLICY = "encyclopedia-primary"
 CREATOR_ID = "creator_a"
 TAG_REF = "Topic/旅行"
-OBJECT_REF = "地点/景区/真实地点"
+OBJECT_REF = "travel/test/entity-" + "a" * 64
 
 
 def write_json(path: Path, payload: object) -> None:
@@ -30,6 +30,8 @@ def build_canonical(root: Path) -> Path:
     # belong to the content library, and a fixture that pre-creates one would
     # hand every test a tree the real contract already rejects.
     canonical = root / "publish"
+    from support.publish_repository_fixture import make_publish_repository
+    make_publish_repository(canonical, "object-transaction-fixture")
     for name in ("creators", "entities", "posts"):
         (canonical / name).mkdir(parents=True, exist_ok=True)
     creator = canonical / "creators" / CREATOR_ID
@@ -121,135 +123,48 @@ def build_package(
         f"media/objects/sha256/{digest_hex[:2]}/{digest_hex[2:4]}/"
         f"{digest_hex}.jpg"
     )
-    write_json(
-        object_root / "_entity.json",
-        {
-            **(entity_extra or {}),
-            "label": "真实地点",
-            "domain": "地点",
-            "type": "景区",
-            "originTaskId": "旅行/地域/测试",
-            "entityRef": "/entity/地点/景区/真实地点",
-            "tagRefs": [TAG_REF],
-            "geoTagRef": TAG_REF,
-            "sourceUrls": ["https://zh.wikipedia.org/wiki/真实地点"],
-            "primarySource": {
-                "sourceKind": "wikipedia",
-                "entityName": "真实地点",
-                "extractor": "wikipedia_api",
-                "canonicalUrl": "https://zh.wikipedia.org/wiki/真实地点",
-                "sourceUrl": "https://zh.wikipedia.org/wiki/真实地点",
-                "title": "真实地点",
-                "fetchedAt": "2026-07-11T00:00:00Z",
-                "snapshotHash": "sha256:" + "1" * 64,
-                "policyRevision": SOURCE_POLICY,
-                "sourceUseMode": "licensed_adaptation",
-            },
-        },
-    )
+    carried = object_root / "media/cover.jpg"
+    carried.parent.mkdir(parents=True, exist_ok=True)
+    carried.write_bytes(image.read_bytes())
     write_json(
         object_root / "manifest.json",
         {
             "schema": "quwoquan_data.entity_object",
             "finalContentRef": "page.md",
-            "sourceCatalogRef": "evidence/source_catalog.json",
-            "rightsRef": "evidence/rights.json",
+            "objectRef": OBJECT_REF,
+            "entityRef": f"/entity/{OBJECT_REF}",
+            "version": 1,
+            "sourceRefs": ["sources/fixture/source.json"],
             "creatorProfileId": CREATOR_ID,
+            **(entity_extra or {}),
             "tagRefs": [TAG_REF],
             "assets": [
                 {
                     "assetId": "cover",
                     "objectKey": object_key,
+                    "path": "media/cover.jpg",
                     "sha256": digest,
                     "bytes": image.stat().st_size,
+                    "sourceRefs": ["sources/fixture/source.json"],
                 }
             ],
         },
+    )
+    evidence_body = b"x"
+    evidence_path = object_root / "sources/fixture/evidence.html"
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_bytes(evidence_body)
+    write_json(
+        object_root / "sources/fixture/source.json",
+        {"schema": "quwoquan_data.publish_source", "sourceId": "fixture", "sourceUrl": "https://zh.wikipedia.org/wiki/真实地点",
+         "sourceUseMode": "factual_reference_only", "fetchedAt": "2026-07-11T00:00:00Z", "metadata": {}, "assets": [{"assetId": "cover"}],
+         "evidence": [{"path": "evidence.html", "sha256": "sha256:" + hashlib.sha256(evidence_body).hexdigest(), "bytes": len(evidence_body), "kind": "source_snapshot"}]},
     )
     (object_root / "page.md").write_text(
         "# 真实地点\n\n真实正文。\n",
         encoding="utf-8",
     )
-    write_json(
-        object_root / "evidence/source_catalog.json",
-        {
-            "sources": [
-                {
-                    "sourceKind": "wikipedia",
-                    "sourceUrl": "https://zh.wikipedia.org/wiki/真实地点",
-                }
-            ]
-        },
-    )
-    snapshot = object_root / "evidence/rights/commons_file_page.html"
-    snapshot.parent.mkdir(parents=True, exist_ok=True)
-    snapshot.write_bytes(b"canonical commons author and license snapshot")
-    snapshot_digest = "sha256:" + hashlib.sha256(snapshot.read_bytes()).hexdigest()
-    write_json(
-        object_root / "evidence/rights.json",
-        {
-            "schema": "quwoquan_data.asset_rights_closure",
-            "publishMediaMode": "not_applicable",
-            "assets": [
-                {
-                    "assetId": "cover",
-                    "sourceKind": "wikipedia",
-                    "sourceUseMode": "licensed_adaptation",
-                    "canonicalFilePage": (
-                        "https://commons.wikimedia.org/wiki/File:Example.jpg"
-                    ),
-                    "snapshotUrl": (
-                        "https://commons.wikimedia.org/w/index.php?"
-                        "title=File:Example.jpg&oldid=1"
-                    ),
-                    "pageRevision": "1",
-                    "originalAssetUrl": (
-                        "https://upload.wikimedia.org/example.jpg"
-                    ),
-                    "author": "真实作者",
-                    "source": "Own work",
-                    "licenseName": (
-                        "Creative Commons Attribution-ShareAlike 4.0 International"
-                    ),
-                    "licenseShortName": "CC BY-SA 4.0",
-                    "licenseUrl": (
-                        "https://creativecommons.org/licenses/by-sa/4.0/"
-                    ),
-                    "usageScope": "app_publish",
-                    "attribution": "真实地点，摄影：真实作者，CC BY-SA 4.0",
-                    "caption": "真实地点",
-                    "captionSource": "Commons file page Chinese description",
-                    "modifications": "none",
-                    "fetchedAt": "2026-07-11T00:00:00Z",
-                    "snapshot": {
-                        "ref": "object/evidence/rights/commons_file_page.html",
-                        "sha256": snapshot_digest,
-                        "bytes": snapshot.stat().st_size,
-                    },
-                    "asset": {
-                        "ref": "cas/image.jpg",
-                        "sha256": digest,
-                        "bytes": image.stat().st_size,
-                        "mimeType": "image/jpeg",
-                        "width": 1280,
-                        "height": 720,
-                    },
-                    "authorizationProof": (
-                        "https://commons.wikimedia.org/w/index.php?"
-                        "title=File:Example.jpg&oldid=1"
-                    ),
-                    "modelReleaseStatus": "not_required",
-                    "rightsAuditStatus": "verified",
-                    "rightsAuditIssues": [],
-                }
-            ],
-        },
-    )
     write_json(object_root / "content_review.json", _content_review())
-    write_json(
-        object_root / "evidence_index.json",
-        {"schema": "quwoquan_data.release_evidence_index", "refs": []},
-    )
     creator_package_ref = Path("creators") / CREATOR_ID
     creator_package_root = package_root / creator_package_ref
     shutil.copytree(canonical / "creators" / CREATOR_ID, creator_package_root)
@@ -263,11 +178,10 @@ def build_package(
             }
         ],
         "tagRefs": [TAG_REF],
-        "sourceCatalogRef": "evidence/source_catalog.json",
-        "rightsRef": "evidence/rights.json",
+        "sourceRefs": ["sources/fixture/source.json"],
         "casRefs": [
             {
-                "sourceRef": "cas/image.jpg",
+                "sourceRef": "object/media/cover.jpg",
                 "objectKey": object_key,
                 "sha256": digest,
                 "bytes": image.stat().st_size,
@@ -298,11 +212,13 @@ def build_package(
                 "layoutSchema": transaction.LAYOUT_SCHEMA,
                 "objectKind": "entities",
                 "objectRef": OBJECT_REF,
+                "objectPath": f"entities/{OBJECT_REF}/1",
                 "objectSchema": "quwoquan_data.entity_object",
                 "packageObjectRef": "object",
             },
             "closure": closure,
             "review": review,
+            "semanticBinding": {key: review_binding[key] for key in ("protocol", "objectRevision", "dispositionsDigest")},
             "objectClosureDigest": closure_digest,
         },
     )

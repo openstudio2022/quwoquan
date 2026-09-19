@@ -26,12 +26,9 @@ func TestFeedRequestDefaultsAndCategoryTypesHaveOneContentSource(t *testing.T) {
 
 	ui := readContentFeedUIConfig(t, filepath.Join(postDir, "ui_config.yaml"))
 	want := map[string]string{
-		"recommended": "micro",
-		"following":   "micro",
-		"micro":       "micro",
-		"images":      "image",
-		"video":       "video",
-		"article":     "article",
+		"images":  "image",
+		"video":   "video",
+		"article": "article",
 	}
 	if !reflect.DeepEqual(ui.FeedRequestTypeByCategory, want) {
 		t.Fatalf(

@@ -628,6 +628,54 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
             self.assertFalse((runtime_root / "runtime-config-package.json").exists())
             self.assertRegex(digest, r"^sha256:[0-9a-f]{64}$")
 
+    def test_android_nonprod_local_build_materializes_managed_trust(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            signing = mock.Mock()
+            keyring_path = root / "trusted-public-keys.json"
+            keyring_path.write_text(
+                json.dumps({"local-key": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="}),
+                encoding="utf-8",
+            )
+            signing.trusted_public_keys_path = keyring_path
+            with (
+                mock.patch.dict(
+                    os.environ,
+                    {"QWQ_APP_RUNTIME_CONFIG_PACKAGE_PATH": "", "QWQ_APP_RUNTIME_CONFIG_TRUST_PATH": ""},
+                    clear=False,
+                ),
+                mock.patch(
+                    "quwoquan_ops.cli.commands.package_app_artifact_inputs.prepare_local_app_runtime_config_signing",
+                    return_value=signing,
+                ),
+            ):
+                digest = _materialize_runtime_config_inputs(
+                    app_dir=root,
+                    build_profile="nonprod",
+                    platform="android",
+                    command_env={},
+                    local_alpha_android=True,
+                )
+        self.assertRegex(digest, r"^sha256:[0-9a-f]{64}$")
+
+    def test_prod_android_build_rejects_missing_formal_trust(self) -> None:
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            mock.patch.dict(
+                os.environ,
+                {"QWQ_APP_RUNTIME_CONFIG_PACKAGE_PATH": "", "QWQ_APP_RUNTIME_CONFIG_TRUST_PATH": ""},
+                clear=False,
+            ),
+            self.assertRaisesRegex(Exception, "formal build-profile trust envelope is required"),
+        ):
+            _materialize_runtime_config_inputs(
+                app_dir=Path(directory),
+                build_profile="prod",
+                platform="android",
+                command_env={},
+                local_alpha_android=False,
+            )
+
     def test_mobile_build_rejects_target_runtime_package_input(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -665,59 +713,21 @@ class StackctlAppArtifactIdentityTest(unittest.TestCase):
                     command_env={},
                 )
 
-    def test_protected_firebase_key_is_selected_only_by_build_profile(self) -> None:
-        payload = json.dumps(
-            {
-                "client": [
-                    {
-                        "client_info": {
-                            "android_client_info": {
-                                "package_name": "com.leadwise.quwoquan.nonprod"
-                            }
-                        }
-                    }
-                ]
-            }
-        )
-        module = "quwoquan_ops.cli.commands.package_app_artifact_inputs"
-        for environment in ("alpha", "beta", "gamma"):
-            with (
-                tempfile.TemporaryDirectory() as directory,
-                mock.patch.dict(
-                    os.environ,
-                    {"QWQ_ANDROID_NONPROD_GOOGLE_SERVICES_JSON": payload},
-                    clear=False,
-                ),
-                mock.patch(f"{module}._write_private"),
-                mock.patch(
-                    f"{module}._decode_secret",
-                    return_value=b"keystore",
-                ),
-            ):
-                os.environ["QWQ_ANDROID_RELEASE_KEYSTORE_B64"] = "a2V5c3RvcmU="
-                os.environ["QWQ_ANDROID_RELEASE_STORE_PASSWORD"] = "store"
-                os.environ["QWQ_ANDROID_RELEASE_KEY_ALIAS"] = "alias"
-                os.environ["QWQ_ANDROID_RELEASE_KEY_PASSWORD"] = "key"
-                _materialize_protected_inputs(
-                    app_dir=Path(directory),
-                    build_profile="nonprod",
-                    platform="android",
-                    build_mode="release",
-                    artifact_format="apk",
-                    application_id="com.leadwise.quwoquan.nonprod",
-                    command_env={},
-                    private_dir=Path(directory) / "private",
-                )
-            self.assertEqual(environment in {"alpha", "beta", "gamma"}, True)
+    def test_android_release_protected_inputs_are_firebase_free(self) -> None:
         source = Path(
             sys.modules[_build_from_capsule.__module__].__file__ or ""
         ).read_text(encoding="utf-8")
-        for retired in (
-            "QWQ_ANDROID_ALPHA_GOOGLE_SERVICES_JSON",
-            "QWQ_ANDROID_BETA_GOOGLE_SERVICES_JSON",
-            "QWQ_ANDROID_GAMMA_GOOGLE_SERVICES_JSON",
+        inputs_source = Path(
+            sys.modules[_materialize_protected_inputs.__module__].__file__ or ""
+        ).read_text(encoding="utf-8")
+        for forbidden in (
+            "GOOGLE_SERVICES_JSON",
+            "google-" + "services.json",
+            "_validated_google_services_bytes",
         ):
-            self.assertNotIn(retired, source)
+            self.assertNotIn(forbidden, inputs_source)
+            self.assertNotIn(forbidden, source)
+
 
     def test_artifact_path_bypass_is_rejected(self) -> None:
         result = command_package_app_artifact(_args(artifact_path="/tmp/app.apk"))

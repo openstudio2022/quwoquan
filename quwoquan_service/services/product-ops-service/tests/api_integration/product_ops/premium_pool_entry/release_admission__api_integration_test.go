@@ -46,7 +46,7 @@ func TestReleaseAdmissionsSourceHTTPAndAtomicPostgresOutbox(t *testing.T) {
 	release := rt.ReleaseCandidateBinding{Environment: "gamma", SourceOwner: "qwq_data", ReleaseID: "release-A", ManifestDigest: d}
 	id := fmt.Sprintf("release-post-%d", time.Now().UnixNano())
 	now := time.Now().UTC().Truncate(time.Second)
-	snapshot := rt.ReleasePostCandidateSnapshot{Release: release, SourceClosureDigest: d, MediaClosureDigest: d, Posts: []rt.ReleasePostPublicSnapshot{{Identity: rt.ReleaseCandidateObjectIdentity{Release: release, ObjectType: "content.post", ObjectID: id, SourceVersion: 1, SourceDigest: d}, PostRef: "ref", AuthorID: "author", AuthorDisplayName: "Author", ContentType: "video", ContentIdentity: "work", Status: "published", Visibility: "public", ModerationStatus: "approved", TagRefs: []string{}, EntityRefs: []string{}, MediaAssetIDs: []string{}, MediaURLs: []string{}, PublishedAt: now.Format(time.RFC3339), UpdatedAt: now.Format(time.RFC3339), DeepLink: "/post/" + id}}}
+	snapshot := rt.ReleasePostCandidateSnapshot{Release: release, SourceClosureDigest: d, MediaClosureDigest: d, Posts: []rt.ReleasePostPublicSnapshot{{Identity: rt.ReleaseCandidateObjectIdentity{Release: release, ObjectType: "content.post", ObjectID: id, SourceVersion: 1, SourceDigest: d}, PostRef: "ref", AuthorID: "author", AuthorDisplayName: "Author", ContentType: "video", Status: "published", Visibility: "public", ModerationStatus: "approved", TagRefs: []string{}, EntityRefs: []string{}, MediaAssetIDs: []string{}, MediaURLs: []string{}, PublishedAt: now.Format(time.RFC3339), UpdatedAt: now.Format(time.RFC3339), DeepLink: "/post/" + id}}}
 	if err := snapshot.Seal(); err != nil {
 		t.Fatal(err)
 	}

@@ -40,19 +40,14 @@ def _load_review_cli() -> ModuleType:
 review_cli = _load_review_cli()
 
 
-def _owner_manifest_ref(raw: bytes) -> str:
-    prefix = ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
-    return prefix + hashlib.sha256(raw).hexdigest() + ".json"
-
-
 def _referenced_receipt_fixture() -> tuple[dict[str, object], str, bytes]:
     receipt = validate_evidence_fingerprint(
         build_feature_context_fingerprint(
             {
                 "schema_version": 3,
                 "target": "README.md",
-                "resolved_owner": "specs/feature-tree/spec.md",
-                "owner_chain": [],
+                "context_status": "specs/feature-tree/spec.md",
+                "feature_chain": [],
                 "canonical_contexts": [],
                 "applicable_agents": ["AGENTS.md"],
                 "open_items": [],
@@ -147,96 +142,3 @@ def test_referenced_receipt_reader_rejects_current_name_replacement(
         resolve_fingerprint_binding(binding, repo_root=root)
     assert replaced
     assert receipt.read_bytes() == b"{}"
-
-
-def test_owner_manifest_reader_rejects_ancestor_and_final_symlinks(
-    tmp_path: Path,
-) -> None:
-    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t2
-    raw = canonical_json_bytes({"fixture": "outside"})
-    ref = _owner_manifest_ref(raw)
-    parts = review_cli._OWNER_MANIFEST_DIRECTORY_PARTS
-    outside = tmp_path / "outside"
-    outside.mkdir()
-    root = tmp_path / "repo-ancestor"
-    parent = root.joinpath(*parts[:-1])
-    parent.mkdir(parents=True)
-    target = outside / parts[-1]
-    target.mkdir()
-    (target / Path(ref).name).write_bytes(raw)
-    (parent / parts[-1]).symlink_to(target, target_is_directory=True)
-    with mock.patch.object(review_cli, "REPO_ROOT", root), pytest.raises(OSError):
-        review_cli._read_owner_manifest_exact_bytes(ref)
-
-    root = tmp_path / "repo-final"
-    final = root.joinpath(*parts, Path(ref).name)
-    final.parent.mkdir(parents=True)
-    outside_file = outside / "manifest.json"
-    outside_file.write_bytes(raw)
-    final.symlink_to(outside_file)
-    with mock.patch.object(review_cli, "REPO_ROOT", root), pytest.raises(OSError):
-        review_cli._read_owner_manifest_exact_bytes(ref)
-
-
-def test_owner_manifest_reader_rejects_fifo_and_hardlink(tmp_path: Path) -> None:
-    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t2
-    raw = canonical_json_bytes({"fixture": "special"})
-    ref = _owner_manifest_ref(raw)
-    parts = review_cli._OWNER_MANIFEST_DIRECTORY_PARTS
-    fifo_root = tmp_path / "repo-fifo-manifest"
-    fifo = fifo_root.joinpath(*parts, Path(ref).name)
-    fifo.parent.mkdir(parents=True)
-    os.mkfifo(fifo)
-    with (
-        mock.patch.object(review_cli, "REPO_ROOT", fifo_root),
-        pytest.raises(OSError, match="regular file"),
-    ):
-        review_cli._read_owner_manifest_exact_bytes(ref)
-
-    hardlink_root = tmp_path / "repo-hardlink-manifest"
-    manifest = hardlink_root.joinpath(*parts, Path(ref).name)
-    manifest.parent.mkdir(parents=True)
-    manifest.write_bytes(raw)
-    os.link(manifest, manifest.parent / "alias.json")
-    with (
-        mock.patch.object(review_cli, "REPO_ROOT", hardlink_root),
-        pytest.raises(OSError, match="link count 必须为 1"),
-    ):
-        review_cli._read_owner_manifest_exact_bytes(ref)
-
-
-def test_owner_manifest_reader_rejects_current_name_replacement(
-    tmp_path: Path,
-) -> None:
-    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-002.t10
-    original = canonical_json_bytes({"fixture": "opened-descriptor"})
-    replacement = canonical_json_bytes({"fixture": "replacement-path"})
-    ref = _owner_manifest_ref(original)
-    root = tmp_path / "repo-race-manifest"
-    manifest = root.joinpath(
-        *review_cli._OWNER_MANIFEST_DIRECTORY_PARTS, Path(ref).name
-    )
-    manifest.parent.mkdir(parents=True)
-    manifest.write_bytes(original)
-    replacement_path = manifest.parent / "replacement.json"
-    replacement_path.write_bytes(replacement)
-    real_read = review_cli.os.read
-    replaced = False
-
-    def replace_path_then_read(descriptor: int, size: int) -> bytes:
-        nonlocal replaced
-        if not replaced:
-            replaced = True
-            replacement_path.replace(manifest)
-        return real_read(descriptor, size)
-
-    with (
-        mock.patch.object(review_cli, "REPO_ROOT", root),
-        mock.patch.object(
-            review_cli.os, "read", side_effect=replace_path_then_read
-        ),
-        pytest.raises(OSError, match="目录项身份漂移"),
-    ):
-        review_cli._read_owner_manifest_exact_bytes(ref)
-    assert replaced
-    assert manifest.read_bytes() == replacement

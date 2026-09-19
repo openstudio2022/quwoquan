@@ -35,7 +35,6 @@ void main() {
         contentPostProjectionFixture(
           postId: 'photo1',
           contentType: 'image',
-          contentIdentity: 'work',
           authorId: 'persona-a1',
           authorAvatarUrl: _avatarUrl,
           authorAvatarAssetId: 'asset-avatar-1',
@@ -156,7 +155,6 @@ void main() {
         contentPostProjectionFixture(
           postId: 'photo1',
           contentType: 'image',
-          contentIdentity: 'work',
           authorId: 'persona-a1',
           authorAvatarUrl: _avatarUrl,
           authorAvatarAssetId: 'asset-avatar-1',
@@ -199,7 +197,6 @@ void main() {
         contentPostProjectionFixture(
           postId: 'video1',
           contentType: 'video',
-          contentIdentity: 'work',
           videoUrl: _videoUrl,
           thumbnailUrl: _posterUrl,
           mediaItems: const <PostMediaItem>[

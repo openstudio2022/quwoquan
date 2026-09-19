@@ -1,3 +1,5 @@
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentType;
 import 'package:quwoquan_app/service/content_service/content/post/adapters/generated/article_detail_wire_keys.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/post_article_detail_projector.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_detail_payload.dart';
@@ -73,7 +75,7 @@ ContentArticleRender projectArticleDetailView(
             .where((url) => url.isNotEmpty)
             .toList(growable: false)
       : const <String>[];
-  if (dto.isArticleLike && mediaCoverUrl.isNotEmpty && images.isEmpty) {
+  if (dto.type == ContentType.article && mediaCoverUrl.isNotEmpty && images.isEmpty) {
     images = <String>[mediaCoverUrl];
   }
   final coverFromDto = mediaCoverUrl.isNotEmpty

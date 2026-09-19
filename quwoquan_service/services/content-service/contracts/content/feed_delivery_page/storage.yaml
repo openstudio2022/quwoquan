@@ -19,7 +19,6 @@ redis_cache:
   scene: rec
   max_value_bytes: 65536
   max_items: 20
-  max_object_cards: 20
   quota_shards: 256
   quota_index: rec:feed_delivery_page_index:{fdp-<quotaShard>}
   quota_metadata: rec:feed_delivery_page_metadata:{fdp-<quotaShard>}
@@ -30,8 +29,11 @@ redis_cache:
   global_max_live_bytes: 8589934592
   create_operation: lua_same_quota_shard_set_nx_with_key_and_byte_admission
   description: >-
-    未压缩 FeedDeliveryPage JSON；同一 key 只允许相同 payload 幂等胜出。
-    分片满只拒绝 contender，禁止跨 scope 淘汰；key 与 payload 不含协议版本信封。
+    未压缩 FeedDeliveryPage JSON；items 仅保存稳定对象引用的共享 envelope 与交付决策，
+    不保存可变 Post/Homepage 投影；Post 与 Homepage 共用 max_items，不存在对象卡 sidecar。
+    scopeHash 含经服务端校验的 clientPresentationContract.contractDigest，不同能力声明隔离。
+    同一 key 只允许相同 payload 幂等胜出；分片满只拒绝 contender，禁止跨 scope 淘汰；
+    key 与 payload 不含协议版本信封。
 - key: rec:feed_delivery_page_index:{fdp-<quotaShard>}
   key_prefix: 'rec:feed_delivery_page_index:'
   hash_tag: fdp-<quotaShard>

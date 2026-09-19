@@ -20,7 +20,6 @@ void main() {
     final wire = <String, dynamic>{
       'postId': 'video-sync',
       'contentType': 'video',
-      'contentIdentity': 'work',
       'authorId': 'author',
       'authorDisplayName': '作者',
       'authorAvatarUrl': '',

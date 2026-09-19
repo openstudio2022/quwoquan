@@ -43,7 +43,6 @@ def _content_review(tmp_path: Path) -> Path:
 def _commercial_manifest() -> dict[str, object]:
     return {
         "contentId": "travel_panda_base_guide", "version": 2,
-        "contentIdentity": "work",
         "sourceAttribution": _source_attribution(),
     }
 
@@ -550,7 +549,7 @@ def test_modern_record_requires_complete_matching_manifest_identity(
 
     with pytest.raises(ObjectTransactionError, match="IDENTITY_INVALID"):
         build_content_pool_fields(
-            source_manifest={"contentId": "modern-content", "version": 1, "contentIdentity": "work", "sourceAttribution": _source_attribution()},
+            source_manifest={"contentId": "modern-content", "version": 1, "sourceAttribution": _source_attribution()},
             canonical_ref="article/modern/1",
             source_task_id="modern-task",
             content_review_path=_content_review(tmp_path),
@@ -598,7 +597,7 @@ def test_complete_manifest_identity_must_match_pool_record(tmp_path: Path) -> No
 
     with pytest.raises(ObjectTransactionError, match="manifest/pool record identity drift"):
         build_content_pool_fields(
-            source_manifest={"contentId": "modern-content", "version": 1, "contentIdentity": "work", "sourceAttribution": _source_attribution()},
+            source_manifest={"contentId": "modern-content", "version": 1, "sourceAttribution": _source_attribution()},
             canonical_ref="article/modern/1",
             source_task_id="modern-task",
             content_review_path=_content_review(tmp_path),
@@ -708,7 +707,7 @@ def _versioned_history(root: Path, versions: tuple[int, ...] = (1, 2)) -> None:
 
 def _allocate_after_history(tmp_path: Path, content_id: str, version: int) -> dict:
     return build_content_pool_fields(
-        source_manifest={"contentId": content_id, "version": version, "contentIdentity": "work", "sourceAttribution": _source_attribution()},
+        source_manifest={"contentId": content_id, "version": version, "sourceAttribution": _source_attribution()},
         canonical_ref="article/new/1", source_task_id="new-execution",
         content_review_path=_content_review(tmp_path),
         rights_authority=_rights_authority(canonical_ref="article/new/1"),

@@ -115,7 +115,7 @@ def test_review_bundle_preserves_original_report_bytes_and_rejects_missing_depen
     handoff = {field: None for field in contract_section("handoff_manifest")["required_fields"]}
     handoff.update(schema_version=contract_schema_version("handoff_manifest"), review_plan_ref="plan.json",
         review_consolidation_ref="consolidation.json", evidence_receipt_refs=["receipt.json"],
-        reviewer_result_refs=["review.json"], owner_identity_ref=".qwq_output/owner.json", candidate_evidence_ref="candidate.json",
+        reviewer_result_refs=["review.json"], context_ref=".qwq_output/owner.json", candidate_evidence_ref="candidate.json",
         candidate_closure=[{"ref": "impact.json", "canonical_json": "{}"}])
     (bundle / "handoff.json").write_text(json.dumps(handoff))
     evidence = review_bundle_evidence(bundle_root=bundle, evidence_root=control, handoff_ref="handoff.json")

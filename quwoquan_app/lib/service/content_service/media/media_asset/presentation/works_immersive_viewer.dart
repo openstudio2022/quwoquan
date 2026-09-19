@@ -70,7 +70,7 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/applicati
 import 'package:quwoquan_app/service/content_service/media/media_asset/domain/work_browser_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
-    show ReferralSource;
+    show ReferralSource, ReferralSourceExt;
 import 'package:quwoquan_app/runtime/auth/auth_continuation.dart';
 import 'package:quwoquan_app/runtime/auth/auth_gate.dart';
 import 'package:quwoquan_app/runtime/auth/auth_session.dart'
@@ -86,7 +86,6 @@ import 'package:quwoquan_app/runtime/observability/trackers/feed_performance_obs
 import 'package:quwoquan_app/runtime/observability/trackers/feed_performance_observability.dart';
 import 'package:quwoquan_app/runtime/observability/trackers/page_lifecycle_observability.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
-import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_keyword_suggester.dart';
@@ -199,6 +198,9 @@ class WorksImmersiveViewer extends ConsumerStatefulWidget {
   final List<ContentSurfaceView>? externalPostViews;
   final int initialPostIndex;
   final int initialImageIndex;
+
+  /// 仅用于内部流运行模式及频道（featured/premium/browse），不是入口归因。
+  /// 外部列表只消费 referralSource，不以此字段选择数据源。
   final String source;
   final ReferralSource referralSource;
   final String? feedRequestId;

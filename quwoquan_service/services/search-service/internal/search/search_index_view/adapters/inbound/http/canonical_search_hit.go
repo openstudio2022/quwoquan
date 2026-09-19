@@ -32,12 +32,11 @@ type canonicalSearchHitWire struct {
 }
 
 type canonicalSearchContentHitWire struct {
-	PostID          string `json:"postId"`
-	ContentType     string `json:"contentType"`
-	ContentIdentity string `json:"contentIdentity,omitempty"`
-	Title           string `json:"title,omitempty"`
-	Summary         string `json:"summary,omitempty"`
-	CoverURL        string `json:"coverUrl,omitempty"`
+	PostID      string `json:"postId"`
+	ContentType string `json:"contentType"`
+	Title       string `json:"title,omitempty"`
+	Summary     string `json:"summary,omitempty"`
+	CoverURL    string `json:"coverUrl,omitempty"`
 	// 封面的配对媒体资产标识与交付访问模式（DEC-033）：research 相位的
 	// coverUrl 是相对私有 CAS 引用，App 按 coverAssetId 换短签才渲染得出。
 	CoverAssetID      string `json:"coverAssetId,omitempty"`
@@ -104,8 +103,7 @@ func CanonicalSearchHit(hit rtsearch.RetrieveHit) canonicalSearchHitWire {
 	if contentType := canonicalContentType(hit.Target, hit.Payload); contentType != "" {
 		wire.Content = &canonicalSearchContentHitWire{
 			PostID: wire.ObjectID, ContentType: contentType,
-			ContentIdentity: payloadText(hit.Payload, "contentIdentity"),
-			Title:           wire.Title, Summary: wire.Snippet,
+			Title: wire.Title, Summary: wire.Snippet,
 			CoverURL:          payloadText(hit.Payload, "coverUrl"),
 			CoverAssetID:      payloadText(hit.Payload, "coverAssetId"),
 			CoverAccessMode:   payloadText(hit.Payload, "coverAccessMode"),

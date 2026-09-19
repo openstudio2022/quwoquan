@@ -35,11 +35,10 @@ type CircleRecordStore interface {
 }
 
 type ListCirclePostsQuery struct {
-	Identity string
-	Type     string
-	Sort     string
-	Cursor   string
-	Limit    int
+	Type   string
+	Sort   string
+	Cursor string
+	Limit  int
 }
 
 type CircleFeedIntersectionReason struct {
@@ -56,7 +55,6 @@ type CircleFeedPost struct {
 	PlacementID         string                         `json:"placementId"`
 	PostID              string                         `json:"postId"`
 	ContentType         string                         `json:"contentType"`
-	ContentIdentity     string                         `json:"contentIdentity,omitempty"`
 	AssistantUsePolicy  string                         `json:"assistantUsePolicy,omitempty"`
 	AuthorID            string                         `json:"authorId,omitempty"`
 	AuthorDisplayName   string                         `json:"authorDisplayName,omitempty"`

@@ -41,7 +41,7 @@ func TestUpdatePostSettingsByNonOwnerEmitsForbiddenEdit(t *testing.T) {
 	)
 	published, err := service.SubmitPostPublication(
 		commandmeta.WithIdempotencyKey(context.Background(), "err-sem-forbidden-edit"),
-		testPublicationCommand("err-sem-forbidden-edit", "draft-err-sem-forbidden"),
+		testPublicationCommand(t, "err-sem-forbidden-edit", "draft-err-sem-forbidden"),
 	)
 	if err != nil {
 		t.Fatalf("publish post before settings update: %v", err)

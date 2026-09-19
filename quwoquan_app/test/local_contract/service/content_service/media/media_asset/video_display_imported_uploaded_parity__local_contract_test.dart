@@ -64,7 +64,6 @@ Map<String, dynamic> _videoWire({
   return <String, dynamic>{
     'postId': id,
     'contentType': 'video',
-    'contentIdentity': 'work',
     'authorId': 'author',
     'authorDisplayName': '作者',
     'authorAvatarUrl': '',

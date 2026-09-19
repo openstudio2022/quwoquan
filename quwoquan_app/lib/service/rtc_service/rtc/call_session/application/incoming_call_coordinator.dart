@@ -11,7 +11,6 @@ import 'package:quwoquan_app/service/notification_service/notification_delivery/
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/rtc_signal_events.dart';
 import 'package:quwoquan_app/service/rtc_service/rtc/call_session/application/public/incoming_call_terminal_account_purger.dart';
-import 'package:quwoquan_app/runtime/platform/firebase_incoming_call_runtime.dart';
 import 'package:quwoquan_app/runtime/platform/callkit_service.dart';
 import 'package:quwoquan_app/runtime/platform/incoming_call_envelope.dart';
 import 'package:quwoquan_app/runtime/platform/incoming_call_native_bridge.dart';
@@ -37,13 +36,11 @@ class IncomingCallCoordinator implements IncomingCallTerminalAccountPurger {
   IncomingCallCoordinator({
     required this.ref,
     required this.readRouter,
-    required this.firebaseRuntime,
     required this.nativeBridge,
   });
 
   final Ref ref;
   final GoRouter Function() readRouter;
-  final FirebaseIncomingCallRuntime firebaseRuntime;
   final IncomingCallNativeBridge nativeBridge;
 
   GoRouter get router => readRouter();
@@ -52,8 +49,6 @@ class IncomingCallCoordinator implements IncomingCallTerminalAccountPurger {
   StreamSubscription<CallKitActionEvent>? _callKitSub;
   StreamSubscription<RtcSignalEvent>? _endedSub;
   StreamSubscription<RtcSignalEvent>? _answeredSub;
-  StreamSubscription<IncomingCallEnvelope>? _foregroundPushSub;
-  StreamSubscription<IncomingCallPushEnvelope>? _foregroundCancelSub;
 
   CallKitService? _callKit;
   int _startGeneration = 0;
@@ -194,36 +189,11 @@ class IncomingCallCoordinator implements IncomingCallTerminalAccountPurger {
     IncomingCallChannel channel,
   ) async {
     try {
-      await _foregroundPushSub?.cancel();
-      _foregroundPushSub = firebaseRuntime.foregroundIncomingCalls.listen((
-        envelope,
-      ) {
-        if (envelope.targetPersonaId != _boundPersonaId) {
-          return;
-        }
-        unawaited(
-          _present(
-            envelope,
-            channel: channel,
-            source: IncomingCallPresentationSource.nativePush,
-            alreadyPresentedByNative: false,
-          ),
-        );
-      });
-      await _foregroundCancelSub?.cancel();
-      _foregroundCancelSub = firebaseRuntime.foregroundCancellations.listen((
-        push,
-      ) {
-        if (push.call.targetPersonaId != _boundPersonaId) {
-          return;
-        }
-        ref.read(incomingCallDeliveryDedupeProvider).suppress(push.call);
-        unawaited(_closeNativeSurface(push.call.callId));
-      });
-      await firebaseRuntime.start();
       if (_startGeneration != generation) {
         return;
       }
+      // Android has no cloud-push adapter. iOS may still synchronize its native
+      // APNs endpoint through the existing platform-neutral coordinator.
       await ref.read(devicePushEndpointCoordinatorProvider).syncAfterLogin();
     } catch (error, stack) {
       _reportAsyncFailure(
@@ -501,17 +471,12 @@ class IncomingCallCoordinator implements IncomingCallTerminalAccountPurger {
     _endedSub = null;
     _answeredSub?.cancel();
     _answeredSub = null;
-    _foregroundPushSub?.cancel();
-    _foregroundPushSub = null;
-    _foregroundCancelSub?.cancel();
-    _foregroundCancelSub = null;
     _callKit?.stopListening();
     _callKit = null;
     _pendingByCallId.clear();
     _actionDedupe.clear();
     _actionDedupeOrder.clear();
     _boundPersonaId = '';
-    unawaited(firebaseRuntime.stop());
     unawaited(nativeBridge.setFlutterReady(false));
     if (removePushEndpoints) {
       unawaited(_removePushEndpointsForLogout());
@@ -520,11 +485,9 @@ class IncomingCallCoordinator implements IncomingCallTerminalAccountPurger {
 
   @override
   Future<void> purgeForTerminalAccountClosure() async {
-    await firebaseRuntime.stop();
     await Future.wait<void>(<Future<void>>[
       ref.read(pushEndpointGatewayProvider).purgeForTerminalAccountClosure(),
       ref.read(callKitServiceProvider).endAllCalls(),
-      clearFirebaseIncomingCallStateForTerminalAccountClosure(),
     ]);
   }
 
@@ -629,7 +592,6 @@ final incomingCallCoordinatorProvider = Provider<IncomingCallCoordinator>((
   final coordinator = IncomingCallCoordinator(
     ref: ref,
     readRouter: ref.watch(incomingCallRouterReaderProvider),
-    firebaseRuntime: ref.watch(firebaseIncomingCallRuntimeProvider),
     nativeBridge: ref.watch(incomingCallNativeBridgeProvider),
   );
   ref.onDispose(() => coordinator.dispose());

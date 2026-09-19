@@ -152,6 +152,8 @@ var appRetiredGeneratedExactOutputs = []string{
 const appOnlyEmitter = "app-only-emitter"
 
 type generatedOutput struct {
+	// 本轮 renderer 的原始内存字节，仅供 emitter 接线；不进入持久 manifest。
+	Content             string `json:"-"`
 	Path                string `json:"path"`
 	Owner               string `json:"owner"`
 	Generator           string `json:"generator"`
@@ -206,6 +208,7 @@ func recordGeneratedFile(path string, content []byte) {
 	sum := sha256.Sum256(content)
 	normalized := filepath.ToSlash(relative)
 	generatedManifestOutputs[normalized] = generatedOutput{
+		Content:             string(content),
 		Path:                normalized,
 		Owner:               "app-only-emitter",
 		Generator:           appOnlyEmitter,
@@ -283,6 +286,30 @@ func removeUntrackedGeneratedOutputs() error {
 			return fmt.Errorf("scan App generated root %s: %w", root, err)
 		}
 	}
+	return retireClientPresentationGoldenFixture()
+}
+
+// 仅退役历史 writer 专属的测试 JSON；不扩张生成清单类型或目录扫描范围。
+func retireClientPresentationGoldenFixture() error {
+	const relative = "lib/runtime/transport/generated/client_content_presentation_contract.golden.json"
+	if _, current := generatedManifestOutputs[relative]; current {
+		return fmt.Errorf("test-only golden fixture must not be emitted as App runtime output: %s", relative)
+	}
+	path := filepath.Join(generatedManifestAppRoot, filepath.FromSlash(relative))
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("inspect retired capability golden: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("retired capability golden is not a regular file: %s", path)
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("retire capability golden: %w", err)
+	}
+	fmt.Printf("retired generated test fixture: %s\n", path)
 	return nil
 }
 

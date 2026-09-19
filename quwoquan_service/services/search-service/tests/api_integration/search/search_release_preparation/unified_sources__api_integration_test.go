@@ -31,7 +31,7 @@ func TestUnifiedPostHomepagePartitionAndAllQueryClasses(t *testing.T) {
 		b := rt.ReleaseQueryPreparationBinding{Release: rt.ReleaseCandidateBinding{"gamma", "qwq_data", releaseID, digest}, Slice: kind + "_search", ProviderBindingGeneration: digest, SchemaGeneration: client.SchemaGeneration()}
 		identity := rt.ReleaseCandidateObjectIdentity{Release: b.Release, ObjectType: "content.post", ObjectID: "same-post", SourceVersion: 1, SourceDigest: digest}
 		if kind == "post" {
-			post := rt.ReleasePostPublicSnapshot{Identity: identity, PostRef: "posts/article/exact", AuthorID: "author", AuthorDisplayName: "作者", ContentType: "article", ContentIdentity: "work", Status: "published", Visibility: "public", ModerationStatus: "approved", Title: title, TagRefs: []string{}, EntityRefs: []string{}, MediaAssetIDs: []string{}, MediaURLs: []string{}, PublishedAt: "2026-09-12T00:00:00Z", UpdatedAt: "2026-09-12T00:00:00Z", DeepLink: "quwoquan://content/posts/same-post"}
+			post := rt.ReleasePostPublicSnapshot{Identity: identity, PostRef: "posts/article/exact", AuthorID: "author", AuthorDisplayName: "作者", ContentType: "article", Status: "published", Visibility: "public", ModerationStatus: "approved", Title: title, TagRefs: []string{}, EntityRefs: []string{}, MediaAssetIDs: []string{}, MediaURLs: []string{}, PublishedAt: "2026-09-12T00:00:00Z", UpdatedAt: "2026-09-12T00:00:00Z", DeepLink: "quwoquan://content/posts/same-post"}
 			s := rt.ReleasePostCandidateSnapshot{Release: b.Release, SourceClosureDigest: digest, MediaClosureDigest: digest, Posts: []rt.ReleasePostPublicSnapshot{post}}
 			_ = s.Seal()
 			return b, rt.SearchReleaseCandidateSnapshot{Kind: kind, Post: &s}

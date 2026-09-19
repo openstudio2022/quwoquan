@@ -17,7 +17,8 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         AssistantUsePolicy,
         CloudOperationCancellationSignal,
         ContentFeedEmptyReason,
-        ContentFeedOutcome;
+        ContentFeedOutcome,
+        ContentType;
 
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
 
@@ -316,9 +317,7 @@ final class _PendingDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
 
 ContentPostViewData _recoveredCanonicalPost() => ContentPostViewData(
   id: 'post-recovered',
-  type: 'micro',
-  identity: 'moment',
-  displayFormat: 'note',
+  type: ContentType.article,
   assistantUsePolicy: AssistantUsePolicy.inherit,
   authorId: 'author-recovered',
   displayName: '恢复内容作者',

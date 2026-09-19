@@ -87,7 +87,9 @@ from .candidate_staging import (  # noqa: F401
 )
 from .release_binding import (  # noqa: F401
     _release_binding,
+    _workspace_root_digest,
     canonical_contract_graph_digest,
+    resolve_package_release_binding,
     validate_release_attestations,
 )
 from .environment_artifact import (  # noqa: F401

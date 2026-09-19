@@ -32,7 +32,7 @@
 - [`profile-homepage-redesign`](./profile-homepage-redesign/spec.md)：统一个人主页的信息架构、状态模型与跨页面互动一致性。
 - [`settings-and-device-token`](./settings-and-device-token/spec.md)：为已登录账号提供可真实读写的通知、隐私、通话、外观设置，并管理设备推送端点与登录凭证。
 - [`user-service-cloud-delivery`](./user-service-cloud-delivery/spec.md)：让用户资料、统计、设置和关系状态由 user-service 持久化，并通过正式远端契约在 App 各页面一致展示和更新。
-- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
+- Feature 层表达业务与设计边界；工程影响由 current actual diff 与 dependency closure 推导。
 
 ## 5. 关键决策
 

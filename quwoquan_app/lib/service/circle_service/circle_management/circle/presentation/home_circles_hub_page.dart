@@ -44,7 +44,6 @@ import 'package:quwoquan_app/service/circle_service/circle_management/circle/app
 import 'package:quwoquan_app/runtime/di/media_viewer_interaction_facade.dart';
 import 'package:quwoquan_app/runtime/di/content_surface_view_mapper.dart';
 import 'package:quwoquan_app/runtime/shell/actions/global_surface_actions.dart';
-
 part 'home_circles_hub_page_widgets.dart';
 
 class CirclesHubPage extends ConsumerStatefulWidget {
@@ -434,10 +433,6 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     return post.supportsUnifiedViewer;
   }
 
-  bool _isVideoPost(ContentPostViewData post) {
-    return post.isVideoLike;
-  }
-
   Future<void> _openCircleFeedViewer(
     BuildContext context,
     CircleHubFeedPostEntry tapped,
@@ -467,10 +462,8 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
     final result = await context.push<Object?>(
       AppRoutePaths.workBrowser(
         workId: tappedDto.id,
-        filter: _isVideoPost(tappedDto)
-            ? 'video'
-            : (tappedDto.isArticleLike ? 'article' : 'image'),
-        source: 'circle',
+        filter: tappedDto.type.wireName,
+        source: ReferralSource.circlePost.value,
         index: '$initialIndex',
       ),
       extra: MediaViewerExtra(
@@ -479,7 +472,6 @@ class _CirclesHubPageState extends ConsumerState<CirclesHubPage> {
             .toList(growable: false),
         dtoPosts: viewerDtos,
         initialIndex: initialIndex,
-        source: 'circle',
         circleId: tapped.circleId.isEmpty ? null : tapped.circleId,
         rawPostsById: mediaRows,
         interactionSnapshot: interactionSnapshot,

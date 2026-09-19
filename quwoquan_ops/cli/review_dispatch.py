@@ -28,7 +28,7 @@ GRADING_PATH = REFERENCES_DIR / "grading.md"
 sys.path.insert(0, str(REPO_ROOT))
 sys.path.insert(0, str(REPO_ROOT / "quwoquan_ops/cli"))
 from lib import review_dispatch_cli as _review_dispatch_cli  # noqa: E402
-from lib import review_owner_manifest as _review_owner_manifest  # noqa: E402
+from lib import review_context_manifest as _review_context_manifest  # noqa: E402
 from lib.agent_governance_contract import (  # noqa: E402
     contract_schema_version,
     contract_section,
@@ -70,17 +70,7 @@ from review_dispatch_evidence import (  # noqa: E402
 )
 
 _EVIDENCE_LINE_RE = re.compile(r"^\s*evidence:\s*(?P<evidence>[a-z0-9][a-z0-9-]*)\s*$")
-ReviewDispatchError = _review_owner_manifest.ReviewDispatchError
-_OWNER_MANIFEST_DIRECTORY_PARTS = (
-    _review_owner_manifest.OWNER_MANIFEST_DIRECTORY_PARTS
-)
-os = _review_owner_manifest.os
-validate_feature_context_manifest = (
-    _review_owner_manifest.validate_feature_context_manifest
-)
-validate_current_feature_context_fingerprint = (
-    _review_owner_manifest.validate_current_feature_context_fingerprint
-)
+ReviewDispatchError = _review_context_manifest.ReviewDispatchError
 
 def derive_profiles(
     profiles: dict[str, Any], changed_paths: list[str], deliverable: str
@@ -123,8 +113,7 @@ def build_plan(
     finding_owners: list[str] | None = None,
     previous_plan: dict[str, Any] | None = None,
     context_manifest: dict[str, Any] | None = None,
-    context_manifest_ref: str | None = None,
-    candidate_evidence_ref: str | None = None,
+        candidate_evidence_ref: str | None = None,
     human_decision_ref: str | None = None,
     admission_class: str = "ordinary",
     scope: str = "",
@@ -199,15 +188,11 @@ def build_plan(
     except HumanDecisionBridgeError as exc:
         raise ValueError(f"{exc.code}: {exc.detail}") from exc
     manifest_required = segment == "POST" and automatic_review
-    contexts, manifest_bytes, manifest_target, owner_identity, candidate_evidence_identity = _normalize_contexts(
-        context_manifest or {},
-        manifest_ref=context_manifest_ref,
-        candidate_evidence_ref=candidate_evidence_ref,
-        changed_paths=normalized_paths,
-        expected_scope=requested_scope,
-        required=manifest_required,
+    contexts, manifest_bytes, candidate_evidence_identity = _normalize_contexts(
+        context_manifest or {}, candidate_evidence_ref=candidate_evidence_ref,
+        changed_paths=normalized_paths, required=manifest_required,
     )
-    resolved_scope = requested_scope or manifest_target
+    resolved_scope = requested_scope
     active_profiles = derive_profiles(
         registry.get("profiles") or {}, normalized_paths, resolved_deliverable
     )
@@ -278,7 +263,6 @@ def build_plan(
         workflow=workflow,
         deliverable=resolved_deliverable,
         scope=resolved_scope,
-        owner_identity=owner_identity,
         candidate_evidence_identity=candidate_evidence_identity,
         human_decision_projection=human_decision_projection,
         terminal=terminal,
@@ -324,7 +308,6 @@ def build_plan(
         "round": round_name,
         "deliverable": resolved_deliverable,
         "scope": resolved_scope,
-        "owner_identity": owner_identity,
         "candidate_evidence_identity": candidate_evidence_identity,
         "human_decision_ref": human_decision_ref,
         "human_decision_projection": human_decision_projection,
@@ -415,11 +398,9 @@ def _validate_plan_contract(plan: dict[str, Any]) -> None:
             if not isinstance(value, dict):
                 raise TypeError(f"review_plan.{field} 项必须为映射")
             validate_declared_fields(value, "review_plan", declaration)
-    owner_identity = plan["owner_identity"]
     candidate_identity = plan["candidate_evidence_identity"]
-    if not isinstance(owner_identity, dict) or not isinstance(candidate_identity, dict):
-        raise TypeError("review_plan 双身份必须为映射")
-    validate_declared_fields(owner_identity, "review_plan", "owner_identity_fields")
+    if not isinstance(candidate_identity, dict):
+        raise TypeError("review_plan candidate identity 必须为映射")
     validate_declared_fields(candidate_identity, "review_plan", "candidate_evidence_identity_fields")
     human_projection = plan["human_decision_projection"]
     if not isinstance(human_projection, dict):
@@ -595,7 +576,7 @@ def _select_rereviewers(
     if changed_fields:
         _refuse(
             "REVIEW.NEW_REVIEW_REQUIRED",
-            "归属/profile/scope 已变化，必须重新首次评审：" + ", ".join(changed_fields),
+            "profile/scope 已变化，必须重新首次评审：" + ", ".join(changed_fields),
         )
 
     owners = list(dict.fromkeys(finding_owners))
@@ -658,35 +639,8 @@ def _checklist_evidence(checklist: str) -> list[str]:
     return list(evidence)
 
 
-def _read_owner_manifest_exact_bytes(manifest_ref: str) -> bytes:
-    """Compatibility export for the descriptor-relative exact-ref reader."""
-
-    return _review_owner_manifest.read_owner_manifest_exact_bytes(
-        manifest_ref, repo_root=source_root(REPO_ROOT)
-    )
-
-
-def _normalize_contexts(
-    manifest: dict[str, Any],
-    *,
-    manifest_ref: str | None,
-    candidate_evidence_ref: str | None = None,
-    changed_paths: list[str] | None = None,
-    expected_scope: str = "",
-    required: bool = False,
-) -> tuple[list[dict[str, Any]], int, str, dict[str, Any]]:
-    return _review_owner_manifest.normalize_contexts(
-        manifest,
-        manifest_ref=manifest_ref,
-        candidate_evidence_ref=candidate_evidence_ref,
-        changed_paths=changed_paths,
-        expected_scope=expected_scope,
-        required=required,
-        repo_root=source_root(REPO_ROOT),
-        reader=_read_owner_manifest_exact_bytes,
-        validate_manifest=validate_feature_context_manifest,
-        validate_current_fingerprint=validate_current_feature_context_fingerprint,
-    )
+def _normalize_contexts(manifest: dict[str, Any], *, candidate_evidence_ref: str | None = None, changed_paths: list[str] | None = None, required: bool = False) -> tuple[list[dict[str, Any]], int, dict[str, Any]]:
+    return _review_context_manifest.normalize_contexts(manifest, candidate_evidence_ref=candidate_evidence_ref, changed_paths=changed_paths or [], required=required, repo_root=source_root(REPO_ROOT))
 
 def _measure_reviewer_contexts(
     registry: dict[str, Any],
@@ -728,7 +682,6 @@ def _fingerprint_receipt(
     workflow: str,
     deliverable: str,
     scope: str,
-    owner_identity: dict[str, Any],
     candidate_evidence_identity: dict[str, Any],
     terminal: dict[str, Any],
     changed_paths: list[str],
@@ -743,7 +696,6 @@ def _fingerprint_receipt(
         workflow=workflow,
         deliverable=deliverable,
         scope=scope,
-        owner_identity=owner_identity,
         candidate_evidence_identity=candidate_evidence_identity,
         human_decision_projection=(
             human_decision_projection
@@ -795,7 +747,6 @@ def recompute_plan_fingerprint(
         workflow=workflow,
         deliverable=deliverable,
         scope=str(plan["scope"]),
-        owner_identity=dict(plan["owner_identity"]),
         candidate_evidence_identity=dict(plan["candidate_evidence_identity"]),
         human_decision_projection=dict(plan["human_decision_projection"]),
         terminal=dict(plan["terminal"]),
@@ -825,14 +776,8 @@ def validate_plan_terminal_for_phase(
     return terminal
 
 
-def _validate_current_owner_manifest(plan: dict[str, Any]) -> dict[str, Any]:
-    return _review_owner_manifest.validate_current_owner_manifest(
-        plan,
-        repo_root=source_root(REPO_ROOT),
-        reader=_read_owner_manifest_exact_bytes,
-        validate_manifest=validate_feature_context_manifest,
-        validate_current_fingerprint=validate_current_feature_context_fingerprint,
-    )
+def _validate_current_candidate(plan: dict[str, Any]) -> dict[str, Any]:
+    return _review_context_manifest.validate_current_candidate(plan, repo_root=source_root(REPO_ROOT))
 
 def _validate_current_git_range(plan: dict[str, Any]) -> None:
     if "git_range" in plan:
@@ -877,7 +822,7 @@ def validate_current_review_plan(
             "REVIEW.TERMINAL_CONTRACT_INVALID",
             f"{current_human_projection['terminal']}: human decision 阻止 phase={phase}",
         )
-    _validate_current_owner_manifest(plan)
+    _validate_current_candidate(plan)
     _validate_current_git_range(plan)
     expected = validate_evidence_fingerprint(plan.get("fingerprint_receipt"))
     current = recompute_plan_fingerprint(plan, registry)

@@ -2,7 +2,7 @@
 
 > 所属领域：[<L1 名称>](../spec.md)
 >
-> 设计归属：`本层 design.md` 或 `[L1 DEC-001](../design.md#dec-001)`
+> 设计引用：`本层 design.md` 或 `[L1 DEC-001](../design.md#dec-001)`
 
 ## 1. 能力目标
 

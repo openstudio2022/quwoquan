@@ -273,6 +273,7 @@ api_routes:
       - CONTENT.USER.unauthorized
       - CONTENT.USER.invalid_argument
       - CONTENT.SYSTEM.feed_capacity_unavailable
+      - CONTENT.USER.presentation_contract_changed
       - CONTENT.SYSTEM.storage_read_failed
       - CONTENT.SYSTEM.required_dependency_unavailable
       - CONTENT.MIDDLEWARE.upstream_timeout
@@ -285,7 +286,6 @@ api_routes:
       metric: content_feed_get
       trace: true
       attributes:
-        - identity
         - type
         - sort
         - outcome
@@ -306,14 +306,11 @@ api_routes:
 
       travel 走 travel_photography 垂类；其余频道走推荐引擎并按 channelId 归因。
 
-      携带 identity/type 的请求是发现页浏览流（时间线具名查询），与频道推荐主链路互斥。
+      携带 type 的请求是发现页浏览流（时间线具名查询），与频道推荐主链路互斥。
 
 '
     request_bindings:
       query:
-        - name: identity
-          field: identity
-          required: false
         - name: type
           field: type
           required: false
@@ -335,6 +332,11 @@ api_routes:
         - name: feedRequestId
           field: feedRequestId
           required: false
+        - name: clientPresentationContract
+          field: clientPresentationContract
+          required: false
+          encoding: json
+          max_bytes: 8192
         - name: limit
           field: limit
       header:
@@ -351,7 +353,6 @@ api_routes:
       - paginationExpiresAt
       - feedRequestId
       - policyDigest
-      - objectCards
       - releaseId
       - manifestDigest
     security:
@@ -443,9 +444,11 @@ api_routes:
         - name: personaId
           field: personaId
       query:
-        - name: identity
-          field: identity
+        - name: clientPresentationContract
+          field: clientPresentationContract
           required: false
+          encoding: json
+          max_bytes: 8192
         - name: type
           field: type
           required: false
@@ -476,6 +479,7 @@ api_routes:
       max_attempts: 2
       idempotency: none
     error_codes:
+      - CONTENT.USER.presentation_contract_changed
       - CONTENT.USER.invalid_argument
       - CONTENT.SYSTEM.storage_read_failed
       - CONTENT.SYSTEM.internal_error
@@ -488,7 +492,6 @@ api_routes:
       trace: true
       attributes:
         - outcome
-        - identity
         - type
     slo:
       latency_p95_ms: 500
@@ -627,6 +630,12 @@ api_routes:
       path:
         - name: postId
           field: postId
+      query:
+        - name: clientPresentationContract
+          field: clientPresentationContract
+          required: false
+          encoding: json
+          max_bytes: 8192
     actor: none
     application:
       kind: query
@@ -648,6 +657,7 @@ api_routes:
     error_codes:
       - CONTENT.USER.post_not_found
       - CONTENT.USER.content_deleted
+      - CONTENT.USER.presentation_unsupported
       - CONTENT.USER.invalid_argument
       - CONTENT.SYSTEM.storage_read_failed
       - CONTENT.SYSTEM.internal_error
@@ -791,61 +801,6 @@ api_routes:
       只有原合法owner命令及已核实当前审核/关闭资格可重新允许restricted状态，terminated不得恢复；重新允许递增安全revision但不刷新旧candidate绑定。
       不影响安全资格的设置只携带当前safetyRevision，不额外递增；缺安全状态/来源或恢复authority拒绝，不在consumer补默认。
     request_entity: UpdatePostSettingsRequest
-    request_body_kind: object
-    response_entity: ContentPostProjection
-    response_body: ContentPostProjection
-    response_body_kind: object
-    security:
-      auth_mode: required
-  - method: POST
-    path: /content/posts/{postId}:promoteToWork
-    operation: PromotePostToWork
-    request_bindings:
-      path:
-        - {name: postId, field: postId}
-    actor: persona
-    application:
-      kind: command
-      facet: PostLifecycleCommandFacet
-      method: promotePostToWork
-      aggregate_owner: Post
-      mutation_target: Post
-      invariant_target: Post
-    authorization:
-      principal: persona
-      ownership_policy: post_owner
-    commercial:
-      status: ready
-    reliability:
-      timeout_ms: 5000
-      cancellation: supported
-      retry_mode: idempotent
-      max_attempts: 2
-      idempotency: required
-    error_codes:
-      - CONTENT.USER.unauthorized
-      - CONTENT.USER.post_not_found
-      - CONTENT.USER.forbidden_edit
-      - CONTENT.USER.invalid_argument
-      - CONTENT.USER.invalid_content_type
-      - CONTENT.USER.idempotency_conflict
-      - CONTENT.USER.version_conflict
-      - CONTENT.SYSTEM.storage_write_failed
-      - CONTENT.SYSTEM.internal_error
-    privacy:
-      request_classification: PII
-      response_classification: PII
-      log_policy: metadata_only
-    telemetry:
-      metric: content_post_promote_to_work
-      trace: true
-      attributes:
-        - outcome
-    slo:
-      latency_p95_ms: 800
-      availability_percent: 99.9
-    description: 点滴升级为作品（原地升级，保持 postId 与 deeplink 不变）
-    request_entity: PromotePostToWorkRequest
     request_body_kind: object
     response_entity: ContentPostProjection
     response_body: ContentPostProjection
@@ -1384,7 +1339,7 @@ readiness_cases:
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb-redis, digest_binding: candidate}
   - case_id: submit-post-publication-local
-    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/spec.md#sit-002
     producer: service
     layer: local_contract
     target: {kind: operation, id: SubmitPostPublication}
@@ -1392,7 +1347,7 @@ readiness_cases:
     executions:
       - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
   - case_id: submit-post-publication-api
-    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/spec.md#sit-002
     producer: service
     layer: api_integration
     target: {kind: operation, id: SubmitPostPublication}
@@ -1448,34 +1403,18 @@ readiness_cases:
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
   - case_id: update-post-settings-local
-    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md#gwt-009
     producer: service
     layer: local_contract
     target: {kind: operation, id: UpdatePostSettings}
-    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
+    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/application/post_lifecycle_owner__local_contract_test.go
     executions:
       - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
   - case_id: update-post-settings-api
-    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md#gwt-009
     producer: service
     layer: api_integration
     target: {kind: operation, id: UpdatePostSettings}
-    runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_crud_contract__api_integration_test.go
-    executions:
-      - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
-  - case_id: promote-post-to-work-local
-    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
-    producer: service
-    layer: local_contract
-    target: {kind: operation, id: PromotePostToWork}
-    runner_source_path: quwoquan_service/services/content-service/tests/local_contract/content/post/adapters/inbound/http/content_handler__local_contract_test.go
-    executions:
-      - {env: alpha, platform: service, device: runner, provider: none, digest_binding: candidate}
-  - case_id: promote-post-to-work-api
-    spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
-    producer: service
-    layer: api_integration
-    target: {kind: operation, id: PromotePostToWork}
     runner_source_path: quwoquan_service/services/content-service/tests/api_integration/content/post/post_identity_contract__api_integration_test.go
     executions:
       - {env: beta, platform: service, device: runner, provider: mongodb, digest_binding: candidate}
@@ -1752,3 +1691,8 @@ readiness_cases:
     executions:
       - {env: gamma, platform: android, device: physical, provider: first-party-https, digest_binding: candidate}
       - {env: gamma, platform: ios, device: physical, provider: first-party-https, digest_binding: candidate}
+
+external_schema_imports:
+- schema_path: quwoquan_data/schema/content/post_manifest.schema.json
+  loader_ref: quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/loader.go#LoadPosts
+  validator_ref: quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/post_manifest_validation.go#ValidatePostManifestCarrierJSON

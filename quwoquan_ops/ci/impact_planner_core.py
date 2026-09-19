@@ -15,9 +15,9 @@ DELIVERY_SCOPE_NAMES = (*SCOPE_NAMES, "device", "coverage_service", "coverage_ap
 LOCAL_SCOPE_NAMES = (*SCOPE_NAMES, "spec_contract")
 INTEGRATION_DEPTHS = ("no_live", "alpha_integration", "abg_release_sensitive")
 SOURCE_IDENTITY = "quwoquan-impact-planner"
-SOURCE_VERSION = "impact-planner-v3"
+SOURCE_VERSION = "impact-planner-v4"
 IMPACT_PLAN_SCHEMA = "delivery-impact-plan"
-IMPACT_PLAN_SCHEMA_VERSION = 2
+IMPACT_PLAN_SCHEMA_VERSION = 3
 RISK_LEVELS = ("R0", "R1", "R2", "R3", "R4")
 EXECUTION_PROFILES = ("pr", "promotion", "nightly", "manual")
 ROOT = Path(__file__).resolve().parents[2]
@@ -103,25 +103,35 @@ _KNOWN_TOP_LEVEL_PREFIXES = (
 _METADATA_PREFIX = "quwoquan_service/contracts/metadata/"
 _SERVICE_CONTRACT_PREFIX = "quwoquan_service/services/"
 _SERVICE_CONTRACT_SEGMENT = "/contracts/"
-_FEATURE_SPEC_SCOPE_RULES: tuple[tuple[str, Mapping[str, bool]], ...] = (
-    (
-        "specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/",
-        {"service": False, "app": True, "portal": False, "topology": False},
-    ),
-    (
-        "specs/feature-tree/runtime/runtime-client-foundation/",
-        {"service": False, "app": True, "portal": False, "topology": False},
-    ),
-    (
-        "specs/feature-tree/product-ops-growth/",
-        {"service": True, "app": True, "portal": True, "topology": False},
-    ),
-    (
-        "specs/feature-tree/platform-ops-governance/",
-        {"service": True, "app": False, "portal": True, "topology": False},
-    ),
-)
 
+# ``contract_closure`` 的唯一 changed-path surface。这里只描述契约 authority、
+# 明确 consumer / generator 及规则自身；owner 或整棵物理树都不是契约影响证据。
+_CONTRACT_CLOSURE_PREFIXES = (
+    "quwoquan_data/schema/",
+    "quwoquan_service/contracts/",
+    "quwoquan_service/services/content-service/contracts/",
+    "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/",
+    "quwoquan_app/packages/quwoquan_cloud_contracts/",
+    "quwoquan_app/scripts/runtime/codegen/verify_app_generated_manifest.py",
+    "quwoquan_app/scripts/runtime/codegen/verify_metadata_response_body_vs_codegen_app.py",
+    "quwoquan_ops/cli/commands/app_preflight_readiness.py",
+    "quwoquan_ops/cli/lib/app_content_uat_plan.py",
+    "quwoquan_ops/cli/lib/app_uat_result_bundle.py",
+    "quwoquan_ops/cli/lib/content_api_consumer.py",
+    "quwoquan_ops/cli/lib/content_api_consumer_authority.py",
+    "quwoquan_ops/cli/lib/deployment_candidate_manifest/",
+    "quwoquan_ops/cli/lib/premium_pool_release.py",
+    "quwoquan_ops/cli/lib/release_uat_sample_plan_derivation.py",
+    "quwoquan_ops/gate/commit_gate.sh",
+    "quwoquan_ops/gate/commit_gate_select.py",
+    "quwoquan_ops/gate/gate_repo.sh",
+    "quwoquan_ops/gate/verify_app_client_contract_kind_alignment.py",
+    "quwoquan_ops/ci/impact_planner_core.py",
+    "quwoquan_ops/ci/local_readiness_planner.py",
+    "quwoquan_data/scripts/core/schema.py",
+    "quwoquan_data/scripts/verify/handler.py",
+    "quwoquan_data/scripts/verify/verify_contract_closure.py",
+)
 
 class ImpactPlannerError(ValueError):
     """Fail-closed malformed planner input."""
@@ -163,6 +173,15 @@ def normalize_changed_path(raw_path: str) -> str:
 def normalize_changed_paths(paths: Iterable[str]) -> list[str]:
     normalized = {normalize_changed_path(path) for path in paths}
     return sorted(normalized, key=lambda value: value.encode("utf-8"))
+
+
+def contract_closure_impacted(paths: Iterable[str]) -> bool:
+    """Whether exact changed paths touch the canonical contract closure."""
+
+    return any(
+        _matches_prefix(path, _CONTRACT_CLOSURE_PREFIXES)
+        for path in normalize_changed_paths(paths)
+    )
 
 
 def validate_exact_sha(value: str, *, label: str) -> str:
@@ -311,11 +330,9 @@ def planner_identity() -> dict[str, str]:
             "segment": _SERVICE_CONTRACT_SEGMENT,
             "closure": ["service", "app", "portal"],
         },
+        "contract_closure_prefixes": list(_CONTRACT_CLOSURE_PREFIXES),
         "portal_closure": ["portal", "data"],
         "ops_non_portal_closure": list(SCOPE_NAMES),
-        "feature_spec_rules": [
-            [prefix, dict(flags)] for prefix, flags in _FEATURE_SPEC_SCOPE_RULES
-        ],
     }
     return {
         "source": SOURCE_IDENTITY,
@@ -331,15 +348,6 @@ def _is_doc_only(path: str) -> bool:
     return suffix in _DOC_ONLY_SUFFIXES and path.startswith(_DOC_ONLY_PREFIXES)
 
 
-def _feature_spec_scopes(path: str) -> Mapping[str, bool] | None:
-    if not path.startswith("specs/feature-tree/") or path.rsplit("/", 1)[-1] not in {"spec.md", "design.md"}:
-        return None
-    for prefix, flags in _FEATURE_SPEC_SCOPE_RULES:
-        if path.startswith(prefix):
-            return flags
-    return {"service": True, "app": True, "portal": True, "topology": False}
-
-
 def _apply_all(scopes: dict[str, bool]) -> None:
     for scope in SCOPE_NAMES:
         scopes[scope] = True
@@ -351,12 +359,9 @@ def _classify_one(path: str, scopes: dict[str, bool]) -> None:
             scopes["data"] = True
         return
 
-    feature_scopes = _feature_spec_scopes(path)
-    if feature_scopes is not None:
-        for scope, required in feature_scopes.items():
-            scopes[scope] = scopes[scope] or required
-        if path.startswith(_DATA_DOCUMENT_PREFIXES):
-            scopes["data"] = True
+    if path.startswith("specs/feature-tree/"):
+        # Feature specs are contract evidence only. Runtime expansion requires an
+        # explicit machine-readable dependency edge, never a directory guess.
         return
 
     if path in _ROOT_LEVEL_ALL_SCOPE_FILES or path.startswith(_ALL_SCOPE_PREFIXES):
@@ -451,6 +456,61 @@ def _matches_prefix(path: str, prefixes: tuple[str, ...]) -> bool:
     return any(path == prefix or path.startswith(prefix) for prefix in prefixes)
 
 
+def _runtime_image_owner(logical_service: str) -> str:
+    # Import lazily so the pure path classifier remains usable without topology I/O.
+    from quwoquan_ops.cli.lib.service_core_composition import (
+        SERVICE_CORE_MODULE_SET,
+        SERVICE_CORE_WORKLOAD,
+    )
+    return SERVICE_CORE_WORKLOAD if logical_service in SERVICE_CORE_MODULE_SET else logical_service
+
+
+def _affected_service_owners(paths: Iterable[str]) -> list[str]:
+    """Project exact service paths to runtime images without directory ownership guesses."""
+    from quwoquan_ops.cli.lib.immutable_image_composition import (
+        first_party_service_names,
+        runtime_image_owner_names,
+    )
+
+    normalized = normalize_changed_paths(paths)
+    if not any(path.startswith("quwoquan_service/") for path in normalized):
+        return []
+    logical_services = frozenset(first_party_service_names(ROOT))
+    all_owners = frozenset(runtime_image_owner_names(ROOT))
+    affected: set[str] = set()
+    shared_files = {
+        "quwoquan_service/go.mod",
+        "quwoquan_service/go.sum",
+        "quwoquan_service/Dockerfile",
+    }
+    shared_prefixes = (
+        "quwoquan_service/contracts/metadata/",
+        "quwoquan_service/generated/",
+        "quwoquan_service/internal/",
+        "quwoquan_service/scripts/",
+        "quwoquan_service/tools/",
+        "quwoquan_service/runtime/",
+        "quwoquan_service/cmd/service-core/",
+    )
+    for path in normalized:
+        if path in shared_files or _matches_prefix(path, shared_prefixes):
+            return sorted(all_owners)
+        match = re.match(r"quwoquan_service/services/([^/]+)/(.*)", path)
+        if match and match.group(1) in logical_services:
+            if match.group(2).split("/", 1)[0] in {"contracts", "environments"}:
+                return sorted(all_owners)
+            affected.add(_runtime_image_owner(match.group(1)))
+        elif path.startswith("quwoquan_service/control-plane/platform-ops/"):
+            affected.add("platform-ops-service")
+        elif path.startswith("quwoquan_service/"):
+            # Unknown service-shared code is an explicit crosscutting graph node.
+            return sorted(all_owners)
+    unknown = affected - all_owners
+    if unknown:
+        raise ImpactPlannerError(f"runtime image owner projection is invalid: {sorted(unknown)}")
+    return sorted(affected)
+
+
 def build_delivery_impact_plan(
     paths: Iterable[str],
     *,
@@ -528,6 +588,7 @@ def build_delivery_impact_plan(
     candidate_products = sorted(
         name for name in ("service", "app", "portal", "data") if runtime_scopes[name]
     )
+    affected_services = _affected_service_owners(changed_paths)
     identity = planner_identity()
     plan = {
         "schema": IMPACT_PLAN_SCHEMA,
@@ -547,6 +608,7 @@ def build_delivery_impact_plan(
         "integration_depth": integration_depth,
         "required_ids": required_ids,
         "candidate_products": candidate_products,
+        "affected_services": affected_services,
         "scopes": scopes,
         "states": states,
         "policy": {

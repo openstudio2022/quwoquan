@@ -4,18 +4,18 @@
 >
 > Journey / Scenario：不直接参与用户 Journey；为所有 Scenario 提供可定位的领域服务实现边界
 >
-> 设计归属：[L2 DEC-001](../design.md#dec-001)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
-作为维护服务契约与实现的开发者，我希望从每个服务自身的 `contracts/domain.yaml` 和 L1 工程归属直接定位唯一责任领域，从而在移动对象目录、生成物或环境入口时不依赖服务名册或宽泛 fallback 猜测 owner。
+作为维护服务契约与实现的开发者，我希望从每个服务自身的 `contracts/domain.yaml` 和 ContractGraph 领域映射直接定位唯一责任领域，从而在移动对象目录、生成物或环境入口时不依赖服务名册或宽泛 fallback 猜测责任领域。
 
 ## 2. 范围与非目标
 
 ### In Scope
 
 - 从 `services/*/contracts/domain.yaml` 动态发现领域服务根。
-- 每个发现的服务根由一个非宽泛 fallback 的 L1 `Service` 工程归属直接拥有。
+- 每个发现的服务根由 `contracts/domain.yaml` 与 ContractGraph 的非 fallback 一致映射直接表达。
 - `_shared` 跨服务 metadata 由 runtime L1 拥有，业务 L1 只作为协作消费者引用。
 
 ### Out of Scope
@@ -50,7 +50,7 @@
 <a id="gwt-001"></a>
 ### GWT-001 物理服务根具有唯一业务 L1 owner
 
-- GIVEN 仓库中存在带 `contracts/domain.yaml` 的服务根和 L1 工程归属。
+- GIVEN 仓库中存在带 `contracts/domain.yaml` 的服务根和 ContractGraph 领域映射。
 - WHEN 特性树门禁扫描当前服务目录与 L1 spec。
 - THEN 每个服务根均由恰好一个直接 `Service` 根认领，且不能只解析为宽泛 fallback。
 
@@ -58,12 +58,12 @@
 ### GWT-002 共享 metadata 与服务集合不依赖人工名册
 
 - GIVEN 跨服务 metadata 和服务本地 contracts 同时存在。
-- WHEN 目录门禁重建服务与工程归属。
+- WHEN 目录门禁重建服务与领域映射。
 - THEN `_shared` 的 owner 为 runtime，服务集合由 `contracts/domain.yaml` 发现，新增合规服务不需要更新固定服务名册。
 
 ## 6. 依赖
 
 - 前置要求：[`system-architecture-and-engineering-guide`](../spec.md) 的目录、契约与服务自治边界。
-- 上游事实：L1 工程归属、服务本地 `contracts/domain.yaml` 与共享 metadata 目录。
+- 上游事实：ContractGraph 领域映射、服务本地 `contracts/domain.yaml` 与共享 metadata 目录。
 - 下游结果：唯一领域 owner 或 `GATE_BLOCK`。
 - 父级设计：`DEC-001`

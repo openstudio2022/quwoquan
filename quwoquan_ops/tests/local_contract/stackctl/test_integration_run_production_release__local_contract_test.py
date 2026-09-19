@@ -253,7 +253,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertIn("ACCEPTANCE_BUNDLE", integrate_block)
         self.assertIn('--acceptance-bundle "$(ACCEPTANCE_BUNDLE)"', integrate_block)
         self.assertIn("--mode integrate", integrate_block)
-        for retired in ("--release-attestation", "--release-handoff-ref", "--readiness-level", "--owner-identity"):
+        for retired in ("--release-attestation", "--release-handoff-ref", "--readiness-level", "--context-manifest"):
             self.assertNotIn(retired, integrate_block)
 
     def test_beta_policy_branch_is_independent_of_impact_depth(self) -> None:
@@ -368,11 +368,11 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
 
         candidate_id = "sha256:" + "a" * 64
         claim = write("claims/c1.json", {"claimId": "sha256:" + "c" * 64, "paths": ["x.txt"],
-                                            "expectedParent": parent, "ownerIdentityRef": "owner-fixture"})
+                                            "expectedParent": parent, "contextRef": "owner-fixture"})
         candidate_body = {
             "schema": "quwoquan_ops.exact_integration_candidate.v1", "commit": commit, "tree": tree,
             "expectedParent": parent, "claimRef": claim["ref"], "claimDigest": claim["digest"], "paths": ["x.txt"],
-            "ownerIdentityRef": "owner-fixture",
+            "contextRef": "owner-fixture",
             "impactPlanDigest": "sha256:" + "9" * 64,
         }
         candidate_id = integration_run._sha256_hex(integration_run._canonical_bytes(candidate_body))
@@ -444,7 +444,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         git("-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "candidate")
         commit, tree = git("rev-parse", "HEAD"), git("rev-parse", "HEAD^{tree}")
         candidate_path = core.build_head_candidate(repository=repository, policy_path=integration_run.POLICY,
-            commit=commit, expected_parent=parent, owner_identity_ref="local-contract:bundle-owner",
+            commit=commit, expected_parent=parent,
             impact_plan_digest="sha256:" + "9" * 64, writer_id="bundle-fixture",
             expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat())
         candidate = json.loads(candidate_path.read_bytes())

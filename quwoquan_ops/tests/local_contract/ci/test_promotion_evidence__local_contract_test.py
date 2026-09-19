@@ -231,7 +231,7 @@ def test_full_promotion_cannot_hide_earlier_health_findings(tmp_path: Path, kind
 
 
 # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001
-@pytest.mark.parametrize("mutation", ["missing-disposition", "another-range", "stale-report", "valid-owner-open"])
+@pytest.mark.parametrize("mutation", ["missing-disposition", "another-range", "stale-report", "valid-feature-open"])
 def test_real_warning_existing_review_closure(tmp_path: Path, mutation: str) -> None:
     """现有 closure validator 真实验证 owner OPEN；不将该局部正例伪称完整 admission。"""
     from quwoquan_ops.ci.verify_code_health_delivery import verify_delivery, promotion_health_plan
@@ -261,7 +261,7 @@ def test_real_warning_existing_review_closure(tmp_path: Path, mutation: str) -> 
         owner = "specs/feature-tree/platform-ops-governance/spec.md"
         plan = {"workflow": "dev", "head_sha": head, "merge_base_sha": base,
             "changed_paths": report["changedPaths"], "candidate_evidence_identity": candidate,
-            "owner_identity": {"resolved_owner": owner}, "contexts": [{"path": owner, "exists": True}],
+            "contexts": [{"path": owner, "anchor": None, "kind": "spec", "exists": True}],
             "reviewers": [{"role": "developer", "kind": "primary"}]}
         artifact = {"kind": "code-health-report-v1", "ref": ref, "canonical_bytes_sha256": exact["digest"],
             "schema": report["schema"], "terminal": report["terminal"], "base_sha": base, "head_sha": head,
@@ -271,8 +271,8 @@ def test_real_warning_existing_review_closure(tmp_path: Path, mutation: str) -> 
             "impact_plan_ref": "impact", "impact_plan_digest": impact["plan_digest"]}
         receipt = {"evidence": [{"id": "health", "exit_code": 0, "timed_out": False, "artifact": artifact}]}
         closure = {"candidate_fingerprint_ref": "candidate-fingerprint", "candidate_fingerprint_digest": "candidate-digest",
-            "health_dispositions": [{"finding_id": finding["findingId"], "disposition": "owner-open",
-                "reason": "完整范围的规模信号按当前 owner OPEN 跟踪", "evidence_ids": ["health"], "open_ref": owner + "#open-004"}
+            "health_dispositions": [{"finding_id": finding["findingId"], "disposition": "feature-open",
+                "reason": "完整范围的规模信号按当前 context OPEN 跟踪", "evidence_ids": ["health"], "open_ref": owner + "#open-004"}
                 for finding in report["findings"] if finding["terminal"] == "PR_WARN"], "replacements": []}
         if mutation == "missing-disposition":
             closure["health_dispositions"] = []
@@ -281,7 +281,7 @@ def test_real_warning_existing_review_closure(tmp_path: Path, mutation: str) -> 
         elif mutation == "stale-report":
             (case / "report.json").write_text("{}")
         results = {"developer": {"status": "completed", "candidate_closure": closure}}
-        if mutation == "valid-owner-open":
+        if mutation == "valid-feature-open":
             review_consolidator.validate_candidate_closure(plan, receipt, results)
         else:
             with pytest.raises(ValueError):
@@ -359,19 +359,22 @@ Path(os.environ["QWQ_NAMED_EVIDENCE_RESULT_PATH"]).write_text(json.dumps(artifac
     git(source, "branch", "lane/engineering", head)
     git(source, "update-ref", "refs/remotes/origin/dev1.0", head)
     exact_range = {"base_sha": base, "head_sha": head, "head_tree": tree}
-    current = candidates._current_owner(target, repo_root=source)
-    owner = {**current, "schema_version": 4, "canonical_contexts": [{"path": current["resolved_owner"], "anchor": None, "kind": "spec"}],
+    from lib.feature_tree.commands import _context_manifest
+    from lib.feature_tree.nodes import discover_nodes
+    with context.source_repository(source):
+        current = _context_manifest("specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md", discover_nodes())
+    owner = {**current, "schema_version": 4, "canonical_contexts": [{"path": current["canonical_contexts"][0]["path"], "anchor": None, "kind": "spec"}],
         "applicable_agents": ["AGENTS.md"], "open_items": []}
     owner["evidence_fingerprint"] = owner_fingerprint.embedded_fingerprint_binding(owner_fingerprint.build_feature_context_fingerprint(owner, repo_root=source))
     def publish(value, subdirectory=None):
         with context.source_repository(source):
             return _write_content_addressed_bytes(canonical_json_bytes(value), subdirectory=subdirectory).relative_to(source).as_posix()
     owner_ref = publish(owner)
-    candidate = candidates.build_candidate_evidence(owner_ref, [target], repo_root=source,
+    candidate = candidates.build_candidate_evidence([target], repo_root=source,
         source_identity={**exact_range, "producer_lane": "lane/engineering"})
     candidate_ref = publish(candidate, "candidates/by-fingerprint")
     plan = review.review_dispatch.build_plan(registry, "dev", "POST", None, [target], context_manifest=owner,
-        context_manifest_ref=owner_ref, candidate_evidence_ref=candidate_ref, git_range=exact_range, source_repository=source)
+        candidate_evidence_ref=candidate_ref, git_range=exact_range, source_repository=source)
     plan_ref, receipt_ref, result_ref = (f".qwq_output/promotion-review/{name}.json" for name in ("plan", "evidence", "review"))
     (source / plan_ref).parent.mkdir(parents=True)
     (source / plan_ref).write_bytes(canonical_json_bytes(plan))
@@ -392,8 +395,8 @@ Path(os.environ["QWQ_NAMED_EVIDENCE_RESULT_PATH"]).write_text(json.dumps(artifac
         result[field] = identity[field]
     result["candidate_closure"] = {"candidate_fingerprint_ref": plan["candidate_evidence_identity"]["fingerprint_ref"],
         "candidate_fingerprint_digest": plan["candidate_evidence_identity"]["fingerprint_digest"], "replacements": [],
-        "health_dispositions": [{"finding_id": item["findingId"], "disposition": "owner-open", "reason": "current owner scope",
-            "evidence_ids": ["code-health-delta"], "open_ref": current["resolved_owner"] + "#open-003"}
+        "health_dispositions": [{"finding_id": item["findingId"], "disposition": "feature-open", "reason": "current context scope",
+            "evidence_ids": ["code-health-delta"], "open_ref": current["canonical_contexts"][0]["path"] + "#open-003"}
             for item in artifact["findings"] if item["terminal"] == "PR_WARN"]}
     (source / result_ref).write_bytes(canonical_json_bytes(result))
     consolidation = review.consolidate(plan, [(receipt_ref, receipt)], [(result_ref, result)], registry=registry, source_repository=source)

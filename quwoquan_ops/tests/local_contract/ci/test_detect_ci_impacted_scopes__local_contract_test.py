@@ -70,43 +70,33 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
         for scope in ("service", "app", "portal", "topology", "data"):
             self.assertIn(f"{scope}=false", result.stdout)
 
-    def test_l1_spec_change_triggers_its_owned_app_scope(self) -> None:
-        result = run_detect("specs/feature-tree/runtime/runtime-client-foundation/spec.md")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("service=false", result.stdout)
-        self.assertIn("app=true", result.stdout)
-        self.assertIn("portal=false", result.stdout)
-        self.assertIn("topology=false", result.stdout)
+    def test_feature_specs_only_trigger_spec_contract(self) -> None:
+        for path in (
+            "specs/feature-tree/runtime/runtime-client-foundation/spec.md",
+            "specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md",
+            "specs/feature-tree/new-domain/new-capability/spec.md",
+        ):
+            result = run_detect(path)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            for scope in ("service", "app", "portal", "topology", "data"):
+                self.assertIn(f"{scope}=false", result.stdout)
+            self.assertIn("spec_contract=true", result.stdout)
 
-    def test_spec_change_triggers_scopes_by_feature_ownership(self) -> None:
-        result = run_detect(
-            "specs/feature-tree/runtime/runtime-client-foundation/unified-app-page-access/spec.md"
+    def test_same_actual_paths_ignore_feature_target_context(self) -> None:
+        from quwoquan_ops.ci.impact_planner_core import build_delivery_impact_plan
+        kwargs = dict(
+            source_sha="b" * 40,
+            base_sha="a" * 40,
+            source_tree_digest="sha1:" + "c" * 40,
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("service=false", result.stdout)
-        self.assertIn("app=true", result.stdout)
-        self.assertIn("portal=false", result.stdout)
-        self.assertIn("topology=false", result.stdout)
-
-    def test_product_ops_spec_change_triggers_service_and_portal(self) -> None:
-        result = run_detect(
-            "specs/feature-tree/product-ops-growth/event-ingestion-and-analytics/spec.md"
+        first = build_delivery_impact_plan(
+            ["quwoquan_service/services/chat-service/internal/chat.go"], **kwargs
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("service=true", result.stdout)
-        self.assertIn("app=true", result.stdout)
-        self.assertIn("portal=true", result.stdout)
-        self.assertIn("topology=false", result.stdout)
-
-    def test_platform_spec_change_triggers_service_and_portal(self) -> None:
-        result = run_detect(
-            "specs/feature-tree/platform-ops-governance/config-and-reliability-governance/spec.md"
+        second = build_delivery_impact_plan(
+            ["quwoquan_service/services/chat-service/internal/chat.go"], **kwargs
         )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("service=true", result.stdout)
-        self.assertIn("app=false", result.stdout)
-        self.assertIn("portal=true", result.stdout)
-        self.assertIn("topology=false", result.stdout)
+        self.assertEqual(first, second)
+        self.assertEqual(first["affected_services"], ["service-core"])
 
     def test_missing_diff_defaults_to_all_impacted(self) -> None:
         result = run_detect()
@@ -197,7 +187,7 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
             },
         )
         self.assertEqual(
-            validated["captured_metadata"]["planner_version"], "impact-planner-v3"
+            validated["captured_metadata"]["planner_version"], "impact-planner-v4"
         )
 
     def test_receipt_requires_lowercase_exact_shas(self) -> None:
@@ -319,7 +309,7 @@ class DetectCiImpactedScopesTest(unittest.TestCase):
             plan, expected_source_sha="b" * 40
         )
         self.assertEqual(validated["schema"], "delivery-impact-plan")
-        self.assertEqual(validated["schema_version"], 2)
+        self.assertEqual(validated["schema_version"], 3)
         self.assertEqual(validated["states"]["device"], "required")
         self.assertRegex(validated["changed_paths_digest"], r"^sha256:[0-9a-f]{64}$")
         self.assertRegex(validated["plan_digest"], r"^sha256:[0-9a-f]{64}$")

@@ -4,7 +4,7 @@
 
 > Journey / Scenario：[`JNY-003 / SCN-007`](../../../spec.md#scn-007)
 
-> 设计归属：[L2 DEC-001](../design.md#dec-001)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
@@ -35,9 +35,9 @@
 - 更多操作面板只展示已具备真实结果或安全终态的能力；禁止“功能开发中”假入口。
 
 <a id="req-002"></a>
-### REQ-002 Discovery 侧反馈入口统一接入 Provider/Repository（Works + Moment）
+### REQ-002 Discovery 侧反馈入口统一消费公开动作契约（统一内容流与聚焦面）
 
-- Discovery 侧反馈入口统一接入 Provider/Repository（Works + Moment）。
+- Discovery 侧反馈入口统一消费公开动作契约（统一内容流与聚焦面）。
 - 更多操作面板只展示已具备真实结果或安全终态的能力；禁止“功能开发中”假入口。
 - 打赏、会员、虚拟币等交易能力；交易合规、计费与退款契约不完整时不得展示入口。
 - `like/favorite/comment/report` 走专用路由，禁止混入 batch tracker。

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "quwoquan_data/schema/content/content_review.schema.json",
-  "description": "review 每对象唯一内容裁决。独立 reviewer 提交语义保真报告与判断；seal 只补齐机械字段、核对摘要/覆盖/顺序闭包，不生成语义事实。既有安全、事实与逐资产权利记录语义保持不变。",
+  "description": "review 每对象唯一内容裁决。顶层 objectRef 唯一绑定冻结的 producer execution target identity，不承载发布后 canonical repository locator 或内容版本；独立 reviewer 提交语义保真报告与判断，seal 只补齐机械字段、核对摘要/覆盖/顺序闭包，不生成语义事实。",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -30,11 +30,6 @@
     "executionId": {
       "type": "string",
       "minLength": 1
-    },
-    "objectRef": {
-      "description": "Opaque canonical logical identity; locator depth is not identity semantics.",
-      "type": "string",
-      "pattern": "^(?:entities/(?!\\.{1,2}(?:/|$))[^/]+(?:/(?!\\.{1,2}(?:/|$))[^/]+)*/[1-9][0-9]*|posts/(?:article|image|video)/(?!\\.{1,2}(?:/|$))[^/]+(?:/(?!\\.{1,2}(?:/|$))[^/]+)*/[1-9][0-9]*)$"
     },
     "decision": {
       "enum": [
@@ -739,6 +734,11 @@
           }
         }
       ]
+    },
+    "objectRef": {
+      "description": "Frozen producer execution target identity. Homepage uses the entityRef-derived process target; posts use the frozen publish coordinates. This is not a canonical repository locator or content version.",
+      "type": "string",
+      "pattern": "^(?:entities/(?!\\.{1,2}(?:/|$))[^/]+/(?!\\.{1,2}(?:/|$))[^/]+/entity-[a-f0-9]{64}|posts/(?:article|image|video)/(?!\\.{1,2}(?:/|$))[^/]+/(?!\\.{1,2}(?:/|$))[^/]+/[1-9][0-9]*)$"
     }
   },
   "allOf": [

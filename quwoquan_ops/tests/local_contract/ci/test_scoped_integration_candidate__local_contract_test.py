@@ -63,7 +63,6 @@ def repo(tmp_path: Path) -> tuple[Path, str]:
 def claim(target: Path, parent: str, paths: list[str], writer: str = "writer-1") -> Path:
     return acquire_claim(
         repository=target, policy_path=POLICY, writer_id=writer,
-        owner_identity_ref="evidence-fingerprint-v1:sha256:" + "b" * 64,
         expected_parent=parent, paths=paths,
         expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
     )
@@ -89,7 +88,6 @@ def test_private_index_candidate_contains_only_claimed_bytes(tmp_path: Path) -> 
 
     candidate_ref = build_candidate(
         repository=target, policy_path=POLICY, claim_ref=claim_ref,
-        owner_identity_ref="evidence-fingerprint-v1:sha256:" + "b" * 64,
         impact_plan_digest=DIGEST, message="scoped candidate",
         author_name="Candidate", author_email="candidate@example.com",
     )
@@ -195,7 +193,7 @@ def competing_admissions(tmp_path: Path, source_receipt_boundary) -> tuple[Path,
         claimed = claim(target, parent, [owned_path], writer=label)
         (target / owned_path).write_text(f"candidate {label}\n")
         candidate_ref = build_candidate(
-            repository=target, policy_path=POLICY, claim_ref=claimed, owner_identity_ref=OWNER,
+            repository=target, policy_path=POLICY, claim_ref=claimed,
             impact_plan_digest=DIGEST, message=label, author_name="Test", author_email="test@example.com",
         )
         admissions.append(independent_admission(target, candidate_ref, f"{label}-"))
@@ -280,7 +278,7 @@ def test_merged_candidate_rejects_each_old_fact(competing_admissions, donor: int
         release_claim(repository=target, policy_path=POLICY, claim_ref=root / candidate["claimRef"], reason="combine candidates")
     merged_ref = build_head_candidate(
         repository=target, policy_path=POLICY, commit=commit, expected_parent=parent,
-        owner_identity_ref=OWNER, impact_plan_digest=DIGEST, writer_id="merged",
+ impact_plan_digest=DIGEST, writer_id="merged",
         expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
     )
     # 先用 C 自己的完整签名事实准入，避免负例被无效夹具提前拒绝。
@@ -312,7 +310,6 @@ def test_same_admission_replay_is_rejected(tmp_path: Path, source_receipt_bounda
     (target / "owned.txt").write_text("candidate\n")
     candidate_ref = build_candidate(
         repository=target, policy_path=POLICY, claim_ref=claim_ref,
-        owner_identity_ref="evidence-fingerprint-v1:sha256:" + "b" * 64,
         impact_plan_digest=DIGEST, message="candidate", author_name="Candidate", author_email="candidate@example.com",
     )
     candidate = json.loads(candidate_ref.read_text())
@@ -354,7 +351,6 @@ def test_hosted_broker_publish_reconciles_unknown_mutation_outcome(tmp_path: Pat
     (target / "owned.txt").write_text("candidate\n")
     candidate_ref = build_candidate(
         repository=target, policy_path=POLICY, claim_ref=claim_ref,
-        owner_identity_ref="evidence-fingerprint-v1:sha256:" + "b" * 64,
         impact_plan_digest=DIGEST, message="candidate", author_name="Candidate", author_email="candidate@example.com",
     )
     candidate = json.loads(candidate_ref.read_text())
@@ -402,7 +398,6 @@ def test_hosted_broker_publish_blocks_before_and_other_readback(tmp_path: Path, 
     (target / "owned.txt").write_text("candidate\n")
     candidate_ref = build_candidate(
         repository=target, policy_path=POLICY, claim_ref=claim_ref,
-        owner_identity_ref="evidence-fingerprint-v1:sha256:" + "b" * 64,
         impact_plan_digest=DIGEST, message="candidate", author_name="Candidate", author_email="candidate@example.com",
     )
     candidate = json.loads(candidate_ref.read_text())
@@ -437,7 +432,7 @@ def admitted_fixture(tmp_path: Path) -> tuple[Path, Path]:
     target, parent = repo(tmp_path)
     claimed = claim(target, parent, ["owned.txt"])
     (target / "owned.txt").write_text("candidate\n")
-    path = build_candidate(repository=target, policy_path=POLICY, claim_ref=claimed, owner_identity_ref=OWNER,
+    path = build_candidate(repository=target, policy_path=POLICY, claim_ref=claimed,
         impact_plan_digest=DIGEST, message="candidate", author_name="Test", author_email="test@example.com")
     candidate = json.loads(path.read_text())
     source = source_fact(target, candidate, path)
@@ -657,7 +652,7 @@ def test_build_head_candidate_binds_exact_commit_and_changed_scope(tmp_path: Pat
     expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     candidate_ref = build_head_candidate(
         repository=target, policy_path=POLICY, commit=commit, expected_parent=parent,
-        owner_identity_ref=OWNER, impact_plan_digest=DIGEST, writer_id="integration", expires_at=expires,
+ impact_plan_digest=DIGEST, writer_id="integration", expires_at=expires,
     )
     candidate = json.loads(candidate_ref.read_text())
     assert candidate["schema"] == "quwoquan_ops.exact_integration_candidate.v1"
@@ -676,7 +671,7 @@ def test_build_head_candidate_binds_exact_commit_and_changed_scope(tmp_path: Pat
     with pytest.raises(ScopedCandidateError, match="CAS_CONFLICT"):
         build_head_candidate(
             repository=target, policy_path=POLICY, commit=side, expected_parent=commit,
-            owner_identity_ref=OWNER, impact_plan_digest=DIGEST, writer_id="integration-2", expires_at=expires,
+ impact_plan_digest=DIGEST, writer_id="integration-2", expires_at=expires,
         )
 
 
@@ -686,7 +681,7 @@ def test_source_fact_binds_receipt_to_candidate_and_keeps_receipt_verdict(tmp_pa
     expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     candidate_ref = build_head_candidate(
         repository=target, policy_path=POLICY, commit=commit, expected_parent=parent,
-        owner_identity_ref=OWNER, impact_plan_digest=DIGEST, writer_id="integration", expires_at=expires,
+ impact_plan_digest=DIGEST, writer_id="integration", expires_at=expires,
     )
     receipt = target / ".qwq_output/env/repo/local/local-readiness/receipt.json"
     receipt.parent.mkdir(parents=True)
@@ -707,7 +702,7 @@ def test_source_fact_rejects_false_passed_wrapper(tmp_path: Path, payload: dict[
     parent, commit = committed_candidate(target)
     candidate_ref = build_head_candidate(
         repository=target, policy_path=POLICY, commit=commit, expected_parent=parent,
-        owner_identity_ref=OWNER, impact_plan_digest=DIGEST, writer_id="integration",
+ impact_plan_digest=DIGEST, writer_id="integration",
         expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
     )
     receipt = target / ".qwq_output/receipt.json"
@@ -731,7 +726,7 @@ def test_local_git_publish_is_expected_old_cas_with_readback(tmp_path: Path, sou
     expires = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     candidate_ref = build_head_candidate(
         repository=target, policy_path=POLICY, commit=commit, expected_parent=parent,
-        owner_identity_ref=OWNER, impact_plan_digest=DIGEST, writer_id="integration", expires_at=expires,
+ impact_plan_digest=DIGEST, writer_id="integration", expires_at=expires,
     )
     candidate = json.loads(candidate_ref.read_text())
     source = source_fact(target, candidate, candidate_ref)

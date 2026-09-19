@@ -203,16 +203,7 @@
 - 可观察结果：Chat 幂等维护唯一 Conversation/Membership、Message、Announcement 与 AssetIndex；有效参与者默认进入消息并可打开 Board，投影延迟有可恢复等待态。
 - 禁止结果：不得由普通会话成员、推荐卡、客户端 role 或 Chat command 创建 Participation；不得建立 Workspace、复制 Gathering、自动 mutual，或把发起活动降级为普通建群。
 
-## 7. 工程归属
-
-- App：`quwoquan_app/lib/service/chat_service`、`quwoquan_app/lib/service/notification_service`、`quwoquan_app/lib/service/rtc_service`
-- Service：`quwoquan_service/services/chat-service`、`quwoquan_service/services/notification-service`、`quwoquan_service/services/rtc-service`
-- 测试：
-  - `local_contract`：`quwoquan_service/services/chat-service/tests`
-  - `api_integration`：`quwoquan_service/services/chat-service/tests`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`、`quwoquan_app/test/user_acceptance/journeys/chat_notification_entry`、`quwoquan_app/test/user_acceptance/journeys/group_avatar_sync`
-
-## 8. 开放事项
+## 7. 开放事项
 
 <a id="open-001"></a>
 ### OPEN-001 chat conversation 领域边界验收

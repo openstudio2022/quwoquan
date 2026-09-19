@@ -105,7 +105,7 @@ def _review_result(
 
 def _refs() -> dict[str, Any]:
     return {
-        "owner_manifest": None,
+        "candidate_evidence": None,
         "local_scope_ready": None,
         "local_release_ready": None,
         "review_plan": None,
@@ -143,7 +143,6 @@ def test_triggered_handoff_rejects_dirty_workspace_feedback_only_evidence() -> N
                 [
                     "make",
                     "feature-candidate-evidence",
-                    f"OWNER_IDENTITY={owner_ref}",
                     f"CHANGED_PATHS={CHANGED}",
                 ],
                 env=env,
@@ -156,7 +155,7 @@ def test_triggered_handoff_rejects_dirty_workspace_feedback_only_evidence() -> N
                 sys.executable, "-B", "quwoquan_ops/cli/review_dispatch.py",
                 "--workflow", "dev", "--segment", "POST",
                 "--changed-paths", CHANGED, "--scope", TARGET,
-                "--owner-identity", owner_ref,
+                "--context-manifest", owner_ref,
                 "--candidate-evidence", candidate_ref,
                 "--out", plan_dir.relative_to(ROOT).as_posix(),
             ],
@@ -222,7 +221,7 @@ def test_triggered_handoff_rejects_dirty_workspace_feedback_only_evidence() -> N
             "artifacts": [CHANGED],
             "pending_dispositions": [],
             "downstream": "plan-next",
-            "owner_identity_ref": owner_ref,
+            "context_ref": owner_ref,
             "candidate_evidence_ref": candidate_ref,
             "review_plan_ref": plan_path.relative_to(ROOT).as_posix(),
             "evidence_receipt_refs": [evidence_ref],

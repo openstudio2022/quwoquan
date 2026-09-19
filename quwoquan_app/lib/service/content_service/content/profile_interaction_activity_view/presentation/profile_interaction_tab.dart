@@ -9,6 +9,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/link_templates.g.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/application/public/generated/user_profile_ui_config.g.dart';
 import 'package:quwoquan_app/service/content_service/content/profile_interaction_activity_view/application/profile_interaction_activity_view_data_mapper.dart';
@@ -608,7 +609,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
     final baseRoute = AppRoutePaths.workBrowser(
       workId: objectId,
       filter: _previewFilterFor(item),
-      source: 'profile-interaction',
+      source: ReferralSource.authorProfile.value,
     );
     // 评论类互动：深链进入内容评论区并携带评论标识，
     // 落地后由分屏定位到「回复我的」那条（回复场景用父评论行高亮）。
@@ -635,7 +636,7 @@ class _ProfileInteractionTabState extends ConsumerState<ProfileInteractionTab>
     return buildProfileInteractionCommentRoute(
       workId: item.previewObjectId,
       filter: _previewFilterFor(item),
-      source: 'profile-interaction',
+      referralSource: ReferralSource.authorProfile,
       entrySource: MediaViewerCommentContext.entrySourceProfileInteraction,
       commentId: item.commentId,
       parentCommentId: item.parentCommentId,

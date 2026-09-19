@@ -82,6 +82,8 @@ type appRequestBinding struct {
 	Name     string `json:"name"`
 	Field    string `json:"field"`
 	Required *bool  `json:"required"`
+	Encoding string `json:"encoding"`
+	MaxBytes int    `json:"maxBytes"`
 }
 
 type appRequestConstants struct {

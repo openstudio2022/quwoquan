@@ -12,7 +12,8 @@ from ..domain.model import (
     validate_content_fence,
     RankingResult,
     RankedRecommendationItem,
-    RecommendationObjectCard,
+    ClientContentPresentationContract,
+    validate_presentation_contract,
     RankedRecommendationWindow,
 )
 
@@ -38,6 +39,7 @@ class CandidateRanker(Protocol):
         session_id: str,
         limit: int,
         content_fence: ReleasePinnedQueryFence,
+        client_presentation_contract: ClientContentPresentationContract,
     ) -> RankingResult: ...
 
 
@@ -81,7 +83,7 @@ class RankedRecommendationPage:
     items: tuple[RankedRecommendationItem, ...]
     next_ordinal: int | None
     expires_at: str
-    object_cards: tuple[RecommendationObjectCard, ...] = ()
+    client_presentation_contract: ClientContentPresentationContract
 
 
 class Facade:
@@ -120,8 +122,10 @@ class Facade:
         scenario: str,
         limit: int,
         content_fence: ReleasePinnedQueryFence,
+        client_presentation_contract: ClientContentPresentationContract,
     ) -> RankedRecommendationPage:
         content_fence = validate_content_fence(content_fence)
+        contract = validate_presentation_contract(client_presentation_contract)
         if limit <= 0 or limit > 100:
             raise ValueError("limit must be in 1..100")
         normalized_key = idempotency_key.strip()
@@ -139,6 +143,7 @@ class Facade:
             json.dumps(
                 {
                     "contentFence": content_fence.model_dump(mode="json"),
+                    "clientPresentationContract": contract.model_dump(mode="json"),
                     "subjectId": normalized_subject,
                     "scenario": normalized_scenario,
                     "limit": limit,
@@ -148,7 +153,7 @@ class Facade:
                 sort_keys=True,
             ).encode("utf-8")
         ).hexdigest()
-        window_id = self._window_id_factory(normalized_key)
+        window_id = self._window_id_factory(json.dumps([normalized_key, contract.contractDigest], separators=(",", ":")))
         existing = self._store.get(normalized_subject, window_id)
         if existing is not None:
             if existing.request_digest != request_digest or existing.content_fence != content_fence:
@@ -163,6 +168,7 @@ class Facade:
             session_id=window_id,
             limit=MAX_WINDOW_ITEMS,
             content_fence=content_fence.model_copy(deep=True),
+            client_presentation_contract=contract.model_copy(deep=True),
         )
         window = RankedRecommendationWindow.create(
             window_id=window_id,
@@ -171,6 +177,7 @@ class Facade:
             request_digest=request_digest,
             ranking=ranking,
             content_fence=content_fence,
+            client_presentation_contract=contract,
         )
         persisted = self._store.create_or_get(window)
         if persisted.request_digest != request_digest or persisted.content_fence != content_fence:
@@ -190,8 +197,10 @@ class Facade:
         from_ordinal: int,
         limit: int,
         content_fence: ReleasePinnedQueryFence,
+        client_presentation_contract: ClientContentPresentationContract,
     ) -> RankedRecommendationPage:
         content_fence = validate_content_fence(content_fence)
+        contract = validate_presentation_contract(client_presentation_contract)
         normalized_subject = subject_id.strip()
         normalized_window = window_id.strip()
         if not normalized_subject or not normalized_window:
@@ -202,8 +211,8 @@ class Facade:
         if self._subject_closures.exists(normalized_subject):
             self._store.erase_subject(normalized_subject)
             raise SubjectClosedError("closed subjects cannot read recommendation windows")
-        if window.content_fence != content_fence:
-            raise IdempotencyConflictError("Content fence changed; restart from first page")
+        if window.content_fence != content_fence or window.client_presentation_contract != contract:
+            raise IdempotencyConflictError("Window fence or presentation contract changed; restart from first page")
         return self._page(window, from_ordinal=from_ordinal, limit=limit)
 
     def _current_hard_exclusions(
@@ -234,11 +243,11 @@ class Facade:
             items = tuple(
                 item
                 for item in items
-                if item.content_id not in negative
-                and str(item.item_feature_snapshot.get("authorId") or "").strip()
-                not in hidden_authors
-                and str(item.item_feature_snapshot.get("contentType") or "").strip()
-                not in hidden_types
+                if item.envelope.post is None or (
+                    item.envelope.post.postId not in negative
+                    and str(item.item_feature_snapshot.get("authorId") or "").strip() not in hidden_authors
+                    and item.envelope.contentType not in hidden_types
+                )
             )
         return RankedRecommendationPage(
             content_fence=window.content_fence.model_copy(deep=True),
@@ -255,5 +264,5 @@ class Facade:
             items=items,
             next_ordinal=next_ordinal,
             expires_at=window.expires_at.isoformat(),
-            object_cards=window.object_cards,
+            client_presentation_contract=window.client_presentation_contract.model_copy(deep=True),
         )

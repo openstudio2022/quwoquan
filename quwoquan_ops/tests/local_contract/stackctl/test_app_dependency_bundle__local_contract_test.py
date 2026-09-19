@@ -55,6 +55,12 @@ def _fixture(
         "schema": bundle.APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA,
         "claim": "PREPARED_NOT_ACTIVE",
         "attemptId": "abc",
+        "platforms": ["android", "ios"],
+        "platformInputs": {
+            "android": {key: identity[key] for key in identity},
+            "ios": {key: identity[key] for key in identity if key != "nativeResolutionInputDigest"},
+        },
+        "nonPromotable": False,
         "components": components,
         "activationEvidence": {
             "requiredActiveRef": "env/repo/local/app-dependency-sync/cache/active.json",
@@ -66,6 +72,12 @@ def _fixture(
         "schema": bundle.APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA,
         "attemptId": "abc",
         **identity,
+        "platforms": ["android", "ios"],
+        "platformInputs": {
+            "android": {key: identity[key] for key in identity},
+            "ios": {key: identity[key] for key in identity if key != "nativeResolutionInputDigest"},
+        },
+        "nonPromotable": False,
         "components": components,
         "receiptRef": receipt_ref.as_posix(),
         "receiptDigest": _digest_bytes(_canonical_bytes(receipt)),

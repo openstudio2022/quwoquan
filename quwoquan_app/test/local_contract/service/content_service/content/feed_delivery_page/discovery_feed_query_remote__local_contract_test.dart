@@ -75,14 +75,16 @@ void main() {
       expect(executor.context?.idempotencyKey, 'base-idempotency');
       expect(executor.context?.deadlineAt, same(requestDeadline));
       expect(executor.context?.cancellation, same(requestCancellation));
-      expect(executor.queryParameters, <String, String>{
-        'sort': 'recommend',
-        'subCategory': 'local',
-        'channelId': 'recommend',
-        'sessionId': 'session-1',
-        'feedRequestId': 'feed-request-1',
-        'limit': '20',
-      });
+      expect(executor.queryParameters['sort'], 'recommend');
+      expect(executor.queryParameters['subCategory'], 'local');
+      expect(executor.queryParameters['channelId'], 'recommend');
+      expect(executor.queryParameters['sessionId'], 'session-1');
+      expect(executor.queryParameters['feedRequestId'], 'feed-request-1');
+      expect(executor.queryParameters['limit'], '20');
+      expect(
+        executor.queryParameters['clientPresentationContract'],
+        isNotEmpty,
+      );
       expect(executor.headers['X-Blocked-Keywords'], 'blocked-one,blocked-two');
       expect(page.feedRequestId, 'server-feed-request');
       expect(page.nextCursor, 'cursor-2');
@@ -114,20 +116,17 @@ void main() {
       expect(executor.context?.cancellation, same(baseCancellation));
     });
 
-    test('已知 feed category 通过数据表稳定映射 identity', () async {
-      const expectedIdentityByCategory = <String, String>{
-        'moment': 'moment',
-        'recommended': 'moment',
-        'following': 'moment',
-        'work': 'work',
-        'works': 'work',
-        'photo': 'work',
-        'images': 'work',
-        'video': 'work',
-        'article': 'work',
+    test('已知 feed category 通过数据表稳定映射 type，不再发送 identity', () async {
+      const expectedTypeByCategory = <String, String?>{
+        'article': 'article',
+        'images': 'image',
+        'video': 'video',
+        'photo': null,
+        'recommended': null,
+        'following': null,
       };
 
-      for (final entry in expectedIdentityByCategory.entries) {
+      for (final entry in expectedTypeByCategory.entries) {
         final executor = _RecordingExecutor();
         final query = RemoteContentDiscoveryFeedQuery(
           client: GeneratedCloudOperationClient(executor),
@@ -142,9 +141,14 @@ void main() {
         await query.listDiscoveryFeedPage(category: entry.key);
 
         expect(
-          executor.queryParameters['identity'],
+          executor.queryParameters.containsKey('identity'),
+          isFalse,
+          reason: '${entry.key} 不得再携带已退役 identity',
+        );
+        expect(
+          executor.queryParameters['type'],
           entry.value,
-          reason: '${entry.key} 必须保持 canonical identity 映射',
+          reason: '${entry.key} 必须保持 canonical type 映射',
         );
       }
     });
@@ -256,17 +260,24 @@ final class _RecordingExecutor implements CloudOperationExecutor {
     queryParameters = payload.queryParameters;
     headers = payload.headers;
     return responseDecoder(<String, Object?>{
-      'items': const <Object?>[
+      'items': <Object?>[
         <String, Object?>{
-          'postId': 'post-1',
-          'contentType': 'micro',
-          'likeCount': 0,
-          'commentCount': 0,
-          'shareCount': 0,
+          'envelope': <String, Object?>{
+            'objectKind': 'post',
+            'contentType': 'article',
+            'openSurface': 'article_reader',
+            'post': <String, Object?>{'postId': 'post-1'},
+          },
+          'post': <String, Object?>{
+            'postId': 'post-1',
+            'contentType': 'article',
+            'likeCount': 0,
+            'commentCount': 0,
+            'shareCount': 0,
+          },
         },
       ],
       'outcome': 'content',
-      'objectCards': const <Object?>[],
       'nextCursor': 'cursor-2',
       'previousCursor': 'cursor-0',
       'paginationExpiresAt': '2026-07-29T12:00:00Z',

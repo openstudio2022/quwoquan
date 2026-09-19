@@ -32,8 +32,8 @@ except ImportError:
 
 SEED_MARKER = "__ml_seed__"
 
-CONTENT_TYPES = ["photo", "video", "article", "moment"]
-CONTENT_TYPE_WEIGHTS = [0.35, 0.25, 0.25, 0.15]
+CONTENT_TYPES = ["image", "video", "article"]
+CONTENT_TYPE_WEIGHTS = [0.5, 0.25, 0.25]
 
 RECALL_PATHS = ["tag_recall", "hot_recall", "social_friend", "social_circle", "explore_recall"]
 REFERRAL_SOURCES = [

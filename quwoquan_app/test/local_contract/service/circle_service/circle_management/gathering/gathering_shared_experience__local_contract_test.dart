@@ -13,7 +13,7 @@ import 'package:quwoquan_app/service/content_service/content/post/application/co
     show ContentGatheringPostsReader;
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show AssistantUsePolicy, ContentPostProjection, ContentGatheringPostsQuery;
+    show AssistantUsePolicy, ContentPostProjection, ContentGatheringPostsQuery, ContentType;
 
 import '../../../../../support/service/circle_service/circle_management/gathering/gathering_test_support.dart';
 
@@ -28,8 +28,7 @@ ContentPostViewData _recapPost({required String id, required String authorId}) {
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: id,
-      contentType: 'image',
-      contentIdentity: 'work',
+      contentType: ContentType.image,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: authorId,
       authorDisplayName: '作者-$authorId',

@@ -9,6 +9,7 @@ import (
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	. "quwoquan_service/services/content-service/internal/content/post/application"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
+	semanticfixture "quwoquan_service/services/content-service/tests/support/semanticfixture"
 )
 
 // visitedAt 是作者声明的到访事实，「同地同期」交集直接以它为召回依据。
@@ -25,7 +26,7 @@ func newVisitedAtService(store *testsupport.PostStore) *PostService {
 	)
 }
 
-func visitedAtPublicationCommand(
+func visitedAtPublicationCommand(t *testing.T,
 	suffix string,
 	visitedAt time.Time,
 ) SubmitPostPublicationCommand {
@@ -34,11 +35,14 @@ func visitedAtPublicationCommand(
 		LocalDraftID:    "draft-visited-" + suffix,
 		AuthorID:        "persona-visited",
 		Content: postmodel.Post{
-			ContentType: "micro",
-			Body:        "老君山观景台的日出",
-			Visibility:  "public",
-			GeoTagRef:   "entity:travel/sight/laojun-mountain",
-			VisitedAt:   visitedAt,
+			ContentType:      "article",
+			ArticleMarkdown:  "老君山观景台的日出",
+			MarkdownDialect:  "qwq-rich-md",
+			SemanticDocument: semanticfixture.Envelope(t),
+			Body:             "老君山观景台的日出",
+			Visibility:       "public",
+			GeoTagRef:        "entity:travel/sight/laojun-mountain",
+			VisitedAt:        visitedAt,
 		},
 	}
 }
@@ -53,7 +57,7 @@ func TestSubmitPostPublicationKeepsDeclaredVisitedAt(t *testing.T) {
 			context.Background(),
 			"intent-visited-past",
 		),
-		visitedAtPublicationCommand("past", visitedAt),
+		visitedAtPublicationCommand(t, "past", visitedAt),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -87,7 +91,7 @@ func TestSubmitPostPublicationLeavesVisitedAtEmptyWhenUndeclared(t *testing.T) {
 			context.Background(),
 			"intent-visited-absent",
 		),
-		visitedAtPublicationCommand("absent", time.Time{}),
+		visitedAtPublicationCommand(t, "absent", time.Time{}),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -116,7 +120,7 @@ func TestSubmitPostPublicationNormalizesVisitedAtToUTC(t *testing.T) {
 			context.Background(),
 			"intent-visited-zone",
 		),
-		visitedAtPublicationCommand("zone", local),
+		visitedAtPublicationCommand(t, "zone", local),
 	)
 	if err != nil {
 		t.Fatal(err)
@@ -158,7 +162,7 @@ func TestSubmitPostPublicationRejectsUntrustworthyVisitedAt(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			store := testsupport.NewPostStore(nil)
 			service := newVisitedAtService(store)
-			command := visitedAtPublicationCommand(
+			command := visitedAtPublicationCommand(t,
 				testCase.name,
 				testCase.visitedAt,
 			)
@@ -192,7 +196,7 @@ func TestSubmitPostPublicationToleratesClientClockSkewOnVisitedAt(t *testing.T) 
 			context.Background(),
 			"intent-visited-skew",
 		),
-		visitedAtPublicationCommand("skew", skewed),
+		visitedAtPublicationCommand(t, "skew", skewed),
 	)
 	if err != nil {
 		t.Fatalf("client clock skew must not block publication: %v", err)

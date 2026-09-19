@@ -10,7 +10,7 @@ from pydantic import BaseModel
 class ContentFeatures(BaseModel):
     """Content item features for recommendation. Feature group: content_features."""
 
-    content_type: str  # 内容类型（image/video/micro/article）
+    content_type: str  # 内容类型（image/video/article）
     tag_count: int  # 标签数量
     aspect_ratio: Optional[float] = None  # 宽高比；未记录尺寸时为 null
     has_cover: bool  # 是否有封面图

@@ -133,7 +133,7 @@ func (s *PostStore) Commit(_ context.Context, commit postports.Commit) (postport
 	events := make([]postports.OutboxEvent, len(commit.Events))
 	for i, event := range commit.Events {
 		switch event.EventType {
-		case "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostPromotedToWork", "PostModerationRejected", "PostDeleted":
+		case "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostModerationRejected", "PostDeleted":
 			var wire map[string]any
 			if err := json.Unmarshal(event.Payload, &wire); err != nil {
 				return postports.CommitResult{}, err

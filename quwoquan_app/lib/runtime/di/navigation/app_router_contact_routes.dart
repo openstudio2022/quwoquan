@@ -11,11 +11,6 @@ List<GoRoute> _contactRoutes() => [
     ),
   ),
   GoRoute(
-    path: AppRoutePaths.addContactScan,
-    pageBuilder: (context, state) =>
-        appRoutePage<void>(state: state, child: const ScanContactQrPage()),
-  ),
-  GoRoute(
     path: AppRoutePaths.addContactPhone,
     pageBuilder: (context, state) =>
         appRoutePage<void>(state: state, child: const PhoneContactsPage()),

@@ -6,6 +6,23 @@ import (
 	"strings"
 )
 
+func requestDomainUsesJSONQuery(domain string) bool {
+	if activeMetadataSource == nil {
+		return false
+	}
+	for _, operation := range activeMetadataSource.Graph().Operations {
+		if operation.Domain != domain || operation.RequestBindings == nil {
+			continue
+		}
+		for _, binding := range operation.RequestBindings.Query {
+			if binding.Encoding == "json" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func renderOperationRequestPart(
 	library requestLibrarySpec,
 	partOfURI string,
@@ -23,6 +40,18 @@ func renderOperationRequestPart(
 	output.WriteString("\n\npart of '")
 	output.WriteString(partOfURI)
 	output.WriteString("';\n\n")
+	for _, operation := range library.Operations {
+		found := false
+		for _, binding := range operation.RequestBindings.Query {
+			if binding.Encoding == "json" {
+				found = true
+			}
+		}
+		if found {
+			output.WriteString(generatedJSONQueryHelper)
+			break
+		}
+	}
 	if requestLibraryUsesNormalization(library, "trim_to_null") {
 		output.WriteString(
 			"String? _normalizeGeneratedOptionalText(String? value) {\n" +
@@ -228,6 +257,7 @@ func writeGeneratedRequestWireDecoderHelpers(
 		reference string
 		payload   string
 	}{
+		{reference: "_generatedRequestUTF8Length(", payload: generatedRequestUTF8LengthHelper},
 		{reference: "_generatedRequestObject(", payload: generatedRequestObjectHelper},
 		{reference: "_generatedRequestRejectUnknownFields(", payload: generatedRequestUnknownFieldsHelper},
 		{reference: "_generatedRequestString(", payload: generatedRequestStringHelper},
@@ -243,6 +273,25 @@ func writeGeneratedRequestWireDecoderHelpers(
 		}
 	}
 }
+
+const generatedRequestUTF8LengthHelper = `int _generatedRequestUTF8Length(String value) => value.runes.fold(
+  0, (length, rune) => length + (rune <= 0x7f ? 1 : rune <= 0x7ff ? 2 : rune <= 0xffff ? 3 : 4),
+);
+
+`
+
+const generatedJSONQueryHelper = `String _encodeGeneratedJSONQuery(Object? value, int maxBytes) {
+  if (value is! Map<String, Object?>) {
+    throw const FormatException('JSON query must be an object');
+  }
+  final encoded = jsonEncode(value);
+  if (maxBytes <= 0 || utf8.encode(encoded).length > maxBytes) {
+    throw const FormatException('JSON query exceeds byte limit');
+  }
+  return encoded;
+}
+
+`
 
 const generatedRequestObjectHelper = `Map<String, Object?> _generatedRequestObject(Object? value, String path) {
   if (value is Map<String, Object?>) return value;

@@ -293,7 +293,6 @@ def _fixture(root: Path) -> dict[str, Path]:
     for post_ref, _post_id, content_type in POSTS:
         manifest = {
             "schema": "quwoquan_data.post_object",
-            "contentIdentity": "work",
             "contentType": content_type,
             "publishTitle": post_titles[content_type],
             "entityRefs": [f"/entity/{ENTITY_REF}"],
@@ -451,7 +450,6 @@ def _fixture(root: Path) -> dict[str, Path]:
                     "postId": post_id,
                     "contentId": f"content-{post_id}",
                     "contentVersion": 1,
-                    "usageScope": "production",
                     "contentType": content_type,
                     "authorId": "author-a",
                 }

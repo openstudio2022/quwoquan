@@ -33,7 +33,7 @@ func TestQueryPublicationAtomicBindingAndReplay(t *testing.T) {
 	_ = snapshot.Seal()
 	// 通过正式owner stage构造真实非空Post候选，source query不依赖active。
 	now := time.Now().UTC().Truncate(time.Millisecond)
-	post := importer.PostDoc{PostRef: "posts/article/source/1", ContentID: "source-post", ContentVersion: 1, PoolSourceType: "data", VariantPurpose: "original", PoolStatus: "active", ContentType: "article", ContentIdentity: "work", Title: "真实候选文章", Body: "候选正文", AuthorID: "source-author", AuthorDisplayName: "候选作者", ArticleMarkdown: "# 候选正文", Admission: importer.ContentAdmission{ProcessResult: "completed", QualityResult: "passed", UsageScope: "production", EvidenceRef: "audit/source", EvidenceDigest: d}, CreatedAt: now.Add(-time.Hour), UpdatedAt: now, PublishedAt: now}
+	post := importer.PostDoc{PostRef: "posts/article/source/1", ContentID: "source-post", ContentVersion: 1, PoolSourceType: "data", PoolStatus: "active", ContentType: "article", Title: "真实候选文章", Body: "候选正文", AuthorID: "source-author", AuthorDisplayName: "候选作者", ArticleMarkdown: "# 候选正文", Admission: importer.ContentAdmission{ProcessResult: "completed", QualityResult: "passed", RightsResult: "passed", RightsAuthorityRef: "content_review.json", RightsAuthorityDigest: d, EvidenceRef: "audit/source", EvidenceDigest: d}, CreatedAt: now.Add(-time.Hour), UpdatedAt: now, PublishedAt: now}
 	opts := importer.ImportOptions{ReleaseID: release.ReleaseID, ManifestDigest: release.ManifestDigest, ReleaseKind: "content", ActivationMode: "stage-only", Mode: "sync", DeletePolicy: "tombstone", SourceOwner: "qwq_data", ProjectionVersion: 1}
 	if _, err = importer.StageImportedPostRelease(ctx, runtime.Database, "gamma", []importer.PostDoc{post}, nil, now, opts); err != nil {
 		t.Fatal(err)

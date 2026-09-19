@@ -55,7 +55,7 @@ def test_media_bytes_do_not_enter_the_object_payload_digest(tmp_path: Path) -> N
     canonical = _structured_object(
         tmp_path / "publish/posts/article/a/1", assets=assets
     )
-    package_assets = package / "assets"
+    package_assets = package / "media"
     package_assets.mkdir()
     (package_assets / "cover.jpg").write_bytes(COVER_BYTES)
     (package_assets / "detail.jpg").write_bytes(DETAIL_BYTES)

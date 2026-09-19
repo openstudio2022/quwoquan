@@ -1,13 +1,17 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: 706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31
 
 library;
 
+import 'dart:convert';
+
 import '../operation_request_payload.dart';
 import "../generated/shared_operation_enums.g.dart";
+import "../generated/shared_operation_types.g.dart";
 import "../recommendation/recommendation_operation_contracts.g.dart";
 
 export "../generated/shared_operation_enums.g.dart";
+export "../generated/shared_operation_types.g.dart";
 export "../recommendation/recommendation_operation_contracts.g.dart";
 
 part '../generated/requests/circle/circle_operation_contracts.g.requests.g.dart';
@@ -1320,7 +1324,6 @@ final class CircleFeedItemView {
     required this.placementId,
     required this.postId,
     required this.contentType,
-    this.contentIdentity,
     this.assistantUsePolicy,
     this.authorId,
     this.authorDisplayName,
@@ -1358,7 +1361,6 @@ final class CircleFeedItemView {
   final String placementId;
   final String postId;
   final String contentType;
-  final String? contentIdentity;
   final AssistantUsePolicy? assistantUsePolicy;
   final String? authorId;
   final String? authorDisplayName;
@@ -1400,7 +1402,6 @@ final class CircleFeedItemView {
       "placementId",
       "postId",
       "contentType",
-      "contentIdentity",
       "assistantUsePolicy",
       "authorId",
       "authorDisplayName",
@@ -1438,9 +1439,6 @@ final class CircleFeedItemView {
       placementId: _requiredString(map["placementId"], '$path.placementId'),
       postId: _requiredString(map["postId"], '$path.postId'),
       contentType: _requiredString(map["contentType"], '$path.contentType'),
-      contentIdentity: map["contentIdentity"] == null
-          ? null
-          : _requiredString(map["contentIdentity"], '$path.contentIdentity'),
       assistantUsePolicy: map["assistantUsePolicy"] == null
           ? null
           : AssistantUsePolicy.fromWire(
@@ -1562,7 +1560,6 @@ final class CircleFeedItemView {
     "placementId": placementId,
     "postId": postId,
     "contentType": contentType,
-    if (contentIdentity != null) "contentIdentity": contentIdentity!,
     if (assistantUsePolicy != null)
       "assistantUsePolicy": assistantUsePolicy!.wireName,
     if (authorId != null) "authorId": authorId!,

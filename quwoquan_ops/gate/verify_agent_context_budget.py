@@ -591,16 +591,13 @@ def check_manifest_budget() -> list[str]:
                 _serialize_context_manifest,
             )
             from lib.feature_tree.nodes import discover_nodes
-            from lib.feature_tree.ownership import resolve_target_details
 
             nodes = discover_nodes()
             budget_fingerprint = None
             for node in _manifest_budget_nodes(nodes):
                 target = node.spec.relative_to(ROOT).as_posix()
-                resolution = resolve_target_details(target, nodes)
                 payload = _context_manifest(
                     target,
-                    resolution,
                     nodes,
                     fingerprint_receipt=budget_fingerprint,
                 )

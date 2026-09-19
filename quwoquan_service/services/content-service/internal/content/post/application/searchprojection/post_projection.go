@@ -69,7 +69,6 @@ func ProjectPostToSearchDocument(stored postmodel.Post) rtsearch.Document {
 			"authorName":        post.AuthorDisplayNameSnapshot,
 			"authorDisplayName": post.AuthorDisplayNameSnapshot,
 			"authorAvatarUrl":   post.AuthorAvatarUrlSnapshot,
-			"contentIdentity":   post.ContentIdentity,
 			"coverUrl":          post.CoverUrl,
 			// 封面的配对媒体资产标识与交付访问模式（DEC-033）。research 相位的
 			// coverUrl 是相对私有 CAS 引用而非公开 URL，搜索结果卡必须按
@@ -120,13 +119,6 @@ func postCoverDelivery(post postmodel.Post) (string, string) {
 }
 
 func normalizePostForSearchRead(post postmodel.Post) postmodel.Post {
-	if strings.TrimSpace(post.ContentIdentity) == "" {
-		if strings.TrimSpace(strings.ToLower(post.ContentType)) == "micro" {
-			post.ContentIdentity = "moment"
-		} else {
-			post.ContentIdentity = "work"
-		}
-	}
 	if strings.TrimSpace(post.Visibility) == "" {
 		post.Visibility = "public"
 	}

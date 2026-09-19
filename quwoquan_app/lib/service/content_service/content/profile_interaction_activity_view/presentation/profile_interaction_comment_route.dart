@@ -1,8 +1,9 @@
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 
 String? buildProfileInteractionCommentRoute({
   required String workId,
-  required String source,
+  required ReferralSource referralSource,
   required String entrySource,
   String? filter,
   required String commentId,
@@ -20,7 +21,7 @@ String? buildProfileInteractionCommentRoute({
   return AppRoutePaths.workBrowser(
     workId: cleanWorkId,
     filter: filter?.trim().isNotEmpty == true ? filter!.trim() : null,
-    source: source,
+    source: referralSource.value,
     openComments: 'true',
     commentEntrySource: entrySource.trim(),
     targetParentCommentId: isReply ? cleanParentCommentId : null,

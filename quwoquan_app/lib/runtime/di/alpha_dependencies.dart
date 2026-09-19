@@ -2,6 +2,8 @@ import 'package:quwoquan_app/runtime/config/app_content_source.dart';
 import 'package:quwoquan_app/runtime/config/cloud_runtime_config.dart';
 import 'package:quwoquan_app/runtime/di/alpha_content_composition.dart';
 import 'package:quwoquan_app/runtime/di/public_media_delivery_dependencies.dart';
+import 'package:quwoquan_app/runtime/di/video_preview_track_dependencies.dart';
+import 'package:quwoquan_app/service/content_service/media/media_asset/adapters/video_preview_track_bundled.dart';
 import 'package:quwoquan_app/runtime/platform/media/bundled_public_media_delivery.dart';
 import 'package:quwoquan_app/runtime/shell/startup/app_bootstrap.dart';
 
@@ -13,5 +15,6 @@ void configureAlphaDependencies() {
     }
     installAlphaContentComposition();
     installPublicMediaDelivery(BundledPublicMediaDelivery());
+    installVideoPreviewTrackQuery(const BundledVideoPreviewTrackQuery());
   });
 }

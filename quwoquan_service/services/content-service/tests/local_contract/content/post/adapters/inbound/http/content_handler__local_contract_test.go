@@ -1,8 +1,6 @@
-// readiness_case: promote-post-to-work-local
-// readiness_case: update-post-settings-local
 // readiness_case: delete-post-local
 // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/spec.md#sit-002
-// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
+// spec_ref: specs/feature-tree/discovery-content/content-type-framework/spec.md#sit-003
 // readiness_case: submit-post-publication-local
 // spec_ref: specs/feature-tree/discovery-content/feed-orchestration-recommendation/streaming-feed-performance/spec.md#gwt-001
 // readiness_case: get-feed-local
@@ -31,13 +29,18 @@ import (
 	"os"
 	"path/filepath"
 	. "quwoquan_service/services/content-service/internal/content/post/adapters/inbound/http"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
+	rtauth "quwoquan_service/runtime/auth"
+	"quwoquan_service/runtime/operation"
 	rtrec "quwoquan_service/runtime/recommendation"
 	rtredis "quwoquan_service/runtime/redis"
+	commenthttp "quwoquan_service/services/content-service/internal/content/comment/adapters/inbound/http"
+	commentapp "quwoquan_service/services/content-service/internal/content/comment/application"
 	commenttestsupport "quwoquan_service/services/content-service/internal/content/comment/infrastructure/testsupport"
 	behaviorhttp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/adapters/inbound/http"
 	behaviorapp "quwoquan_service/services/content-service/internal/content/content_behavior_fact/application"
@@ -399,9 +402,10 @@ func TestHealthz(t *testing.T) {
 }
 
 // spec_ref: specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-002
-func TestAnonymousIdentityWorkFeedRejectsInvalidActiveBindingOnWire(t *testing.T) {
+func TestAnonymousFeedRejectsInvalidActiveBindingOnWire(t *testing.T) {
 	handler, _ := newTestHandlerWithActiveSupply(invalidActiveSupplyReader{})
-	request := httptest.NewRequest(http.MethodGet, "/content/feed?identity=work&sort=recommend&limit=1", nil)
+	request := httptest.NewRequest(http.MethodGet, "/content/feed?sort=recommend&limit=1", nil)
+	request.Header.Set("X-Client-Session-Id", "invalid-active-binding-session")
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusServiceUnavailable {
@@ -427,7 +431,7 @@ func (invalidActiveSupplyReader) ActiveSupplySnapshot(ctx context.Context) (feed
 }
 
 func TestFeedAndPostEndpoints(t *testing.T) {
-	feedReq := httptest.NewRequest("GET", "/content/feed?type=photo&limit=1", nil)
+	feedReq := httptest.NewRequest("GET", "/content/feed?type=image&limit=1", nil)
 	feedRec := httptest.NewRecorder()
 	newTestHandler().ServeHTTP(feedRec, feedReq)
 	if feedRec.Code != 200 {
@@ -441,6 +445,11 @@ func TestFeedAndPostEndpoints(t *testing.T) {
 	}
 	if len(feedBody.Items) == 0 {
 		t.Fatalf("expected feed items")
+	}
+	for _, item := range feedBody.Items {
+		if item["contentType"] != "image" {
+			t.Fatalf("image filter returned another content type: %+v", item)
+		}
 	}
 
 	postReq := httptest.NewRequest("GET", "/content/posts/post_photo_001", nil)
@@ -467,7 +476,6 @@ func TestGetPostDecoratesCanonicalCoWishlistedReasonAndPreservesViewerMediaAncho
 	mediaURL := "media/video/s/video-primary-0001/post/post-canonical-co-wishlist/v1/source.mp4"
 	detail := postports.PostDetailSlice{
 		PostID: postports.NewPostID(postID), ContentType: postports.ContentType("video"),
-		ContentIdentity:   postports.ContentIdentity("work"),
 		AuthorPersonaID:   postports.NewPersonaID("author-canonical"),
 		AuthorDisplayName: "内容作者", Title: "西湖同行记录", Body: "从共同想去到一起出发。",
 		MediaAssetIDs: []string{"video-primary-0001"}, MediaURLs: []string{mediaURL},
@@ -547,7 +555,6 @@ func TestGetPostIntersectionReadFailureDegradesWithoutClaimingEmptyAttachment(t 
 	postID := "post-intersection-read-failure"
 	detail := postports.PostDetailSlice{
 		PostID: postports.NewPostID(postID), ContentType: postports.ContentType("image"),
-		ContentIdentity:   postports.ContentIdentity("work"),
 		AuthorPersonaID:   postports.NewPersonaID("author-canonical"),
 		AuthorDisplayName: "内容作者", Title: "西湖同行记录",
 		PrimaryHomepageID: "homepage-west-lake", PrimaryHomepageType: "place",
@@ -912,7 +919,7 @@ func TestSubmitPostPublicationRequiresTransportIdempotencyHeader(t *testing.T) {
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/content/posts:publish",
-		bytes.NewBufferString(`{"publishIntentId":"intent-missing-key","localDraftId":"draft-missing-key","contentType":"micro","body":"缺少幂等键"}`),
+		bytes.NewBuffer(validSemanticArticleRequest(t, "intent-missing-key", "draft-missing-key", nil)),
 	)
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Client-Persona-Id", "persona-idempotency")
@@ -934,7 +941,7 @@ func TestSubmitPostPublicationHonorsNonProductionMediaNotReadyInjection(t *testi
 	req := httptest.NewRequest(
 		http.MethodPost,
 		"/content/posts:publish",
-		bytes.NewBufferString(`{"publishIntentId":"intent-media-not-ready","localDraftId":"draft-media-not-ready","contentType":"text","body":"test injection"}`),
+		bytes.NewBuffer(validSemanticArticleRequest(t, "intent-media-not-ready", "draft-media-not-ready", nil)),
 	)
 	req.Header.Set("X-Test-Error-Inject", "CONTENT.USER.media_not_ready")
 	rec := httptest.NewRecorder()
@@ -1008,7 +1015,7 @@ func TestPostCommandBodiesBindOnlyCanonicalRequestEntityFields(t *testing.T) {
 		{
 			name:      "submit publication",
 			operation: "SubmitPostPublication",
-			body:      `{"publishIntentId":"intent-canonical","localDraftId":"draft-canonical","contentType":"micro","body":"canonical"}`,
+			body:      string(validSemanticArticleRequest(t, "intent-canonical", "draft-canonical", nil)),
 			wantKey:   "publishIntentId",
 		},
 		{
@@ -1016,12 +1023,6 @@ func TestPostCommandBodiesBindOnlyCanonicalRequestEntityFields(t *testing.T) {
 			operation: "UpdatePostSettings",
 			body:      `{"visibility":"private","assistantUsePolicy":"exclude"}`,
 			wantKey:   "visibility",
-		},
-		{
-			name:      "promote to work",
-			operation: "PromotePostToWork",
-			body:      `{"contentType":"article","title":"canonical work"}`,
-			wantKey:   "contentType",
 		},
 		{
 			name:      "generate article summary",
@@ -1117,7 +1118,7 @@ func TestFeedIssuesServerFeedRequestID(t *testing.T) {
 }
 
 func TestFeedWithSessionIdFromHeader(t *testing.T) {
-	req := httptest.NewRequest("GET", "/content/feed?type=photo&limit=1", nil)
+	req := httptest.NewRequest("GET", "/content/feed?type=image&limit=1", nil)
 	req.Header.Set("X-Client-Session-Id", "dart_session_abc")
 	req.Header.Set("X-Client-User-Id", "user_123")
 	rec := httptest.NewRecorder()
@@ -1162,18 +1163,33 @@ func TestSubmitPostPublicationWithLocationField(t *testing.T) {
 	}
 }
 
-func TestMomentRequiresBodyOrMedia(t *testing.T) {
-	req := httptest.NewRequest(
-		"POST",
-		"/content/posts:publish",
-		bytes.NewBufferString(`{"publishIntentId":"intent-empty","localDraftId":"draft-empty","contentType":"micro","body":""}`),
-	)
-	setActorHeaders(req, "owner_test_moment", "sub_test_moment")
-	req.Header.Set("Idempotency-Key", "intent-empty")
-	rec := httptest.NewRecorder()
-	newTestHandler().ServeHTTP(rec, req)
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for empty moment payload, got %d", rec.Code)
+func TestArticleRequiresMarkdownBody(t *testing.T) {
+	for _, markdown := range []string{"", " \n\t"} {
+		t.Run(strconv.Quote(markdown), func(t *testing.T) {
+			handler := newTestHandler()
+			request := httptest.NewRequest(http.MethodPost, "/content/posts:publish",
+				bytes.NewBuffer(validSemanticArticleRequest(t, "intent-empty", "draft-empty", map[string]any{
+					"articleMarkdown": markdown,
+				})))
+			setActorHeaders(request, "article_author", "article_author")
+			request.Header.Set("Idempotency-Key", "intent-empty")
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusBadRequest || !strings.Contains(recorder.Body.String(), "CONTENT.USER.invalid_argument") {
+				t.Fatalf("empty article body must fail its admission: status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+
+			// 仅补齐正文，同一个合法语义信封即可发布，避免其他错误掩盖正文 admission。
+			valid := httptest.NewRequest(http.MethodPost, "/content/posts:publish",
+				bytes.NewBuffer(validSemanticArticleRequest(t, "intent-valid-body", "draft-valid-body", nil)))
+			setActorHeaders(valid, "article_author", "article_author")
+			valid.Header.Set("Idempotency-Key", "intent-valid-body")
+			validRecorder := httptest.NewRecorder()
+			handler.ServeHTTP(validRecorder, valid)
+			if validRecorder.Code != http.StatusAccepted {
+				t.Fatalf("valid article body status=%d body=%s", validRecorder.Code, validRecorder.Body.String())
+			}
+		})
 	}
 }
 
@@ -1182,7 +1198,7 @@ func TestRetiredPostDraftMutationRoutesAreAbsent(t *testing.T) {
 	createReq := httptest.NewRequest(
 		"POST",
 		"/content/posts",
-		bytes.NewBufferString(`{"contentType":"micro","body":"retired"}`),
+		bytes.NewBuffer(validSemanticArticleRequest(t, "intent-retired", "draft-retired", nil)),
 	)
 	setActorHeaders(createReq, "u1", "u1")
 	createRec := httptest.NewRecorder()
@@ -1318,7 +1334,7 @@ func TestGetPostTombstoneReturnsGone(t *testing.T) {
 	createReq := httptest.NewRequest(
 		"POST",
 		"/content/posts:publish",
-		bytes.NewBufferString(`{"publishIntentId":"intent-gone","localDraftId":"draft-gone","contentType":"micro","body":"tombstone body","visibility":"public"}`),
+		bytes.NewBuffer(validSemanticArticleRequest(t, "intent-gone", "draft-gone", map[string]any{"visibility": "public"})),
 	)
 	setActorHeaders(createReq, "u_gone", "u_gone")
 	createReq.Header.Set("Idempotency-Key", "intent-gone")
@@ -1355,6 +1371,84 @@ func TestGetPostTombstoneReturnsGone(t *testing.T) {
 	handler.ServeHTTP(missRec, missReq)
 	if missRec.Code != http.StatusNotFound {
 		t.Fatalf("missing post without tombstone must return 404, got %d", missRec.Code)
+	}
+}
+
+func TestRetiredPromoteRouteCannotMutateArticleOrCommentThread(t *testing.T) {
+	postStore := testsupport.NewPostStore(nil)
+	commentStore := commenttestsupport.NewStore()
+	postService := postapp.NewPostService(postapp.BindDataPorts(postStore),
+		postapp.WithCommentReaders(commentStore),
+		postapp.WithPublicationAdmission(testsupport.AllowPublicationRateGate{}, testsupport.FixedPublicationSafetyGate{}))
+	commentService := commentapp.NewCommentService(commentapp.BindDataPorts(
+		commentStore, commentStore, testsupport.NewReactionStore(), commentStore, commentStore))
+	handler := NewContentHandler(nil, postapp.BindFacades(postService),
+		postapp.NewPostQueryFacade(postapp.PostQueryDependencies{Detail: localPostDetailReader{store: postStore}, Tombstones: postStore}),
+		commenthttp.NewHandler(commentapp.BindFacades(commentService)), nil, nil, nil).Routes()
+
+	request := func(method, path string, payload []byte, wantStatus int) []byte {
+		t.Helper()
+		req := httptest.NewRequest(method, path, bytes.NewReader(payload))
+		setActorHeaders(req, "article_owner", "article_owner")
+		req = req.WithContext(rtauth.WithPrincipal(req.Context(), rtauth.Principal{
+			Actor: operation.ActorContext{AccountID: "article_owner", PersonaID: "article_owner"},
+		}))
+		req.Header.Set("Content-Type", "application/json")
+		if path == "/content/posts:publish" {
+			req.Header.Set("Idempotency-Key", "intent-retired-promote")
+		}
+		rec := httptest.NewRecorder()
+		handler.ServeHTTP(rec, req)
+		if rec.Code != wantStatus {
+			t.Fatalf("%s %s status=%d want=%d body=%s", method, path, rec.Code, wantStatus, rec.Body.String())
+		}
+		return rec.Body.Bytes()
+	}
+	created := request(http.MethodPost, "/content/posts:publish",
+		validSemanticArticleRequest(t, "intent-retired-promote", "draft-retired-promote", nil), http.StatusAccepted)
+	var receipt struct {
+		PostID string `json:"postId"`
+	}
+	if err := json.Unmarshal(created, &receipt); err != nil || receipt.PostID == "" {
+		t.Fatalf("publication receipt=%s err=%v", created, err)
+	}
+	postPath := "/content/posts/" + receipt.PostID
+	commentStore.SeedPost(receipt.PostID, "article_owner")
+	request(http.MethodPost, postPath+"/comments", []byte(`{"content":"退役入口不得删除的评论"}`), http.StatusCreated)
+
+	readObject := func(path string) map[string]any {
+		t.Helper()
+		var result map[string]any
+		if err := json.Unmarshal(request(http.MethodGet, path, nil, http.StatusOK), &result); err != nil {
+			t.Fatalf("decode %s: %v", path, err)
+		}
+		return result
+	}
+	beforeCounters := readObject(postPath + "/counters")
+	if beforeCounters["commentCount"] != float64(1) {
+		t.Fatalf("must establish a real comment before retired request: %+v", beforeCounters)
+	}
+	beforeArticle := readObject(postPath)
+	if beforeArticle["contentType"] != "article" || beforeArticle["articleMarkdown"] != "# test\n\nbody" {
+		t.Fatalf("canonical article prerequisite drifted: %+v", beforeArticle)
+	}
+	beforeComments := readObject(postPath + "/comments?limit=20")
+	items, ok := beforeComments["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("must establish one visible comment: %+v", beforeComments)
+	}
+	request(http.MethodPost, postPath+":promoteToWork",
+		validSemanticArticleRequest(t, "intent-retired-promote", "draft-retired-promote", map[string]any{
+			"title": "不得覆盖", "articleMarkdown": "# 不得覆盖\n\n篡改正文",
+		}), http.StatusNotFound)
+	for path, before := range map[string]map[string]any{
+		postPath:                        beforeArticle,
+		postPath + "/counters":          beforeCounters,
+		postPath + "/comments?limit=20": beforeComments,
+	} {
+		if after := readObject(path); !reflect.DeepEqual(before, after) {
+			t.Fatalf("retired route changed %s: before=%+v after=%+v", path, before, after)
+		}
 	}
 }
 

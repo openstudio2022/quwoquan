@@ -204,7 +204,9 @@ func TestPostMarkdownDialectUsesClosedEnum(t *testing.T) {
 	decodeYAML(t, filepath.Join(serviceRoot(t), "services/content-service/contracts/content/post/fields.yaml"), &d)
 	refs := []map[string]any{}
 	collectNamedMappings(d, "markdownDialect", &refs)
-	if len(refs) != 4 {
+	// Post、PostArticleAssetManifest、SubmitContentPostPublicationCommand 各声明一次；
+	// 已退役发布载荷不再拥有第四份 dialect。
+	if len(refs) != 3 {
 		t.Fatalf("markdownDialect declarations=%d", len(refs))
 	}
 	for _, f := range refs {

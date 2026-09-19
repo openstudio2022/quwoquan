@@ -21,13 +21,11 @@ from .delta import clause_binding_transitions, open_anchor_ratchet_targets
 from .evidence import canonical_spec_ref, test_spec_refs
 from . import gitio
 from .nodes import Node, _visible_dirs, discover_nodes
-from .ownership import validate_domain_service_ownership
 from .parsing import (
     acceptance_clause_counts,
     acceptance_ids,
     acceptance_refs_in_open,
     anchorless_opens_in_text,
-    engineering_roots,
     headings,
     ids,
     invalid_acceptance_refs_in_open,
@@ -298,20 +296,6 @@ def command_verify(args: argparse.Namespace) -> int:
         if path.is_dir() and path != context.TREE_ROOT and path.resolve() not in node_dirs:
             errors.append(f"{path.relative_to(context.REPO_ROOT)}: 目录不是可识别节点")
 
-    claims: dict[str, list[str]] = {}
-    for node in (item for item in nodes if item.level == 1):
-        roots = engineering_roots(node)
-        if not roots:
-            errors.append(f"{node.rel}: 缺少可解析的工程归属路径")
-        for root in roots:
-            if not (context.REPO_ROOT / root).exists():
-                errors.append(f"{node.rel}: 工程归属路径不存在 `{root}`")
-            claims.setdefault(root.rstrip("/"), []).append(node.node_id)
-    for root, owners in claims.items():
-        if len(owners) > 1:
-            errors.append(f"工程归属重叠 `{root}`：{', '.join(sorted(owners))}")
-
-    errors.extend(validate_domain_service_ownership(nodes))
     errors.extend(validate_journey_bidirection(nodes))
     errors.extend(validate_policy_governance())
 
@@ -392,10 +376,10 @@ def command_verify(args: argparse.Namespace) -> int:
         report_args = argparse.Namespace()
         change_report_code = command_change_report(report_args)
         if change_report_code != 0:
-            # command_change_report 仅在 unowned 时非 0；release_blockers 只打印
+            # command_change_report 保留 release blockers 信息；release_blockers 只打印
             # RELEASE_GATES_BLOCKED，不阻断非提升性结构门禁 / commit_gate。
             errors.append(
-                "当前 Git diff 存在未归属工程变更；见 feature-tree/change-report.md"
+                "当前 Git diff 影响报告生成失败；见 feature-tree/change-report.md"
             )
     emit_gate_result(
         "verify-feature-tree", [finding(error) for error in errors], context.REPO_ROOT

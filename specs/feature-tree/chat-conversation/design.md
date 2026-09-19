@@ -32,7 +32,7 @@
 - [`group-creation-member-management`](./group-creation-member-management/spec.md)：私建群创建、后续成员增删、角色治理与群设置在同一 Conversation/ConversationMembership 聚合边界内形成可商用闭环。
 - [`list-detail-message-delivery`](./list-detail-message-delivery/spec.md)：保证消息从发送、确认、重试到列表与详情展示的一致性
 - [`realtime-call`](./realtime-call/spec.md)：让用户在满足关系与成员权限时发起、接听、拒绝、取消和结束 1v1 或不超过 32 人的实时音视频通话，并通过同一 `CallSession/CallParticipant` 状态机、realtime-gateway 信令、LiveKit 媒体和会话记录获得可恢复结果。
-- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
+- Feature 层表达业务与设计边界；工程影响由 current actual diff 与 dependency closure 推导。
 
 ## 5. 关键决策
 

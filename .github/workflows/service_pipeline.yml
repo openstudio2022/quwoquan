@@ -297,11 +297,28 @@ jobs:
           print(f"rc_tag_name={admission['tagName']}")
           PY_AUTHORITY
       - id: plan
-        name: Build the complete RC service material set
+        name: Build the actual candidate service material set
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_git_sha }}
         run: |
+          set -euo pipefail
+          BASE_SHA="$(git rev-parse "${SOURCE_SHA}^")"
+          SOURCE_TREE="$(git rev-parse "${SOURCE_SHA}^{tree}")"
+          IMPACT_PLAN="$RUNNER_TEMP/service-factory-authority/impact-plan.json"
+          python3 quwoquan_ops/ci/detect_ci_impacted_scopes.py \
+            --base-sha "$BASE_SHA" --head-sha "$SOURCE_SHA" \
+            --source-tree-digest "sha1:${SOURCE_TREE}" \
+            --impact-plan "$IMPACT_PLAN" \
+            --validate-impact-plan "$IMPACT_PLAN"
+          python3 - "$IMPACT_PLAN" "$RUNNER_TEMP/service-factory-authority/qualification-request.json" <<'PY'
+          import json, sys
+          from quwoquan_ops.ci.release_qualification import validate_impact_plan_projection
+          plan = json.load(open(sys.argv[1], encoding="utf-8"))
+          request = json.load(open(sys.argv[2], encoding="utf-8"))
+          validate_impact_plan_projection(request["deliveryTargets"], plan["candidate_products"])
+          PY
           python3 quwoquan_ops/ci/plan_service_release_images.py \
-            --head-sha "${{ steps.source.outputs.source_git_sha }}" \
-            --changed-file .github/workflows/service_pipeline.yml \
+            --impact-plan "$IMPACT_PLAN" \
             --github-output "$GITHUB_OUTPUT"
       - name: Generate immutable transport coordinate
         id: coordinates

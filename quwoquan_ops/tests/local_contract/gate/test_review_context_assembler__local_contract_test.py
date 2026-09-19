@@ -51,7 +51,6 @@ def test_large_candidate_code_health_artifact_compresses_with_auditable_identity
             "profile": None, "checklist": "roles/developer/checklists/dev/base.md",
         }],
         "fingerprint_receipt": {"ref": "plan-fingerprint.json", "digest": "sha256:" + "4" * 64},
-        "owner_identity": {"ref": "owner.json", "canonical_bytes_sha256": "sha256:" + "1" * 64},
         "candidate_evidence_identity": {
             "ref": "candidate.json", "canonical_bytes_sha256": "sha256:" + "2" * 64,
             "changed_paths_digest": "sha256:" + "3" * 64,
@@ -105,7 +104,6 @@ def test_slightly_over_budget_artifact_falls_back_to_exact_report_ref() -> None:
             "profile": None, "checklist": "roles/developer/checklists/dev/base.md",
         }],
         "fingerprint_receipt": {"ref": "plan-fingerprint.json", "digest": "sha256:" + "4" * 64},
-        "owner_identity": {"ref": "owner.json", "canonical_bytes_sha256": "sha256:" + "1" * 64},
         "candidate_evidence_identity": {
             "ref": "candidate.json", "canonical_bytes_sha256": "sha256:" + "2" * 64,
             "changed_paths_digest": "sha256:" + "3" * 64,

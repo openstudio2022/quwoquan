@@ -449,7 +449,7 @@ ProfileInteractionActivityViewData _interaction({
   String displayPersonaId = 'u_display',
   String displayName = '林清越',
   String displayAvatarUrl = '',
-  String targetContentType = 'micro',
+  String targetContentType = 'article',
   String previewMediaKind = 'text',
   String previewImageUrl = '',
   String previewText = '街角光影',

@@ -21,7 +21,6 @@ final class BundledContentDiscoveryFeedQuery
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     required int limit,
@@ -65,9 +64,6 @@ final class BundledContentDiscoveryFeedQuery
         ),
     };
     final channel = (channelId ?? '').trim();
-    final selectedIdentity = channel.isNotEmpty
-        ? null
-        : identity ?? DiscoveryFeedRouteRegistry.identityForCategory(category);
     final selectedType = channel.isNotEmpty
         ? null
         : type ?? DiscoveryFeedRouteRegistry.routeForSurface(category)?.type;
@@ -88,9 +84,7 @@ final class BundledContentDiscoveryFeedQuery
     } else {
       selected = selected.where(
         (post) =>
-            (selectedIdentity == null ||
-                post.contentIdentity == selectedIdentity) &&
-            (selectedType == null || post.contentType == selectedType),
+            selectedType == null || post.contentType.wireName == selectedType,
       );
     }
     if (subCategory != null && subCategory.isNotEmpty) {
@@ -103,7 +97,6 @@ final class BundledContentDiscoveryFeedQuery
             jsonEncode([
               bundle.digest,
               channel,
-              selectedIdentity,
               selectedType,
               subCategory,
               sort,

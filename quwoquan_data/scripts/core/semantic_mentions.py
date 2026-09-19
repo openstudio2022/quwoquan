@@ -6,6 +6,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 import hashlib
 import json
 import unicodedata
+from core.schema import assert_valid
 from typing import Any, TypeVar
 
 STATUS_PUBLISHED = "published"
@@ -150,6 +151,8 @@ def build_semantic_mentions(
                 location=str(target.get("location") or "body"),
             )
         )
+    for row in rows:
+        assert_valid(row, "governance", "semantic_mention", label="semantic mention")
     return rows
 
 

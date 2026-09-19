@@ -93,7 +93,7 @@ func TestInternalGraphQLRequiresVerifiedAPIEdgeCredentialAndReadsPostSlice(t *te
 		t.Fatal(err)
 	}
 	facts := base.Data.Post.Attribution
-	if facts["commercialAuthorizationStatus"] != "unverified" || facts["publicationAdmission"] != "production_release" ||
+	if facts["commercialAuthorizationStatus"] != "unverified" ||
 		facts["watermarkKind"] != "author_signature" || facts["watermarkNote"] != "保留作者签名" {
 		t.Fatalf("importer -> BSON query -> GraphQL lost source facts: %s", body)
 	}
@@ -101,8 +101,10 @@ func TestInternalGraphQLRequiresVerifiedAPIEdgeCredentialAndReadsPostSlice(t *te
 	if string(modifications) != `["crop","resize"]` {
 		t.Fatalf("importer -> HTTP GraphQL lost modification order: %s", body)
 	}
-	if _, retired := facts["riskAcceptanceId"]; retired {
-		t.Fatalf("retired source fact leaked: %s", body)
+	for _, field := range []string{"riskAcceptanceId", "publicationAdmission"} {
+		if _, retired := facts[field]; retired {
+			t.Fatalf("retired source fact %q leaked: %s", field, body)
+		}
 	}
 	mediaRequest, err := http.NewRequest(http.MethodPost, server.URL+postgraphql.InternalGraphQLPath,
 		bytes.NewBufferString(`{"operationName":"ContentPostDetailMedia","variables":{"postId":"post-1"},"extensions":{"persistedQuery":{"version":1,"sha256Hash":"9d8916aa9564bd99f990ab00b32d79d70dc860d05108a5e6f30f07df43b2a25f"}}}`))
@@ -164,7 +166,7 @@ func TestInternalGraphQLRequiresVerifiedAPIEdgeCredentialAndReadsPostSlice(t *te
 	}
 }
 
-const basePersistedGraphQLRequest = `{"operationName":"ContentPostDetailBase","variables":{"postId":"post-1"},"extensions":{"persistedQuery":{"version":1,"sha256Hash":"7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7"}}}`
+const basePersistedGraphQLRequest = `{"operationName":"ContentPostDetailBase","variables":{"postId":"post-1"},"extensions":{"persistedQuery":{"version":1,"sha256Hash":"6d1f340a4caedf270c46377b1b3a8ae48e3d669f3f7709ec81b3efcf2f6d9820"}}}`
 
 type apiPostDetailReader struct {
 	detail postports.PostDetailSlice
@@ -195,15 +197,15 @@ func importedImageDetail(t *testing.T) postports.PostDetailSlice {
 		}
 	}
 	manifest := map[string]any{
-		"contentId": "image-caption-chain", "version": 1, "sourceType": "data", "variantPurpose": "original", "status": "active",
-		"admission":   map[string]any{"processResult": "completed", "qualityResult": "passed", "usageScope": "production", "evidenceRef": "audit/attestation.json", "evidenceDigest": "sha256:" + strings.Repeat("a", 64)},
-		"contentType": "image", "contentIdentity": "work", "title": "owner internal GraphQL", "caption": "作品正文不是逐图说明",
+		"contentId": "image-caption-chain", "version": 1, "sourceType": "data", "status": "active",
+		"admission":   map[string]any{"processResult": "completed", "qualityResult": "passed", "rightsResult": "passed", "rightsAuthorityRef": "content_review.json", "rightsAuthorityDigest": "sha256:" + strings.Repeat("b", 64), "evidenceRef": "audit/attestation.json", "evidenceDigest": "sha256:" + strings.Repeat("a", 64)},
+		"contentType": "image", "title": "owner internal GraphQL", "caption": "作品正文不是逐图说明",
 		"sourceCollectionId": "collection", "publishedAt": "2026-09-09T00:00:00Z",
 		"assets": []any{asset("asset-b", "第一图的真实说明"), asset("asset-a", "")},
 		"sourceAttribution": map[string]any{
 			"isOriginal": false, "originalCreatorName": "摄影师", "platform": "Commons", "sourcePostUrl": "https://example.com/source",
 			"originalAssetUrl": "https://example.com/image.jpg", "attributionText": "摄影师 / CC BY 4.0", "rightsBasis": "CC BY 4.0",
-			"commercialAuthorizationStatus": "unverified", "publicationAdmission": "production_release", "derivedModifications": []string{"crop", "resize"},
+			"commercialAuthorizationStatus": "unverified", "derivedModifications": []string{"crop", "resize"},
 			"watermarkKind": "author_signature", "watermarkNote": "保留作者签名", "watermarkStatus": "present", "audioRightsStatus": "no_audio",
 			"modelReleaseStatus": "not_required", "propertyReleaseStatus": "not_required", "collectedAt": "2026-09-09T00:00:00Z", "takedownPolicy": "notice_and_takedown",
 		},
@@ -228,7 +230,7 @@ func importedImageDetail(t *testing.T) postports.PostDetailSlice {
 	post := posts[0]
 	media := postimport.ImportedMediaFields(post.Assets, "public")
 	raw, err = bson.Marshal(bson.M{
-		"_id": "post-1", "contentType": post.ContentType, "contentIdentity": post.ContentIdentity, "title": post.Title, "body": post.Body,
+		"_id": "post-1", "contentType": post.ContentType, "title": post.Title, "body": post.Body,
 		"mediaItems": media.MediaItems, "sourceAttribution": post.SourceAttribution,
 		"status": "published", "visibility": "public", "moderationStatus": "approved", "createdAt": post.CreatedAt, "updatedAt": post.UpdatedAt,
 	})
@@ -280,9 +282,9 @@ func TestImportedArticleEntityMappingReachesTypedGraphQL(t *testing.T) {
 	write("entities/地点/中国/广东/广州/公园/p0001/人民公园/8/manifest.json", map[string]string{"entityId": "entity:park-gz", "entityRef": "/entity/guangzhou-park", "label": "人民公园"})
 	postPath := "posts/article/导览/p0001/同名公园/1"
 	write(postPath+"/manifest.json", map[string]any{
-		"contentId": "same-name-parks", "version": 1, "sourceType": "data", "variantPurpose": "original", "status": "active", "contentIdentity": "work", "contentType": "article",
+		"contentId": "same-name-parks", "version": 1, "sourceType": "data", "status": "active", "contentType": "article",
 		"publishTitle": "同名公园", "publishedAt": "2026-09-09T00:00:00Z", "semanticDocument": semanticfixture.Map(t),
-		"admission": map[string]any{"processResult": "completed", "qualityResult": "passed", "usageScope": "production", "evidenceRef": "review.json", "evidenceDigest": binding.ManifestDigest},
+		"admission": map[string]any{"processResult": "completed", "qualityResult": "passed", "rightsResult": "passed", "rightsAuthorityRef": "content_review.json", "rightsAuthorityDigest": "sha256:" + strings.Repeat("b", 64), "evidenceRef": "review.json", "evidenceDigest": binding.ManifestDigest},
 	})
 	markdown := "🙂@[人民公园](entity:park-cd)，[人民公园](/entity/guangzhou-park)，@[未收录](entity:absent)"
 	if err := os.WriteFile(filepath.Join(root, postPath, "article.md"), []byte(markdown), 0o644); err != nil {

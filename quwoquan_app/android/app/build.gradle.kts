@@ -76,7 +76,6 @@ val requestedBuildProfiles =
 check(requestedBuildProfiles.size <= 1) {
     "GATE_BLOCK: one Android invocation must select exactly one buildProfile."
 }
-val googleServicesConfig = projectDir.resolve("google-services.json")
 val releaseKeystorePath = System.getenv("QWQ_ANDROID_RELEASE_KEYSTORE_PATH")?.trim().orEmpty()
 val releaseKeystorePassword = System.getenv("QWQ_ANDROID_RELEASE_STORE_PASSWORD")?.trim().orEmpty()
 val releaseKeyAlias = System.getenv("QWQ_ANDROID_RELEASE_KEY_ALIAS")?.trim().orEmpty()
@@ -142,33 +141,6 @@ val releaseSigningConfigured =
         releaseKeyAlias.isNotEmpty() &&
         releaseKeyPassword.isNotEmpty() &&
         File(releaseKeystorePath).isFile
-if (googleServicesConfig.isFile) {
-    apply(plugin = "com.google.gms.google-services")
-} else {
-    logger.lifecycle(
-        "[rtc] google-services.json is absent; Firebase incoming calls remain fail-closed.",
-    )
-}
-gradle.taskGraph.whenReady {
-    val shipsProductionBinary =
-        allTasks.any { task ->
-            task.project == project &&
-                task.name.contains("Release", ignoreCase = true)
-        }
-    if (shipsProductionBinary && !googleServicesConfig.isFile) {
-        throw GradleException(
-            "production Android build requires android/app/google-services.json; " +
-                "inject the protected Firebase config before building and remove it afterwards",
-        )
-    }
-    if (shipsProductionBinary && !releaseSigningConfigured) {
-        throw GradleException(
-            "production Android release requires QWQ_ANDROID_RELEASE_KEYSTORE_PATH, " +
-                "QWQ_ANDROID_RELEASE_STORE_PASSWORD, QWQ_ANDROID_RELEASE_KEY_ALIAS and " +
-                "QWQ_ANDROID_RELEASE_KEY_PASSWORD; debug signing is forbidden",
-        )
-    }
-}
 
 val androidAbiSplitsEnvVar = "QWQ_ANDROID_ABI_SPLITS"
 val androidAbiSplitsEnabled = envFlagEnabled(androidAbiSplitsEnvVar, false)
@@ -426,7 +398,6 @@ dependencies {
     implementation("androidx.media3:media3-transformer:1.4.1")
     implementation("androidx.media3:media3-common:1.4.1")
     implementation("androidx.media3:media3-effect:1.4.1")
-    implementation("com.google.android.gms:play-services-auth-api-phone:18.3.1")
     implementation("com.tencent.mm.opensdk:wechat-sdk-android:6.8.34")
     implementation("com.alipay.sdk:alipaysdk-android:15.8.42")
     implementation(

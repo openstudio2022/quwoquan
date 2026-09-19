@@ -4,7 +4,7 @@
 
 > Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 
-> 设计归属：[L2 DEC-015](../design.md#dec-015)
+> 设计引用：[L2 DEC-015](../design.md#dec-015)
 
 ## 1. 用户价值
 
@@ -82,7 +82,7 @@
 <a id="req-004"></a>
 ### REQ-004 执行权与容量不跨 target 干扰
 
-- scheduler 的请求去重不等于执行权；选中请求后须原子 claim target execution slot，由唯一受管 executor 持有整个有副作用子进程期间的 fence。父任务退出后，在旧子进程终止或可靠隔离前不得新代接管；标记 superseded 不代表清理已完成。
+- scheduler 的请求去重不等于执行权；选中请求后须原子 claim target execution slot，由唯一受管 executor 持有整个有副作用子进程期间的 fence。父任务退出后，在旧子进程终止或可靠隔离前不得新代接管；标记 superseded 不代表清理已完成。`alpha-local` 可在用户明确授权的单轮跨工作树恢复中执行受管 takeover：调用方必须同时给出 exact target、旧 owner/worktree/lane、fence digest 与 current candidate evidence；控制面确认旧 executor 已 inactive、execution slot/consumer lease 已释放后，以 plan/apply 两阶段 CAS 归档旧 fence 并生成 append-only audit receipt。任一 expected 值、活性或输入漂移均 fail closed；该入口不得用于 beta/gamma/prod/hosted，也不得扩展为删除任意 lock。
 - CPU、RAM、容器 VM 配额、磁盘与构建峰值通过独立 host 预算原子预约，不足仅排队/拒绝新工作，不驱逐既有环境。各环境有资源上限，共享 Docker/VM 管理与全局 GC 保持独立 host 锁和显式授权。
 - build 配置与输出按 attempt/target 私有物化，不覆盖源码树共享 generated config；SDK 不支持同目录并发时只锁相应构建输出，共享 codegen 仍串行，不把构建锁扩为环境终身全局互斥。
 
@@ -123,7 +123,7 @@
 
 - GIVEN 两个 worktree/调度者访问同一 host 与 container daemon，同 target 有延迟子进程或旧设备租约，其他 target 正常读取。
 - WHEN 并发启动、package、请求 supersede、父任务崩溃、同设备显式切环境或预算不足。
-- THEN 同 target 只允许一个 creator/executor 和运行 generation，同 identity attach 复用、异 identity 冲突；自设锁根或 daemon authority 不一致阻断，package 不替换 running，旧子进程未终止/隔离前新代不能 mutation。
+- THEN 同 target 只允许一个 creator/executor 和运行 generation，同 identity attach 复用、异 identity 冲突；自设锁根或 daemon authority 不一致阻断，package 不替换 running，旧子进程未终止/隔离前新代不能 mutation。Alpha 显式 takeover 只有在旧 executor inactive、无 execution slot/未释放 lease、expected owner/worktree/lane 与 fence digest 全部 CAS 命中且绑定 current candidate 时成功，并留下可读 receipt；active executor、wrong expected、非 Alpha target 与 Prod/hosted 均拒绝。
 - THEN 独立 nonce/exact lease 使旧 release、PID 复用与迟到响应无法解绑或回写新会话；不同设备共用 nonprod 包，同设备切换重建上下文，direct 租约不签发更高 authority，最后 consumer 离开不自动 down。
 - THEN 容量不足只拒绝/排队新任务，矩阵不 down 未拥有实例；失败清理只回收 created 资源，其他 target 的凭据、信任、转发、内容身份和读取预算不受影响。
 

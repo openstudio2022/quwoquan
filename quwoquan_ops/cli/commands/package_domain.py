@@ -88,6 +88,15 @@ def run_managed_runtime_package_cli(args: argparse.Namespace) -> dict[str, Any]:
         normalized_argv.append(argument)
         index += 1
     normalized_argv[1:1] = ["--output-format", "json"]
+    latest_stage = ["entry-dispatch"]
+
+    def observe_stderr(chunk: str) -> None:
+        for line in chunk.splitlines():
+            marker = "[runtime-package-stage] "
+            if line.startswith(marker):
+                latest_stage[0] = line.removeprefix(marker).strip() or latest_stage[0]
+        print(chunk, end="", file=sys.stderr, flush=True)
+
     try:
         completed = run_managed_subprocess(
             [sys.executable, "-B", *normalized_argv],
@@ -101,9 +110,7 @@ def run_managed_runtime_package_cli(args: argparse.Namespace) -> dict[str, Any]:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=timeout,
-            on_stderr=lambda chunk: print(
-                chunk, end="", file=sys.stderr, flush=True
-            ),
+            on_stderr=observe_stderr,
         )
     except subprocess.TimeoutExpired:
         return {
@@ -115,6 +122,7 @@ def run_managed_runtime_package_cli(args: argparse.Namespace) -> dict[str, Any]:
                 f"{PACKAGE_ATTEMPT_TIMEOUT_BLOCKER}: runtime package exceeded "
                 f"{timeout}s; all owned process groups killed and reaped"
             ],
+            "timeoutStage": latest_stage[0],
             "cleanupGrace": process_group_cleanup_grace(),
         }
     try:
@@ -290,7 +298,16 @@ def register_parser(
         default="",
         help="Canonical rollback Data release attestation bound into a full package.",
     )
+    package_parser.add_argument(
+        "--candidate-evidence",
+        default="",
+        help=(
+            "Current canonical candidate evidence for non-promotable alpha-local "
+            "workspace packaging; rejected for every other target."
+        ),
+    )
     package_parser.add_argument("--target", choices=_stackctl.TARGETS, default="")
+    package_parser.add_argument("--dependency-platform", choices=["android", "ios", "all"], default="")
     # prod-hosted 镜像物料来源：factory = GHCR 工厂物料（正式）；local-build = integration
     # 工作树 exact dev candidate 的本机 linux/amd64 build-once 物料，只能进入 prevalidate
     # rehearsal，候选与报告固定 nonPromotable（deliver-deploy-prod-pipeline DEC-013）。
@@ -431,6 +448,11 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
         target_name = _stackctl.DEFAULT_TARGET_BY_ENV[env_name]
     if not target_name:
         return _stackctl._command_package_unlocked(args)
+    dependency_platform = str(getattr(args, "dependency_platform", "") or "")
+    if not dependency_platform:
+        return {"exitCode": 2, "summary": f"stackctl runtime package blocked for {env_name}", "details": ["--dependency-platform is required for managed runtime package"]}
+    if target_name.startswith("prod-") and dependency_platform != "all":
+        return {"exitCode": 2, "summary": f"stackctl runtime package blocked for {env_name}", "details": ["Prod runtime package requires --dependency-platform all"]}
     if str(getattr(args, "service", "") or "").strip():
         return {
             "exitCode": 2,
@@ -465,10 +487,14 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
         "before release attestation reads "
         f"candidate={release_attestation_path} rollback={rollback_attestation_path}"
     )
+    candidate_evidence_path = str(getattr(args, "candidate_evidence", "") or "")
     try:
-        requested_release_bindings = _stackctl.validate_release_attestations(
-            release_attestation_path,
-            rollback_attestation_path,
+        requested_release_bindings = _stackctl.resolve_package_release_binding(
+            env_name,
+            target_name,
+            release_attestation=release_attestation_path,
+            rollback_release_attestation=rollback_attestation_path,
+            candidate_evidence=candidate_evidence_path,
         )
         _package_stage("after release attestation reads")
     except (OSError, UnicodeError, ValueError, json.JSONDecodeError) as exc:
@@ -509,6 +535,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             rollback_release_attestation=str(
                 getattr(args, "rollback_release_attestation", "") or ""
             ),
+            candidate_evidence=candidate_evidence_path,
         )
         _package_stage("after deployment input root construction")
         # 签名材料只由 env/target 决定，不依赖 capsule 或 baseline。放在任何落盘之前
@@ -547,6 +574,7 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
                 package_snapshot = _stackctl.materialize_package_input_capsule(
                     package_input_roots,
                     capsule_root=capsule_staging_root,
+                    platforms=(("android", "ios") if args.dependency_platform == "all" else (args.dependency_platform,)),
                 )
             except (
                 OSError,

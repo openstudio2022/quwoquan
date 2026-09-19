@@ -27,6 +27,8 @@ var (
 	ErrInvalidArgument                       = errors.New("CONTENT.USER.invalid_argument")
 	ErrInvalidContentType                    = errors.New("CONTENT.USER.invalid_content_type")
 	ErrPostNotFound                          = errors.New("CONTENT.USER.post_not_found")
+	ErrPresentationContractChanged           = errors.New("CONTENT.USER.presentation_contract_changed")
+	ErrPresentationUnsupported               = errors.New("CONTENT.USER.presentation_unsupported")
 	ErrPublicationRejected                   = errors.New("CONTENT.USER.publication_rejected")
 	ErrRateLimited                           = errors.New("CONTENT.USER.rate_limited")
 	ErrRequiredDependencyUnavailable         = errors.New("CONTENT.SYSTEM.required_dependency_unavailable")
@@ -131,6 +133,18 @@ func AppErrorFromInvalidContentType(debugMessage string) *rterr.AppError {
 func AppErrorFromPostNotFound(debugMessage string) *rterr.AppError {
 	code, _ := rterr.ParseCode("CONTENT.USER.post_not_found")
 	return rterr.NewAppError(code, "内容不存在或已删除", debugMessage).WithMetadata("not_found", 404).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromPresentationContractChanged returns *AppError for CONTENT.USER.presentation_contract_changed (user_message from errors.yaml).
+func AppErrorFromPresentationContractChanged(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.presentation_contract_changed")
+	return rterr.NewAppError(code, "内容展示能力已变化，请刷新列表", debugMessage).WithMetadata("presentation_contract_changed", 409).WithRecoveryDirective("surface", "inlineCard", 0)
+}
+
+// AppErrorFromPresentationUnsupported returns *AppError for CONTENT.USER.presentation_unsupported (user_message from errors.yaml).
+func AppErrorFromPresentationUnsupported(debugMessage string) *rterr.AppError {
+	code, _ := rterr.ParseCode("CONTENT.USER.presentation_unsupported")
+	return rterr.NewAppError(code, "当前版本暂不支持此内容，请更新后查看", debugMessage).WithMetadata("presentation_unsupported", 426).WithRecoveryDirective("surface", "inlineCard", 0)
 }
 
 // AppErrorFromPublicationRejected returns *AppError for CONTENT.USER.publication_rejected (user_message from errors.yaml).

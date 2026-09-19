@@ -5,7 +5,6 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/c
 
 ContentShareTemplate buildDiscoveryShareTemplate({
   required ContentPostViewData post,
-  required bool enableIdentityTemplate,
   List<String> tags = const <String>[],
   String visibility = 'public',
   PublicContentLinkBuilder? publicLinks,
@@ -17,7 +16,6 @@ ContentShareTemplate buildDiscoveryShareTemplate({
   );
   return ContentShareTemplateBuilder.build(
     surfaceView: surfaceView,
-    enableIdentityTemplate: enableIdentityTemplate,
     visibility: visibility,
     publicLinks: publicLinks,
   );

@@ -72,6 +72,9 @@ func generateDomainOperationContracts(
 		spec.HasRequestPart = true
 		specs[owner] = &spec
 	}
+	if err := mergeCanonicalRequestValues(specs, groups); err != nil {
+		return nil, err
+	}
 	if err := externalizeCanonicalDomainModels(specs); err != nil {
 		return nil, err
 	}
@@ -137,6 +140,7 @@ func generateDomainOperationContracts(
 			provided[owner][name] = struct{}{}
 		}
 	}
+	includeSharedProvidedModels(provided, specs)
 	return provided, nil
 }
 

@@ -1,4 +1,4 @@
-"""Feature owner独立持久消费依据，不访问Candidate私有集合。"""
+"""Feature profile 独立持久消费依据，不访问Candidate私有集合。"""
 from pymongo.errors import DuplicateKeyError
 
 

@@ -37,19 +37,18 @@ func (r *fixtureViewerReactionReader) ReadPostLikedFlags(
 
 func newViewerLikedFixturePost(postID string, now time.Time) postmodel.Post {
 	return postmodel.Post{
-		ID:              postID,
-		ContentType:     "image",
-		ContentIdentity: "work",
-		AuthorId:        "author-viewer-liked",
-		Status:          "published",
-		Visibility:      "public",
-		Title:           "viewer liked title",
-		Body:            "viewer liked body",
-		MediaUrls:       []string{"https://media.test/viewer-liked.webp"},
-		LikeCount:       5,
-		CreatedAt:       now,
-		UpdatedAt:       now,
-		PublishedAt:     now,
+		ID:          postID,
+		ContentType: "image",
+		AuthorId:    "author-viewer-liked",
+		Status:      "published",
+		Visibility:  "public",
+		Title:       "viewer liked title",
+		Body:        "viewer liked body",
+		MediaUrls:   []string{"https://media.test/viewer-liked.webp"},
+		LikeCount:   5,
+		CreatedAt:   now,
+		UpdatedAt:   now,
+		PublishedAt: now,
 	}
 }
 
@@ -101,7 +100,6 @@ func TestListFeedAttachesViewerLikedForAuthenticatedViewer(t *testing.T) {
 		UserID:          "viewer-liked-user",
 		ViewerPersonaID: "persona-viewer-liked",
 		SessionID:       "session-viewer-liked",
-		Identity:        "work",
 		Type:            "image",
 		Limit:           1,
 	})
@@ -125,7 +123,6 @@ func TestListFeedAttachesViewerLikedForAuthenticatedViewer(t *testing.T) {
 		UserID:          "viewer-liked-user",
 		ViewerPersonaID: "persona-viewer-liked",
 		SessionID:       "session-viewer-liked-2",
-		Identity:        "work",
 		Type:            "image",
 		Limit:           1,
 	})
@@ -165,7 +162,6 @@ func TestListFeedLeavesViewerLikedUnattachedForAnonymousOrReadFailure(t *testing
 	response, err := svc.ListFeed(context.Background(), ListFeedRequest{
 		UserID:    "viewer-anonymous",
 		SessionID: "session-viewer-anonymous",
-		Identity:  "work",
 		Type:      "image",
 		Limit:     1,
 	})
@@ -199,7 +195,6 @@ func TestListFeedLeavesViewerLikedUnattachedForAnonymousOrReadFailure(t *testing
 		UserID:          "viewer-degraded",
 		ViewerPersonaID: "persona-viewer-degraded",
 		SessionID:       "session-viewer-degraded",
-		Identity:        "work",
 		Type:            "image",
 		Limit:           1,
 	})

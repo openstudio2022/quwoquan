@@ -43,32 +43,53 @@ type AssetManifestItem struct {
 	// enum 唯一真相源 contracts/metadata/_shared/types.yaml
 	// MediaDeliveryAccessMode）。Data release 只允许显式 public；
 	// 空值与私有访问模式均不得进入本 importer。
-	AccessMode           string   `json:"accessMode,omitempty" bson:"accessMode,omitempty"`
-	ObjectKey            string   `json:"objectKey,omitempty" bson:"-"`
-	Version              int64    `json:"version,omitempty" bson:"version,omitempty"`
-	PublicSliceKey       string   `json:"publicSliceKey,omitempty" bson:"publicSliceKey,omitempty"`
-	CDNURL               string   `json:"cdnUrl,omitempty" bson:"cdnUrl,omitempty"`
-	Sha256               string   `json:"sha256" bson:"sha256"`
-	MimeType             string   `json:"mimeType,omitempty" bson:"mimeType,omitempty"`
-	SourceOriginalSha256 string   `json:"sourceOriginalSha256,omitempty" bson:"sourceOriginalSha256,omitempty"`
-	Caption              string   `json:"caption,omitempty" bson:"caption,omitempty"`
-	Role                 string   `json:"role,omitempty" bson:"role,omitempty"`
-	Width                int64    `json:"width,omitempty" bson:"width,omitempty"`
-	Height               int64    `json:"height,omitempty" bson:"height,omitempty"`
-	DurationMs           int64    `json:"durationMs,omitempty" bson:"durationMs,omitempty"`
-	ThumbnailURL         string   `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
-	CoverURL             string   `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
-	CoverStrategy        string   `json:"coverStrategy,omitempty" bson:"coverStrategy,omitempty"`
-	CoverFrameTimeMs     int64    `json:"coverFrameTimeMs,omitempty" bson:"coverFrameTimeMs,omitempty"`
-	PosterAssetID        string   `json:"posterAssetId,omitempty" bson:"posterAssetId,omitempty"`
-	SourceCollectionID   string   `json:"sourceCollectionId,omitempty" bson:"sourceCollectionId,omitempty"`
-	Creator              string   `json:"creator,omitempty" bson:"creator,omitempty"`
-	CollectionPageURL    string   `json:"collectionPageUrl,omitempty" bson:"collectionPageUrl,omitempty"`
-	License              string   `json:"license,omitempty" bson:"license,omitempty"`
-	TermsURL             string   `json:"termsUrl,omitempty" bson:"termsUrl,omitempty"`
-	AuthorizationProof   string   `json:"authorizationProof,omitempty" bson:"authorizationProof,omitempty"`
-	RightsAuditStatus    string   `json:"rightsAuditStatus,omitempty" bson:"rightsAuditStatus,omitempty"`
-	RightsAuditIssues    []string `json:"rightsAuditIssues,omitempty" bson:"rightsAuditIssues,omitempty"`
+	AccessMode           string          `json:"accessMode,omitempty" bson:"accessMode,omitempty"`
+	ObjectKey            string          `json:"objectKey,omitempty" bson:"-"`
+	Version              int64           `json:"version,omitempty" bson:"version,omitempty"`
+	PublicSliceKey       string          `json:"publicSliceKey,omitempty" bson:"publicSliceKey,omitempty"`
+	CDNURL               string          `json:"cdnUrl,omitempty" bson:"cdnUrl,omitempty"`
+	Sha256               string          `json:"sha256" bson:"sha256"`
+	MimeType             string          `json:"mimeType,omitempty" bson:"mimeType,omitempty"`
+	SourceOriginalSha256 string          `json:"sourceOriginalSha256,omitempty" bson:"sourceOriginalSha256,omitempty"`
+	Caption              string          `json:"caption,omitempty" bson:"caption,omitempty"`
+	Role                 string          `json:"role,omitempty" bson:"role,omitempty"`
+	Width                int64           `json:"width,omitempty" bson:"width,omitempty"`
+	Height               int64           `json:"height,omitempty" bson:"height,omitempty"`
+	DurationMs           int64           `json:"durationMs,omitempty" bson:"durationMs,omitempty"`
+	ThumbnailURL         string          `json:"thumbnailUrl,omitempty" bson:"thumbnailUrl,omitempty"`
+	CoverURL             string          `json:"coverUrl,omitempty" bson:"coverUrl,omitempty"`
+	CoverStrategy        string          `json:"coverStrategy,omitempty" bson:"coverStrategy,omitempty"`
+	CoverFrameTimeMs     int64           `json:"coverFrameTimeMs,omitempty" bson:"coverFrameTimeMs,omitempty"`
+	PosterAssetID        string          `json:"posterAssetId,omitempty" bson:"posterAssetId,omitempty"`
+	SourceCollectionID   string          `json:"sourceCollectionId,omitempty" bson:"sourceCollectionId,omitempty"`
+	Creator              string          `json:"creator,omitempty" bson:"creator,omitempty"`
+	CollectionPageURL    string          `json:"collectionPageUrl,omitempty" bson:"collectionPageUrl,omitempty"`
+	License              string          `json:"license,omitempty" bson:"license,omitempty"`
+	TermsURL             string          `json:"termsUrl,omitempty" bson:"termsUrl,omitempty"`
+	AuthorizationProof   string          `json:"authorizationProof,omitempty" bson:"authorizationProof,omitempty"`
+	RightsAuditStatus    string          `json:"rightsAuditStatus,omitempty" bson:"rightsAuditStatus,omitempty"`
+	RightsAuditIssues    []string        `json:"rightsAuditIssues,omitempty" bson:"rightsAuditIssues,omitempty"`
+	Closure000           json.RawMessage `json:"acquisitionReceiptRefs"`
+	Closure001           json.RawMessage `json:"audioRightsStatus"`
+	Closure002           json.RawMessage `json:"bytes"`
+	Closure003           json.RawMessage `json:"codec"`
+	Closure004           json.RawMessage `json:"commercialAuthorizationStatus"`
+	Closure005           json.RawMessage `json:"container"`
+	Closure006           json.RawMessage `json:"derivativeBinding"`
+	Closure007           json.RawMessage `json:"fileName"`
+	Closure008           json.RawMessage `json:"imageLayout"`
+	Closure009           json.RawMessage `json:"modelReleaseStatus"`
+	Closure010           json.RawMessage `json:"perceptualHash"`
+	Closure011           json.RawMessage `json:"pixelFormat"`
+	Closure012           json.RawMessage `json:"posterFileName"`
+	Closure013           json.RawMessage `json:"posterSha256"`
+	Closure014           json.RawMessage `json:"propertyReleaseStatus"`
+	Closure015           json.RawMessage `json:"provenanceRef"`
+	Closure016           json.RawMessage `json:"rightsRefs"`
+	Closure017           json.RawMessage `json:"sourceAssetRefs"`
+	Closure018           json.RawMessage `json:"subtitlesFileName"`
+	Closure019           json.RawMessage `json:"subtitlesSha256"`
+	Closure020           json.RawMessage `json:"usageScope"`
 }
 
 type ArticleAssetManifestDoc struct {
@@ -103,7 +124,6 @@ type PostDoc struct {
 	Admission            ContentAdmission                `json:"admission" bson:"admission"`
 	PoolStatus           string                          `json:"poolStatus" bson:"poolStatus"`
 	ContentType          string                          `json:"contentType" bson:"contentType"`
-	ContentIdentity      string                          `json:"contentIdentity" bson:"contentIdentity"`
 	Title                string                          `json:"title" bson:"title"`
 	Body                 string                          `json:"body" bson:"body"`
 	Angle                string                          `json:"angle" bson:"angle"`
@@ -561,6 +581,9 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		if rerr != nil {
 			return rerr
 		}
+		if rerr := ValidatePostManifestCarrierJSON(raw, postRef); rerr != nil {
+			return rerr
+		}
 		attribution, rerr := decodeReleaseSourceAttribution(raw, postRef)
 		if rerr != nil {
 			return rerr
@@ -664,7 +687,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 		if len(assets) == 0 && m.ArticleAssetManifest != nil {
 			assets = m.ArticleAssetManifest.Assets
 		}
-		contentIdentity, err := canonicalImportedContentIdentity(m.ContentIdentity)
+		contentType, err := canonicalImportedContentType(m.ContentType)
 		if err != nil {
 			return fmt.Errorf("%s: %w", postRef, err)
 		}
@@ -676,8 +699,7 @@ func LoadPosts(publishRoot string, filter map[string]bool) ([]PostDoc, error) {
 			VariantPurpose:        m.VariantPurpose,
 			Admission:             m.Admission,
 			PoolStatus:            m.PoolStatus,
-			ContentType:           m.ContentType,
-			ContentIdentity:       contentIdentity,
+			ContentType:           contentType,
 			Title:                 title,
 			Body:                  body,
 			Angle:                 angle,

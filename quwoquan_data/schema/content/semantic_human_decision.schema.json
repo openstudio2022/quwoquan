@@ -1,1 +1,5 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","$ref":"semantic_disposition.schema.json#/$defs/humanDecision"}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$ref": "semantic_disposition.schema.json#/$defs/humanDecision",
+  "$id": "https://quwoquan.local/schema/content/semantic_human_decision.schema.json"
+}

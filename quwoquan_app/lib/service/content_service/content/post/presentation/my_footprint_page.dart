@@ -80,7 +80,12 @@ class _MyFootprintPageState extends ConsumerState<MyFootprintPage> {
     ref
         .read(contentBehaviorTrackerProvider)
         .trackClick(id, referralSource: ReferralSource.authorProfile);
-    context.push(AppRoutePaths.workBrowser(workId: id, source: 'myFootprint'));
+    context.push(
+      AppRoutePaths.workBrowser(
+        workId: id,
+        source: ReferralSource.authorProfile.value,
+      ),
+    );
   }
 
   @override

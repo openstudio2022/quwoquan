@@ -84,15 +84,22 @@ func TestPostDeletionConsumerRejectsMixedPayloadWithoutMutation(t *testing.T) {
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
 		t.Fatal(err)
 	}
-	payload["unsupportedReactionCascade"] = true
-	event.Payload, _ = json.Marshal(payload)
 	consumer := reactionapp.NewPostDeletionConsumer(service, store)
-	if err := consumer.Publish(context.Background(), event); err == nil {
-		t.Fatal("mixed unsupported PostDeleted payload must be rejected")
-	}
-	count, err := store.CountActiveReactions(context.Background(), "post-invalid-delete")
-	if err != nil || count != 1 {
-		t.Fatalf("invalid lifecycle fact mutated relations: count=%d err=%v", count, err)
+	for field, value := range map[string]any{"unsupportedReactionCascade": true, "contentIdentity": "work"} {
+		payload[field] = value
+		var err error
+		event.Payload, err = json.Marshal(payload)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := consumer.Publish(context.Background(), event); err == nil {
+			t.Fatalf("unsupported PostDeleted field %q must be rejected", field)
+		}
+		count, err := store.CountActiveReactions(context.Background(), "post-invalid-delete")
+		if err != nil || count != 1 {
+			t.Fatalf("invalid lifecycle fact %q mutated relations: count=%d err=%v", field, count, err)
+		}
+		delete(payload, field)
 	}
 }
 
@@ -121,7 +128,7 @@ func TestReleaseImportPostDeletionFactPassesStrictConsumerAndAdvancesIndependent
 		}
 		snapshots = append(snapshots, releaseimport.ImportedPostDeletionSnapshot{
 			PostID: postID, AuthorID: "data-author-a", ContentType: "image",
-			ContentIdentity: "work", Status: "published",
+			Status: "published",
 		})
 	}
 	now := time.Date(2026, 8, 11, 3, 10, 0, 0, time.UTC)
@@ -237,19 +244,18 @@ func postDeletedOutboxEvent(t *testing.T, postID, eventID string) postports.Outb
 	t.Helper()
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	payload, err := json.Marshal(map[string]any{
-		"postId":          postID,
-		"authorId":        "post-owner",
-		"contentType":     "image",
-		"contentIdentity": "work",
-		"status":          "published",
-		"environment":     nil,
-		"sourceOwner":     nil,
-		"releaseId":       nil,
-		"manifestDigest":  nil,
-		"releaseDigest":   nil,
-		"sourceVersion":   int64(2),
-		"safetyRevision":  int64(1),
-		"deletedAt":       now.Format(time.RFC3339Nano),
+		"postId":         postID,
+		"authorId":       "post-owner",
+		"contentType":    "image",
+		"status":         "published",
+		"environment":    nil,
+		"sourceOwner":    nil,
+		"releaseId":      nil,
+		"manifestDigest": nil,
+		"releaseDigest":  nil,
+		"sourceVersion":  int64(2),
+		"safetyRevision": int64(1),
+		"deletedAt":      now.Format(time.RFC3339Nano),
 	})
 	if err != nil {
 		t.Fatal(err)

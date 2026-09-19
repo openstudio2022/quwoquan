@@ -58,7 +58,7 @@ if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
         os.environ.pop(_key, None)
     # 强制隔离数据根：即使个别测试模块忘记自建 tempfile 根，
     # paths 常量也只会冻结在这里，绝不落真实根。
-    _ISOLATED_ROOT = tempfile.mkdtemp(prefix="qwq_pytest_isolated_")
+    _ISOLATED_ROOT = str(Path(tempfile.mkdtemp(prefix="qwq_pytest_isolated_")).resolve())
     os.environ["QWQ_DATA_ROOT"] = _ISOLATED_ROOT
     # paths 的 library/golden 默认值都由 XDG_DATA_HOME 派生；默认值本身也要落在测试根。
     os.environ["XDG_DATA_HOME"] = str(Path(_ISOLATED_ROOT) / "xdg_data")
@@ -69,6 +69,13 @@ if os.environ.get("QWQ_PYTEST_ALLOW_ENV_ROOTS") != "1":
     # 随体媒体根是发布事务的写入目标，且按设计落在仓内受版本控制目录。任何执行
     # apply 的测试都会往那里写字节，因此隔离与 publish 根同级必需。
     os.environ["QWQ_CARRIED_MEDIA_ROOT"] = str(Path(_ISOLATED_ROOT) / "carried_media")
+    # 生产 reader 要求现役 publish repository identity；隔离根由 pytest 明确建成最小合法仓。
+    _publish_root = Path(os.environ["QWQ_PUBLISH_ROOT"])
+    (_publish_root / ".git").mkdir(parents=True)
+    (_publish_root / "repository.json").write_text(
+        '{"layoutVersion":2,"repositoryId":"pytest-isolated","schema":"quwoquan_data.publish_repository.v2"}\n',
+        encoding="utf-8",
+    )
     # startup probe cache 是运行期降本缓存；pytest 默认关闭，避免环境预检类测试
     # 误把 cache 写入真实 .qwq_output/data/local/workspace/runtime/env。
     os.environ.setdefault("QWQ_CURSOR_STARTUP_PROBE_CACHE_TTL_SECONDS", "0")

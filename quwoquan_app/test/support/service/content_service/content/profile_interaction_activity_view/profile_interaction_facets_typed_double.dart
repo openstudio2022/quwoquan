@@ -191,7 +191,7 @@ final class InMemoryProfileInteractionFacet
           'image' => ContentType.image,
           _ =>
             targetKind == 'discussion'
-                ? ContentType.micro
+                ? ContentType.article
                 : ContentType.article,
         },
         targetContentSummary: _text(raw['targetContentSummary']),

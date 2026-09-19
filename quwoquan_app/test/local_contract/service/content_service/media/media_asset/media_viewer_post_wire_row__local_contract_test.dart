@@ -8,9 +8,7 @@ void main() {
     final row = MediaViewerPostWireRow.fromViewData(
       ContentPostViewData(
         id: 'p1',
-        type: 'micro',
-        identity: 'moment',
-        displayFormat: 'note',
+        type: ContentType.article,
         assistantUsePolicy: AssistantUsePolicy.inherit,
         authorId: 'author-1',
         displayName: '作者',

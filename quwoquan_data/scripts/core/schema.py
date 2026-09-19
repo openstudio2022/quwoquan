@@ -105,7 +105,9 @@ def _resolve_external_refs(
             for key, item in value.items()
             if key != "$ref"
         }
-        return {**target, **siblings}
+        if siblings:
+            return {"allOf": [target, siblings]}
+        return target
     return {
         key: _resolve_external_refs(item, current_path=current_path, stack=stack, carried=carried)
         for key, item in value.items()
@@ -182,7 +184,8 @@ def validate_strict(
 
     支持 type / required / properties / additionalProperties(false|schema) /
     enum / const / minimum / maximum / minLength / pattern / items /
-    allOf / anyOf / oneOf / not / if-then-else / contains。
+    allOf / anyOf / oneOf / not / if-then-else / contains / minProperties /
+    format(date-time|uri)，以及 Draft 2020-12 的 $ref sibling。
     patternProperties(简化: 不支持)。
     未知字段在 additionalProperties=false 时必须失败（fail-closed）。
     """
@@ -201,12 +204,20 @@ def validate_strict(
             return [f"{path}: 无法解析 $ref {ref!r}"]
         if not isinstance(target, dict):
             return [f"{path}: $ref {ref!r} 未指向 schema 对象"]
-        return validate_strict(
+        target_errors = validate_strict(
             instance,
             target,
             path=path,
             _root_schema=root_schema,
         )
+        siblings = {key: value for key, value in schema.items() if key != "$ref"}
+        if siblings:
+            target_errors.extend(
+                validate_strict(
+                    instance, siblings, path=path, _root_schema=root_schema
+                )
+            )
+        return target_errors
     for index, branch in enumerate(schema.get("allOf") or []):
         if isinstance(branch, dict):
             errors.extend(
@@ -299,12 +310,28 @@ def validate_strict(
 
             if _re.search(str(pattern), instance) is None:
                 errors.append(f"{path}: {instance!r} 不匹配 pattern {pattern!r}")
+        format_name = schema.get("format")
+        if format_name == "date-time":
+            from datetime import datetime as _datetime
+            try:
+                _datetime.fromisoformat(instance.replace("Z", "+00:00"))
+            except ValueError:
+                errors.append(f"{path}: {instance!r} 不是合法 date-time")
+        elif format_name == "uri":
+            from urllib.parse import urlparse as _urlparse
+            parsed = _urlparse(instance)
+            if not parsed.scheme or (parsed.scheme in {"http", "https"} and not parsed.netloc):
+                errors.append(f"{path}: {instance!r} 不是合法 uri")
     if isinstance(instance, (int, float)) and not isinstance(instance, bool):
         if "minimum" in schema and instance < schema["minimum"]:
             errors.append(f"{path}: {instance} < minimum {schema['minimum']}")
         if "maximum" in schema and instance > schema["maximum"]:
             errors.append(f"{path}: {instance} > maximum {schema['maximum']}")
     if isinstance(instance, dict):
+        if "minProperties" in schema and len(instance) < int(schema["minProperties"]):
+            errors.append(
+                f"{path}: 属性数量 {len(instance)} < minProperties {schema['minProperties']}"
+            )
         properties = schema.get("properties") or {}
         for field in schema.get("required", []):
             if field not in instance:

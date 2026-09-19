@@ -115,13 +115,14 @@ def _bound(chain, sequence: int, ref: str, digest: str) -> None:
 def _review_evidence(root: Path, execution: Path, ref: str, manifest: dict, cache: dict) -> tuple[dict, dict]:
     review_path = _file(root, "content_review.json")
     review = _read_json(review_path)
+    process_ref = str(review.get("objectRef") or "")
     if (manifest.get("executionId") != execution.name or review.get("executionId") != execution.name
-            or review.get("objectRef") != ref):
+            or not process_ref):
         _fail("ORIGINAL_REVIEW_BINDING_DRIFT", ref)
     _chain(execution, cache)
-    if review_path.read_bytes() != _file(execution, ref + "/5.review/content_review.json").read_bytes():
+    if review_path.read_bytes() != _file(execution, process_ref + "/5.review/content_review.json").read_bytes():
         _fail("ORIGINAL_REVIEW_BINDING_DRIFT", ref)
-    return _execution_review(execution, ref, cache)
+    return _execution_review(execution, process_ref, cache)
 
 
 def _execution_review(execution: Path, ref: str, cache: dict) -> tuple[dict, dict]:
@@ -133,10 +134,11 @@ def _execution_review(execution: Path, ref: str, cache: dict) -> tuple[dict, dic
     digest = _digest_file(review_path)
     _bound(chain, 3, ref + "/5.review/content_review.json", digest)
     converted = convert_review_document(review)
-    draft_ref = ref + "/" + _relative(review["draft"]["ref"])
+    page_binding = review.get("candidateBindings", {}).get("page", {})
+    draft_ref = ref + "/" + _relative(page_binding.get("ref", ""))
     draft_path = _file(execution, draft_ref)
     draft_digest = _digest_file(draft_path)
-    if draft_digest != review["draft"]["digest"]:
+    if draft_digest != page_binding.get("digest"):
         _fail("ORIGINAL_DRAFT_DRIFT", ref)
     _bound(chain, 2, draft_ref, draft_digest)
     if converted["decision"] != "approved":
@@ -149,7 +151,10 @@ def _execution_review(execution: Path, ref: str, cache: dict) -> tuple[dict, dic
 
 
 def _record_history(root: Path, ref: str, manifest: dict) -> list[dict]:
-    rows = [_read_json(_absolute(p, kind="file")) for p in sorted((root / "_pool/versions").glob("*.json"))]
+    # 此模块是一次性离线旧池 cutover reader；旧 authority 固定在 _pool/versions，
+    # 已转换 staging 固定在 records。普通 canonical reader 不接受旧布局。
+    records_root = root / "records" if (root / "records").is_dir() else root / "_pool/versions"
+    rows = [_read_json(_absolute(p, kind="file")) for p in sorted(records_root.glob("*.json"))]
     if not rows:
         _fail("ORIGINAL_RECORD_MISSING", ref)
     identity = manifest.get("entityId" if ref.startswith("entities/") else "contentId")
@@ -158,7 +163,7 @@ def _record_history(root: Path, ref: str, manifest: dict) -> list[dict]:
         _fail("ORIGINAL_IDENTITY_INVALID", ref)
     for row in rows:
         if (row.get("objectId") != identity or row.get("contentVersion") != version
-                or row.get("objectRef") != ref.split("/", 1)[1] or type(row.get("recordSequence")) is not int):
+                or row.get("objectRef") != (manifest.get("entityRef", "").removeprefix("/entity/") if ref.startswith("entities/") else ref.split("/", 1)[1]) or type(row.get("recordSequence")) is not int):
             _fail("ORIGINAL_IDENTITY_INVALID", ref)
     rows.sort(key=lambda row: row["recordSequence"])
     if [row["recordSequence"] for row in rows] != list(range(1, len(rows) + 1)):
@@ -186,18 +191,21 @@ def original_pool_payload_digest(root: Path) -> str:
 
 def _records(root: Path, ref: str, manifest: dict, review: dict) -> dict:
     latest = _record_history(root, ref, manifest)[-1]
-    if latest.get("payloadDigest") != original_pool_payload_digest(root):
+    from content.release.canonical.content_pool_record import pool_payload_digest
+    if latest.get("payloadDigest") != pool_payload_digest(root):
         _fail("ORIGINAL_PAYLOAD_DRIFT", ref)
     digest = _digest_file(root / "content_review.json")
     admission = manifest.get("admission") or {}
     authority_fields = {"processResult": "completed", "qualityResult": "passed", "evidenceRef": "content_review.json",
-                        "evidenceDigest": digest, "rightsResult": "passed", "rightsAuthorityRef": ref + "/content_review.json",
+                        "evidenceDigest": digest, "rightsResult": "passed",
+                        "rightsAuthorityRef": admission.get("rightsAuthorityRef"),
                         "rightsAuthorityDigest": digest}
     if any(admission.get(key) != value for key, value in authority_fields.items()):
         _fail("ORIGINAL_RECORD_AUTHORITY_INVALID", ref)
     expected = {"status": "active", "processResult": "completed", "qualityResult": "passed",
                 "eligibilityResult": "passed", "evidenceRef": "content_review.json", "evidenceDigest": digest,
-                "rightsResult": "passed", "rightsAuthorityRef": ref + "/content_review.json", "rightsAuthorityDigest": digest}
+                "rightsResult": "passed", "rightsAuthorityRef": admission.get("rightsAuthorityRef"),
+                "rightsAuthorityDigest": digest}
     if any(latest.get(key) != value for key, value in expected.items()):
         _fail("ORIGINAL_RECORD_AUTHORITY_INVALID", ref)
     identity_document = validate_object_source_identity(manifest)
@@ -245,12 +253,14 @@ def _sources(execution: Path, ref: str, cache: dict) -> tuple[list, dict]:
 
 def _inspect_content(root: Path, execution: Path, ref: str, manifest: dict, cache: dict) -> dict:
     converted, authority = _review_evidence(root, execution, ref, manifest, cache)
+    process_ref = str(converted.get("objectRef") or "")
     _records(root, ref, manifest, converted)
-    source_evidence, assets = _sources(execution, ref, cache)
+    source_evidence, assets = _sources(execution, process_ref, cache)
     validate_content_review_document(converted, execution_id=execution.name, object_ref=ref,
+                                    object_aliases=(process_ref,),
                                     required_asset_refs=required_review_asset_refs(manifest, object_kind=ref.split("/")[0]),
                                     source_assets=assets, require_approved=True)
-    draft = _file(execution, ref + "/" + converted["draft"]["ref"])
+    draft = _file(execution, process_ref + "/" + converted["candidateBindings"]["page"]["ref"])
     text = draft.suffix == ".md"
     if text and _file(root, manifest["finalContentRef"]).read_bytes() != draft.read_bytes():
         _fail("ORIGINAL_REVIEWED_SURFACE_DRIFT", ref)
@@ -342,9 +352,11 @@ def _review_copies(roots: list[Path], refs: set[str]) -> dict[str, list[dict]]:
     for root in roots:
         for path in sorted(root.glob("*/payload/objects/**/content_review.json")):
             review = _read_json(_absolute(path, kind="file"))
-            if review.get("objectRef") in result:
-                result[review["objectRef"]].append({**_evidence(path), "executionId": review.get("executionId"),
-                                                  "role": "archive_copy_not_receipt_authority"})
+            review_ref = str(review.get("objectRef") or "")
+            matches = [ref for ref in result if ref == review_ref or path.as_posix().endswith(f"/objects/{ref}/content_review.json")]
+            for matched_ref in matches:
+                result[matched_ref].append({**_evidence(path), "executionId": review.get("executionId"),
+                                            "role": "archive_copy_not_receipt_authority"})
     return result
 
 
@@ -397,7 +409,7 @@ def _alternative_review(execution: Path, ref: str, original_root: Path, cache: d
                                         required_asset_refs=[row["assetRef"] for row in review["assetRights"]],
                                         source_assets=assets, require_approved=True)
         manifest = _read_json(original_root / "manifest.json")
-        draft = _file(execution, ref + "/" + review["draft"]["ref"])
+        draft = _file(execution, ref + "/" + review["candidateBindings"]["page"]["ref"])
         final = original_root / str(manifest.get("finalContentRef") or "")
         same = draft.read_bytes() == final.read_bytes() if draft.suffix == ".md" and final.is_file() else None
         from content.release.canonical.pool_cutover import _source_digest
@@ -422,6 +434,7 @@ def _legacy_evidence(root: Path, execution: Path, ref: str) -> list[dict]:
         document = _read_json(_absolute(path, kind="file"))
         row = {**_evidence(path), "role": "historical_audit_not_current_authority", "executionId": document.get("executionId")}
         if name == "evidence_index.json":
+            assert_valid(document, "content", "evidence_index", label=str(path))
             row["indexedEvidence"] = [{"expectedDigest": item.get("sha256"),
                                       **_optional_evidence(execution / ref / _relative(item["ref"]))}
                                      for item in document.get("evidence", [])]
@@ -434,11 +447,27 @@ def _recovery_row(row: dict, pool: Path, tasks: Path, executions: list[Path], ar
     manifest = _read_json(root / "manifest.json")
     execution_id = manifest.get("sourceIdentity", {}).get("executionId", "")
     execution = tasks / _relative(execution_id)
-    records = [_read_json(path) for path in sorted((root / "_pool/versions").glob("*.json"))]
+    records_root = root / "records" if (root / "records").is_dir() else root / "_pool/versions"
+    records = [_read_json(path) for path in sorted(records_root.glob("*.json"))]
     record = max(records, key=lambda item: item["recordSequence"])
     review = _optional_evidence(root / "content_review.json")
-    alternatives = [_alternative_review(candidate, ref, root, cache) for candidate in executions
-                    if (candidate / ref / "5.review/content_review.json").is_file()]
+    alternatives = []
+    for candidate in executions:
+        refs = {ref}
+        manifest_path = candidate / "execution_manifest.json"
+        if manifest_path.is_file():
+            try:
+                execution_manifest = _read_json(manifest_path)
+                refs.update(str(row.get("targetRef") or "") for row in execution_manifest.get("targets", []))
+            except (OSError, ValueError):
+                pass
+        refs.update(
+            path.parent.parent.relative_to(candidate).as_posix()
+            for path in candidate.glob("**/5.review/content_review.json")
+        )
+        for process_ref in sorted(refs):
+            if process_ref and (candidate / process_ref / "5.review/content_review.json").is_file():
+                alternatives.append(_alternative_review(candidate, process_ref, root, cache))
     verified = [item for item in alternatives if item["status"] == "independent_chain_verified_not_migration_admission"]
     return {"objectRef": ref, "before": row["before"], "firstIssues": row["issues"],
             "originalExecutionRef": str(execution), "originalExecutionExists": execution.is_dir(),

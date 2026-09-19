@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"quwoquan_service/internal/metadata/ast"
+	"quwoquan_service/internal/metadata/requestbinding"
 	"sort"
 	"strconv"
 	"strings"
@@ -624,6 +626,27 @@ func validateRequestModelBindings(
 	bindings appRequestBindings,
 	constants *appRequestConstants,
 ) error {
+	for _, binding := range bindings.Query {
+		if binding.Encoding == "" {
+			continue
+		}
+		if activeMetadataSource == nil {
+			return fmt.Errorf("%s JSON query requires accepted ContractGraph", operationID)
+		}
+		found := false
+		for _, operation := range activeMetadataSource.Graph().Operations {
+			if operation.ID != operationID {
+				continue
+			}
+			found = true
+			if _, err := requestbinding.Resolve(activeMetadataSource.Graph().Documents, operation, ast.RequestBinding{Name: binding.Name, Field: binding.Field, Encoding: binding.Encoding, MaxBytes: binding.MaxBytes}); err != nil {
+				return err
+			}
+		}
+		if !found {
+			return fmt.Errorf("JSON query operation %s absent from ContractGraph", operationID)
+		}
+	}
 	fields := make(map[string]fieldDef, len(model.Fields))
 	for _, field := range model.Fields {
 		name := strings.TrimSpace(field.Name)
@@ -650,6 +673,10 @@ func validateRequestModelBindings(
 		{name: "injected", values: bindings.Injected},
 	} {
 		for _, binding := range group.values {
+			if (binding.Encoding != "" || binding.MaxBytes != 0) &&
+				(group.name != "query" || binding.Encoding != "json" || binding.MaxBytes <= 0) {
+				return fmt.Errorf("%s binding %s requires query encoding=json and positive max_bytes", operationID, binding.Name)
+			}
 			if group.name != "injected" {
 				if _, exists := fields[binding.Field]; !exists {
 					return fmt.Errorf(

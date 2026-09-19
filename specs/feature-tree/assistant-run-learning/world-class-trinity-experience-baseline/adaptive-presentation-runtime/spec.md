@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：[`JNY-009 / SCN-017`](../../../spec.md#scn-017)
 >
-> 设计归属：[L2 DEC-004](../design.md#dec-004)
+> 设计引用：[L2 DEC-004](../design.md#dec-004)
 
 ## 1. 用户价值
 

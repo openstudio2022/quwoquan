@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：[`JNY-001 / SCN-004`](../../../spec.md#scn-004)
 >
-> 设计归属：[L2 DEC-001](../design.md#dec-001)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
@@ -38,6 +38,7 @@
 ### REQ-002 退役入口不会回流且唯一验证入口仍闭环
 
 - 所有最小 gate 通过，且高置信退役路径无活动源码引用。
+- schema/contract 退出必须在同一变更中使 authority、生产 reader/writer、配置实例、生成物和旧协议测试归零，并把旧路径/身份交给现有反向退役门；工具不自动删除。保留的非 supporting schema 必须有生产 consumer，supporting schema 必须从现役根经 `$ref` 可达。任何无绑定、悬空、重复身份或动态未知都保持门禁失败，不建立候选 inventory、不分批处理，也不以 OPEN 放行。
 
 <a id="req-003"></a>
 ### REQ-003 可再生产输出与工作区目录边界
@@ -85,6 +86,7 @@
 - THEN 旧无 slice 与未引用 archived 媒体副本为零，全部权威媒体引用均有物理对象。
 - THEN App 不打包无消费者配置，已清零语义基线不可通过 update-baseline 回流。
 - THEN tracked 多根 `quwoquan-workspace.code-workspace` 不存在，README/AGENTS 明示一 worktree 一 Cursor workspace，bare hub 不被当作源码或脏工作树。
+- THEN 契约闭包中每个现役 authority 都有生产 consumer 或从生产根可达，每个生产 consumer 都反向解析到唯一 authority；原子退役同批清除双向边并由旧路径/身份反向门阻止回流，任一未裁决项直接失败。
 
 ## 6. 依赖
 

@@ -38,7 +38,6 @@ func TestSearchIndexProjectionDeclaresOnlyAssembledProductionSources(t *testing.
 		"content.post.PostPublished",
 		"content.post.PostUpdated",
 		"content.post.PostSettingsUpdated",
-		"content.post.PostPromotedToWork",
 		"content.post.PostModerationRejected",
 		"content.post.PostDeleted",
 		"content.post.PostPrivacyRedacted",

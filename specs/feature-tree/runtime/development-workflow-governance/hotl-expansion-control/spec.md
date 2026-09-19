@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：不直接参与用户 Journey；为全部交付阶段提供可审计的 Human-on-the-loop 扩展准入边界
 >
-> 设计归属：[L2 DEC-010](../design.md#dec-010)
+> 设计引用：[L2 DEC-010](../design.md#dec-010)
 
 ## 1. 用户价值
 

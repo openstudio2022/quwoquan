@@ -41,8 +41,7 @@ void main() {
       SubmitContentPostPublicationCommand(
         publishIntentId: 'comment-post-$sequence',
         localDraftId: 'comment-draft-$sequence',
-        contentType: ContentType.micro,
-        contentIdentity: ContentIdentity.moment,
+        contentType: ContentType.article,
         body: 'Comment API contract post $sequence',
         visibility: Visibility.public,
       ),

@@ -32,7 +32,6 @@ func emptyListFeedResponse(
 	}
 	return &ListFeedResponse{
 		Items:          []FeedItemView{},
-		ObjectCards:    []ObjectCardView{},
 		FeedRequestID:  feedRequestID,
 		Outcome:        FeedResponseOutcomeEmpty,
 		EmptyReason:    reason,

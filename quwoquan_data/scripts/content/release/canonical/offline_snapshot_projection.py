@@ -67,7 +67,7 @@ def project_post(source: CanonicalSource, ref: str, media: dict[str, dict], vali
     post_id = runtime_post_id(m["contentId"])
     if not post_id:
         raise OfflineSnapshotError("OFFLINE.POST_ID_MISSING")
-    view = {"postId": post_id, "contentType": content_type, "contentIdentity": m["contentIdentity"],
+    view = {"postId": post_id, "contentType": content_type,
             "authorId": m["authorId"], "authorDisplayName": creator["displayName"],
             "authorAvatarUrl": avatar["canonicalReference"], "authorAvatarAssetId": avatar["assetId"], "authorAvatarAccessMode": "public",
             "title": m["title"] if content_type == "image" else m["publishTitle"],

@@ -69,9 +69,10 @@ def _text_bytes(root: Path, ref: str, final_ref: str) -> dict[Path, bytes]:
     result = {}
     for path in _regular_tree(root):
         relative = path.relative_to(root)
-        if relative.parts[0] == "_pool":
+        if relative.parts[0] in {"_pool", "records"}:
             continue
-        if relative.as_posix() not in allowed:
+        is_source_evidence = relative.parts[0] == "sources"
+        if relative.as_posix() not in allowed and not is_source_evidence:
             _fail("TEXT_CONVERSION_UNSUPPORTED", relative)
         if relative.as_posix() not in _SIDECARS.values():
             result[relative] = path.read_bytes()
@@ -90,22 +91,23 @@ def convert_text_object(*, object_root: Path, execution_root: Path, object_ref: 
         _fail("TEXT_CONVERSION_MEDIA_FORBIDDEN", ref)
     _inspect_content(root, execution, ref, original, {})
     result = _text_bytes(root, ref, original["finalContentRef"])
-    entity = json.loads(result[Path("_entity.json")]) if ref.startswith("entities/") else None
-    if entity is not None:
-        _attribution(entity, "entity")
-        _convert_asset_classification(entity.get("assets"), "entity.assets")
-        assert_valid(entity, "publish", "entity", label=ref)
-        result[Path("_entity.json")] = _json_bytes(entity)
+    entity = original if ref.startswith("entities/") else None
     manifest = _manifest(original, entity)
     result[Path("manifest.json")] = _json_bytes(manifest)
     if entity is None:
         assert_valid(manifest, "content", "post_manifest", label=ref)
-    rights = json.loads(result[Path("rights.json")])
+    rights_path = Path("rights.json")
+    rights = json.loads(result[rights_path]) if rights_path in result else {
+        "schema": "quwoquan_data.asset_rights_closure",
+        "publishMediaMode": "text_only",
+        "assets": [],
+    }
     _convert_asset_classification(rights.get("assets"), "rights.assets")
     assert_valid(rights, "release", "asset_rights_closure", label=ref)
     if rights["assets"] or rights.get("publishMediaMode") != "text_only":
         _fail("TEXT_CONVERSION_MEDIA_FORBIDDEN", "rights assets")
-    result[Path("rights.json")] = _json_bytes(rights)
+    # rights.json 是旧 sidecar；只用于 conversion 输入校验，不写入现役单 manifest 包。
+    result.pop(rights_path, None)
     # 旧 review 已由原 receipt/execution exact bytes 验真；successor 只机械删分类，不产生新判断。
     original_review = json.loads(result[Path("content_review.json")])
     result[Path("content_review.json")] = _json_bytes(convert_review_document(original_review))
@@ -114,14 +116,14 @@ def convert_text_object(*, object_root: Path, execution_root: Path, object_ref: 
     result[Path("manifest.json")] = _json_bytes(manifest)
     digest = _digest_bytes(_json_bytes([{"path": path.as_posix(), "sha256": _digest_bytes(raw), "bytes": len(raw)}
                                       for path, raw in sorted(result.items())]))
-    records = [_read_json(p) for p in (root / "_pool/versions").glob("*.json")]
+    records = [_read_json(p) for p in (root / "records").glob("*.json")]
     record = copy.deepcopy(max(records, key=lambda row: row["recordSequence"]))
     _remove_retired_classification(record, "usageScope", {"research", "commercial"}, "record.usageScope")
     record.update(recordSequence=1, contentVersion=manifest["version"], payloadDigest=digest,
                   canonicalObjectDigest=digest, sourceAttribution=manifest["sourceAttribution"],
                   evidenceDigest=review_digest, rightsAuthorityDigest=review_digest)
     assert_valid(record, "release", "pool_object_record", label=ref)
-    result[Path("_pool/versions/1.json")] = _json_bytes(record)
+    result[Path("records/1.json")] = _json_bytes(record)
     if _tree_digest(root) != before_digest:
         _fail("POOL_CHANGED_DURING_CONVERSION", ref)
     return result

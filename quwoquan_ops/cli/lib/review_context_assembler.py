@@ -242,7 +242,6 @@ def _assemble_candidate(
     results, result_changes = _evidence_results(
         raw_results, artifact_projection=artifact_projection
     )
-    owner = dict(plan.get("owner_identity") or {})
     candidate = {
         "schema_version": 1,
         "system_prompt": system_prompt,
@@ -260,7 +259,6 @@ def _assemble_candidate(
                 "required": reviewer.get("required"),
                 "profile": reviewer.get("profile"),
             },
-            "owner_identity": owner,
             "candidate_evidence_identity": dict(plan.get("candidate_evidence_identity") or {}),
             "candidate_identity": {
                 "plan_fingerprint_ref": plan.get("fingerprint_receipt", {}).get("ref"),
@@ -348,7 +346,6 @@ def assemble_reviewer_context(
                     "attempts": attempts,
                     "identity_fields_preserved": [
                         "identity.reviewer",
-                        "identity.owner_identity",
                         "identity.candidate_evidence_identity",
                         "identity.candidate_identity",
                     ],

@@ -1,8 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
-import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show FeedObjectCard;
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_feed_object_card.dart';
 
 /// 首页固定以 20 条请求一页；响应超过请求预算时必须 fail-closed，不能截断后
 /// 跳过同一 opaque continuation 中的内容。
@@ -38,10 +37,10 @@ final class DiscoveryFeedResidentPage {
     required this.nextCursor,
     this.previousCursor,
     this.paginationExpiresAt,
-    List<FeedObjectCard> objectCards = const <FeedObjectCard>[],
+    List<ContentFeedObjectCard> objectCards = const <ContentFeedObjectCard>[],
     int maxItems = homeFeedPageItemLimit,
   }) : items = List<ContentPostViewData>.unmodifiable(items),
-       objectCards = List<FeedObjectCard>.unmodifiable(objectCards) {
+       objectCards = List<ContentFeedObjectCard>.unmodifiable(objectCards) {
     if (items.length > maxItems) {
       throw DiscoveryFeedPageBudgetExceeded(
         actualItems: items.length,
@@ -85,7 +84,7 @@ final class DiscoveryFeedResidentPage {
   final String? nextCursor;
   final String? previousCursor;
   final DateTime? paginationExpiresAt;
-  final List<FeedObjectCard> objectCards;
+  final List<ContentFeedObjectCard> objectCards;
 
   DiscoveryFeedResidentPage withPreviousCursor(String? cursor) {
     return DiscoveryFeedResidentPage(
@@ -133,11 +132,8 @@ final class DiscoveryFeedResidentPage {
     final nextObjectCards = objectCards
         .map((card) {
           final anchorIndex = card.anchorIndex.clamp(0, items.length);
-          return _feedObjectCardAt(
-            card,
-            anchorIndex: anchorIndex >= insertionIndex
-                ? anchorIndex + 1
-                : anchorIndex,
+          return card.withAnchorIndex(
+            anchorIndex >= insertionIndex ? anchorIndex + 1 : anchorIndex,
           );
         })
         .toList(growable: false);
@@ -277,22 +273,20 @@ final class DiscoveryFeedResidentPageWindow {
         residentPages.expand((page) => page.items),
       );
 
-  List<FeedObjectCard> get visibleObjectCards {
-    final cards = <FeedObjectCard>[];
+  List<ContentFeedObjectCard> get visibleObjectCards {
+    final cards = <ContentFeedObjectCard>[];
     var precedingItems = 0;
     for (final page in residentPages) {
       for (final card in page.objectCards) {
         cards.add(
-          _feedObjectCardAt(
-            card,
-            anchorIndex:
-                precedingItems + card.anchorIndex.clamp(0, page.items.length),
+          card.withAnchorIndex(
+            precedingItems + card.anchorIndex.clamp(0, page.items.length),
           ),
         );
       }
       precedingItems += page.items.length;
     }
-    return List<FeedObjectCard>.unmodifiable(cards);
+    return List<ContentFeedObjectCard>.unmodifiable(cards);
   }
 
   Set<String> get retainedPostIds => _allPages
@@ -486,7 +480,7 @@ final class DiscoveryFeedResidentPageWindow {
       );
       final nextItems = page.items.toList(growable: true)
         ..insert(insertionIndex, post);
-      final nextObjectCards = <FeedObjectCard>[];
+      final nextObjectCards = <ContentFeedObjectCard>[];
       for (var index = 0; index < page.objectCards.length; index += 1) {
         final card = page.objectCards[index];
         final originalAnchor = placement.objectCardAnchorIndices[index].clamp(
@@ -494,9 +488,8 @@ final class DiscoveryFeedResidentPageWindow {
           nextItems.length,
         );
         nextObjectCards.add(
-          _feedObjectCardAt(
-            card,
-            anchorIndex: originalAnchor > placement.pageItemIndex
+          card.withAnchorIndex(
+            originalAnchor > placement.pageItemIndex
                 ? (card.anchorIndex + 1).clamp(0, nextItems.length)
                 : card.anchorIndex.clamp(0, nextItems.length),
           ),
@@ -602,10 +595,10 @@ String? _normalizedCursor(String? value) {
   return normalized.isEmpty ? null : normalized;
 }
 
-List<FeedObjectCard> _rebasePageObjectCardsAfterDeduplication({
+List<ContentFeedObjectCard> _rebasePageObjectCardsAfterDeduplication({
   required List<ContentPostViewData> remoteItems,
   required List<ContentPostViewData> visibleItems,
-  required List<FeedObjectCard> objectCards,
+  required List<ContentFeedObjectCard> objectCards,
 }) {
   if (objectCards.isEmpty || identical(remoteItems, visibleItems)) {
     return objectCards;
@@ -629,9 +622,7 @@ List<FeedObjectCard> _rebasePageObjectCardsAfterDeduplication({
   }
   return objectCards
       .map(
-        (card) => _feedObjectCardAt(
-          card,
-          anchorIndex:
+        (card) => card.withAnchorIndex(
               visiblePrefixCounts[card.anchorIndex.clamp(
                 0,
                 remoteItems.length,
@@ -641,17 +632,3 @@ List<FeedObjectCard> _rebasePageObjectCardsAfterDeduplication({
       .toList(growable: false);
 }
 
-FeedObjectCard _feedObjectCardAt(
-  FeedObjectCard source, {
-  required int anchorIndex,
-}) => FeedObjectCard(
-  objectKind: source.objectKind,
-  objectId: source.objectId,
-  title: source.title,
-  subtitle: source.subtitle,
-  coverUrl: source.coverUrl,
-  tagRefs: source.tagRefs,
-  reasonText: source.reasonText,
-  recallPath: source.recallPath,
-  anchorIndex: anchorIndex,
-);

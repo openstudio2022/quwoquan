@@ -914,14 +914,18 @@ def register_parser(subparsers: "argparse._SubParsersAction") -> None:
     )
     repair_parser.add_argument(
         "--worktree-startup-reconciliation",
-        choices=("plan", "apply", "recover-plan", "recover-apply", "fence-plan", "fence-apply", "current-fence-plan", "current-fence-apply"),
+        choices=("plan", "apply", "recover-plan", "recover-apply", "fence-plan", "fence-apply", "current-fence-plan", "current-fence-apply", "takeover-plan", "takeover-apply"),
         default="",
-        help="Explicit Alpha/Beta/Gamma worktree receipt archive (plan/apply), or exact orphan resource recovery (recover-plan/recover-apply); recovery apply requires confirmation and preserves volumes.",
+        help="Explicit local worktree reconciliation. takeover-plan/apply is an alpha-local-only, expected-owner and exact-fence CAS handoff for an inactive executor.",
     )
     repair_parser.add_argument(
         "--executor-fence-ref", default="",
         help="Exact current target executor fence PATH=sha256:DIGEST; current-fence plan/apply only, zero live resources required.",
     )
+    repair_parser.add_argument("--expected-previous-owner", default="", help="Exact previous executor owner record required by takeover CAS.")
+    repair_parser.add_argument("--expected-previous-worktree", default="", help="Expected previous executor worktree required by takeover CAS.")
+    repair_parser.add_argument("--expected-previous-lane", default="", help="Expected previous executor lane required by takeover CAS.")
+    repair_parser.add_argument("--candidate-evidence", default="", help="Current canonical candidate evidence bound into an alpha-local takeover receipt.")
     repair_parser.add_argument(
         "--failed-repair-report-ref", default="",
         help="Exact report.json PATH=sha256:DIGEST for a zero-mutation startup-guard rejection; fence reconciliation only.",

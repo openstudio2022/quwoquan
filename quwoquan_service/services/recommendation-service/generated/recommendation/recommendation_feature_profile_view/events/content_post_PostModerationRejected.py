@@ -8,6 +8,41 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from enum import Enum
+from pydantic_core import core_schema
+
+
+class _ContractEnum(str, Enum):
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        return core_schema.no_info_before_validator_function(
+            cls._validate_wire,
+            handler(source_type),
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize_wire),
+        )
+
+    @classmethod
+    def _serialize_wire(cls, value):
+        return cls._validate_wire(value).value
+
+    @classmethod
+    def _validate_wire(cls, value):
+        if isinstance(value, cls):
+            return value
+        if type(value) is not str:
+            raise ValueError("enum wire value must be a string")
+        return cls(value)
+
+
+class ContentType(_ContractEnum):
+    VALUE_IMAGE = "image"
+    VALUE_VIDEO = "video"
+    VALUE_ARTICLE = "article"
+
+
+class MediaDeliveryAccessMode(_ContractEnum):
+    VALUE_PUBLIC = "public"
+    VALUE_SIGNED_GRANT = "signed_grant"
 
 
 class PostMediaItem(BaseModel):
@@ -15,7 +50,7 @@ class PostMediaItem(BaseModel):
     kind: str
     mediaAssetId: str | None = None
     mediaAssetVersion: int | None = None
-    accessMode: str | None = None
+    accessMode: MediaDeliveryAccessMode | None = None
     url: str
     coverUrl: str | None = None
     coverAssetId: str | None = None
@@ -64,8 +99,7 @@ class PostLifecycleProjectionPayload(BaseModel):
     """Post owner唯一canonical公开投影，prepare源与真实对象lifecycle由同一纯mapper派生。activation/rollback只发ContentReleaseFenceChanged，不发本payload冒充内容更新。所有source字段必须显式存在；ordinary的environment/sourceOwner/releaseId/manifestDigest/releaseDigest为null，Data的前四字段为非空完整源tuple，releaseDigest仅可作为审计摘要。sourceVersion为对象owner权威正版本且等于envelope aggregateVersion，不能使用activation序号；同源版本不同公开摘要冲突。未知字段、空字符串来源及部分tuple拒绝，消费者不能默认补null。"""
     postId: str
     authorId: str
-    contentType: str
-    contentIdentity: str
+    contentType: ContentType
     status: str
     visibility: str
     moderationStatus: str

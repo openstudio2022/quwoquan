@@ -1,10 +1,10 @@
 {
   "schema": "qwq.app-launch-contract.generated",
-  "sourceDigest": "sha256:3060c668589ff5bc24da05a355b395a73f02903f578ca89705b36c578d45d73f",
+  "sourceDigest": "sha256:bf5adb5a1aba571c8f69657beb1f786b0ed12f40bbc1f921caeba37aed005f0b",
   "sources": [
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_artifact_manifest.yaml",
-      "sha256": "sha256:248fb394df0712071c15a508ec3067164183a9a90292ae711658418fba7ee49b"
+      "sha256": "sha256:a31129af4baada7bd862fb43b2a95a9fe3c9cd144cfc91a1e3936ec035126e8a"
     },
     {
       "path": "quwoquan_service/contracts/metadata/_shared/app_launch_manifest.yaml",
@@ -1902,6 +1902,27 @@
     }
   },
   "appArtifactContract": {
+    "android_runtime_profiles": {
+      "aosp_no_gms": {
+        "compatible_system": "AOSP",
+        "forbidden_android_components": [
+          "google_app_id",
+          "com.google.android.gms",
+          "com.google.firebase"
+        ],
+        "forbidden_gradle_plugins": [
+          "com.google.gms.google-services",
+          "com.google.firebase.crashlytics"
+        ],
+        "forbidden_maven_group_prefixes": [
+          "com.google.android.gms",
+          "com.google.firebase",
+          "com.google.mlkit",
+          "com.android.billingclient",
+          "com.google.android.play"
+        ]
+      }
+    },
     "application_identity": {
       "base_application_ids": {
         "android": {
@@ -1947,6 +1968,7 @@
     ],
     "build_products": {
       "android-nonprod-apk": {
+        "android_runtime": "aosp_no_gms",
         "artifact_format": "apk",
         "build_mode": "release",
         "build_profile": "nonprod",
@@ -1954,6 +1976,7 @@
         "platform": "android"
       },
       "android-prod-apk": {
+        "android_runtime": "aosp_no_gms",
         "artifact_format": "apk",
         "build_mode": "release",
         "build_profile": "prod",

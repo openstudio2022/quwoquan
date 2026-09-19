@@ -63,7 +63,7 @@ def test_score_content_feed_returns_scores() -> None:
         "userId": "u1",
         "sessionId": "s1",
         "candidates": [
-            {"contentId": "c1", "contentType": "post", "ageHours": 1.0, "likeCount": 10},
+            {"contentId": "c1", "contentType": "article", "ageHours": 1.0, "likeCount": 10},
             {"contentId": "c2", "contentType": "video", "ageHours": 24.0, "likeCount": 5},
         ],
     }
@@ -88,7 +88,7 @@ def test_score_accepts_entity_refs() -> None:
         "candidates": [
             {
                 "contentId": "c1",
-                "contentType": "post",
+                "contentType": "article",
                 "entityRefs": ["entity/地点/景区/九寨沟"],
                 "ageHours": 1.0,
             }

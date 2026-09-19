@@ -36,7 +36,6 @@ class CreatePublishConfirmSheet extends ConsumerStatefulWidget {
     required this.joinedCircles,
     required this.recommendedCircles,
     this.circleLoadUnavailable = false,
-    this.suggestedTextContentType,
   });
 
   final PublishSettings initialSettings;
@@ -44,11 +43,6 @@ class CreatePublishConfirmSheet extends ConsumerStatefulWidget {
   final List<CreateCircleOption> joinedCircles;
   final List<CreateCircleOption> recommendedCircles;
   final bool circleLoadUnavailable;
-
-  /// 系统建议的文字形态（`micro` | `article`）；null 表示非文字创作，不显示
-  /// 形态行。确认页打开时把建议固化为 [PublishSettings.textContentType]，
-  /// 用户可在此修改；提交阶段以确认值为准（GWT-001）。
-  final String? suggestedTextContentType;
 
   @override
   ConsumerState<CreatePublishConfirmSheet> createState() =>
@@ -65,12 +59,6 @@ class _CreatePublishConfirmSheetState
   void initState() {
     super.initState();
     _settings = widget.initialSettings;
-    // 形态确认单一真相：建议值只在尚未确认时固化一次；已确认（含草稿恢复）
-    // 保留用户选择，不被建议覆盖。
-    final suggested = widget.suggestedTextContentType?.trim() ?? '';
-    if (suggested.isNotEmpty && _settings.textContentType.trim().isEmpty) {
-      _settings = _settings.copyWith(textContentType: suggested);
-    }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       setState(() {
@@ -117,14 +105,6 @@ class _CreatePublishConfirmSheetState
     );
   }
 
-  bool get _showsPublishFormRow =>
-      (widget.suggestedTextContentType?.trim() ?? '').isNotEmpty;
-
-  String get _publishFormValueLabel =>
-      _settings.textContentType.trim() == 'article'
-      ? CreationText.publishFormArticle
-      : CreationText.publishFormMicro;
-
   Widget _buildSettingsCard(BuildContext context) {
     final topRadius = BorderRadius.vertical(
       top: Radius.circular(AppSpacing.radiusTwentyEight),
@@ -132,25 +112,13 @@ class _CreatePublishConfirmSheetState
     return IosSelectionSection(
       child: Column(
         children: <Widget>[
-          // 发布形态（GWT-001）：系统建议已固化为当前值，用户可修改；
-          // 提交阶段只消费该确认值，不再静默推导。
-          if (_showsPublishFormRow) ...<Widget>[
-            PublishConfirmSettingRow(
-              key: const ValueKey<String>('publish-confirm-form-row'),
-              title: CreationText.publishFormLabel,
-              value: _publishFormValueLabel,
-              onTap: _pickPublishForm,
-              borderRadius: topRadius,
-            ),
-            const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
-          ],
           PublishConfirmSettingRow(
             title: CreationText.whoCanSeeLabel,
             value: _settings.isPublic
                 ? CreationText.visibilityPublic
                 : CreationText.visibilityPrivate,
             onTap: _pickVisibility,
-            borderRadius: _showsPublishFormRow ? BorderRadius.zero : topRadius,
+            borderRadius: topRadius,
           ),
           const IosSelectionInlineDivider(indent: AppSpacing.containerMd),
           PublishConfirmSettingRow(
@@ -240,39 +208,6 @@ class _CreatePublishConfirmSheetState
       confirmLabel: CreationText.createPublishConfirmButton,
       onConfirm: () => Navigator.of(context).pop(_settings),
     );
-  }
-
-  Future<void> _pickPublishForm() async {
-    final nextValue = await showAppActionSheetForConfirm<String>(
-      context,
-      title: CreationText.publishFormSheetTitle,
-      message: CreationText.publishFormSheetHint,
-      sections: [
-        AppActionSheetSection<String>(
-          items: [
-            AppActionSheetItem<String>(
-              value: 'micro',
-              label: CreationText.publishFormMicro,
-              icon: CupertinoIcons.text_bubble,
-              isSelected: _settings.textContentType.trim() != 'article',
-            ),
-            AppActionSheetItem<String>(
-              value: 'article',
-              label: CreationText.publishFormArticle,
-              icon: CupertinoIcons.doc_text,
-              isSelected: _settings.textContentType.trim() == 'article',
-            ),
-          ],
-        ),
-      ],
-      initialValue: _settings.textContentType.trim() == 'article'
-          ? 'article'
-          : 'micro',
-    );
-    if (nextValue == null) return;
-    setState(() {
-      _settings = _settings.copyWith(textContentType: nextValue);
-    });
   }
 
   Future<void> _pickVisibility() async {

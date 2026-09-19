@@ -148,19 +148,7 @@
 - 小艺提示不遮挡对象页主操作，不在同一首屏出现多个主动提示。
 - 禁止结果：小艺不得基于端侧临时拼装上下文生成事实解释。；用户关闭或忽略必须影响后续触发策略。
 
-## 7. 工程归属
-
-- App：`quwoquan_app/lib/design_system/object_page`
-- App（协作引用，不用于代码归属）：`quwoquan_app/lib/service/entity_service`、`quwoquan_app/lib/service/content_service`、`quwoquan_app/lib/service/circle_service`、`quwoquan_app/lib/service/user_service`
-- Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/entity-service/contracts`
-- Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/content-service/contracts`、`quwoquan_service/services/user-service/contracts`
-- Service（协作引用，不用于代码归属）：`quwoquan_service/services/recommendation-service`、`quwoquan_service/services/entity-service`、`quwoquan_service/services/content-service`、`quwoquan_service/services/user-service`
-- 测试：
-  - `local_contract`：`quwoquan_app/test`
-  - `api_integration`：`quwoquan_service/services/entity-service/tests`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`
-
-## 8. 开放事项
+## 7. 开放事项
 
 <a id="open-001"></a>
 ### OPEN-001 三类对象页统一体验验收

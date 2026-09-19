@@ -95,7 +95,7 @@ class PublicContractValidator:
     def schema_for_type(self, name: str, enum_ref: str | None = None) -> dict:
         if name.startswith("[]"):
             return {"type": "array", "items": self.schema_for_type(name[2:], enum_ref)}
-        primitives = {"string": "string", "timestamp": "string", "int": "integer", "int64": "integer", "bool": "boolean", "float64": "number", "decimal": "number", "object": "object", "json": "object"}
+        primitives = {"string": "string", "timestamp": "string", "int": "integer", "int64": "integer", "bool": "boolean", "float64": "number", "decimal": "number", "object": "object", "json": "object", "semantic_document": "object"}
         if name in primitives:
             return {"type": primitives[name]}
         if name == "enum":

@@ -40,7 +40,6 @@ func TestCirclePostPlacementDeclaresContentPostLifecycleSource(t *testing.T) {
 		"content.post.PostModerationRejected",
 		"content.post.PostUpdated",
 		"content.post.PostSettingsUpdated",
-		"content.post.PostPromotedToWork",
 		"content.post.PostDeleted",
 		"content.post.PostPrivacyRedacted",
 		"content.post.PostPurged",

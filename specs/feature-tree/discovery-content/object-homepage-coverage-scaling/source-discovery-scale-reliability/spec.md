@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：[`JNY-014 / SCN-035`](../../../spec.md#scn-035)
 >
-> 设计归属：[L2 DEC-001](../design.md#dec-001)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
@@ -42,7 +42,6 @@
 
 ## 4. 契约引用
 
-- source plan：`quwoquan_data/schema/source/source_plan.schema.json`
 - source unit：`quwoquan_data/schema/source/atomic_source_unit_meta.schema.json`
 - source ref：`quwoquan_data/schema/source/object_source_refs.schema.json`
 - stage receipt：`quwoquan_data/schema/execution/stage_receipt.schema.json`

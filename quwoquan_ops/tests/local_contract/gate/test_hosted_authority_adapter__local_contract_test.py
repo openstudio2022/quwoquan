@@ -46,14 +46,14 @@ from lib.hosted_authority import (  # noqa: E402
     signature_message,
 )
 from hosted_authority_smoke import (  # noqa: E402
-    OWNER_MANIFEST_ROOT,
+    CANDIDATE_EVIDENCE_ROOT,
     READINESS_BUNDLE_ROOT,
     SmokeFailure,
     _fresh_readiness,
-    _normalize_owner_manifest_path,
+    _normalize_candidate_evidence_path,
     _read_canonical_input,
     _read_canonical_repo_ref,
-    _verify_owner_manifest,
+    _verify_candidate_evidence,
     build_parser as build_smoke_parser,
     main as smoke_main,
     run_observe_only_smoke,
@@ -252,27 +252,13 @@ def readiness_bytes(
     return exact({"generatedAt": generated_at, "results": results if results is not None else [readiness_result()]})
 
 
-def manifest_fixture(*, target: str = "AGENTS.md") -> tuple[str, bytes]:
-    payload = {
-        "schema_version": contract_schema_version("feature_context_manifest"), "target": target,
-        "resolved_owner": "specs/feature-tree/spec.md",
-        "owner_chain": [{"level": 0, "node_id": "app-root", "path": "specs/feature-tree/spec.md"}],
-        "canonical_contexts": [{"path": "specs/feature-tree/spec.md", "anchor": None, "kind": "spec"}],
-        "applicable_agents": ["AGENTS.md"], "open_items": [],
-    }
-    receipt = build_feature_context_fingerprint(payload, repo_root=ROOT)
-    payload["evidence_fingerprint"] = {
-        "mode": "embedded", "ref": receipt["ref"], "digest": receipt["digest"],
-        "receipt": receipt, "receipt_ref": None,
-    }
-    validate_feature_context_manifest(payload)
-    raw = canonical_json_bytes(payload)
-    digest = __import__("hashlib").sha256(raw).hexdigest()
-    ref = (OWNER_MANIFEST_ROOT / f"{digest}.json").as_posix()
-    path = ROOT / ref
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(raw)
-    return ref, raw
+def candidate_fixture(*, target: str = "AGENTS.md") -> tuple[str, bytes]:
+    result = subprocess.run(
+        [sys.executable, "quwoquan_ops/cli/feature_tree.py", "candidate-evidence", "--changed-path", target],
+        cwd=ROOT, check=True, capture_output=True, text=True,
+    )
+    ref = result.stdout.strip()
+    return ref, (ROOT / ref).read_bytes()
 
 
 class HostedAuthorityAdapterTest(unittest.TestCase):
@@ -303,14 +289,14 @@ class HostedAuthorityAdapterTest(unittest.TestCase):
     def _smoke_fixture(self):
         temporary, private, public = keypair()
         self.addCleanup(temporary.cleanup)
-        owner_ref, owner_bytes = manifest_fixture()
-        self.addCleanup((ROOT / owner_ref).unlink, missing_ok=True)
-        fingerprint = str(json.loads(owner_bytes)["evidence_fingerprint"]["digest"])
+        candidate_ref, candidate_bytes = candidate_fixture()
+        self.addCleanup((ROOT / candidate_ref).unlink, missing_ok=True)
+        fingerprint = str(json.loads(candidate_bytes)["evidence_fingerprint"]["digest"])
         readiness = readiness_bytes(generated_at="2026-09-01T00:00:00+00:00")
         client = self._authority_client(private, fingerprint=fingerprint, public=public)
-        return temporary, private, owner_ref, owner_bytes, readiness, client, public
+        return temporary, private, candidate_ref, candidate_bytes, readiness, client, public
 
-    def _arguments(self, owner_ref, owner_bytes, readiness, client, public, **overrides):
+    def _arguments(self, candidate_ref, candidate_bytes, readiness, client, public, **overrides):
         readiness_ref = (
             READINESS_BUNDLE_ROOT
             / (__import__("hashlib").sha256(readiness).hexdigest() + ".json")
@@ -323,7 +309,7 @@ class HostedAuthorityAdapterTest(unittest.TestCase):
             readiness_path.write_bytes(readiness)
         self.addCleanup(readiness_path.unlink, missing_ok=True)
         arguments = {
-            "owner_manifest_ref": owner_ref, "owner_manifest_bytes": owner_bytes,
+            "candidate_evidence_ref": candidate_ref, "candidate_evidence_bytes": candidate_bytes,
             "readiness_bundle_ref": readiness_ref, "readiness_bundle_bytes": readiness,
             "receipt_ref": DECISION_ID, "client": client,
             "trusted_public_keys": {KEY_ID: public}, "expected_scope": EXPECTED_SCOPE,
@@ -338,7 +324,7 @@ class HostedAuthorityAdapterTest(unittest.TestCase):
     def test_hosted_smoke_cli_requires_explicit_expected_identity(self) -> None:
         parser = build_smoke_parser()
         parsed = parser.parse_args([
-            "--owner-manifest", "owner.json", "--readiness-bundle", "readiness.json",
+            "--candidate-evidence", "owner.json", "--readiness-bundle", "readiness.json",
             "--authority-receipt-ref", DECISION_ID, "--expected-scope-kind", "objective",
             "--expected-scope-id", CANDIDATE, "--expected-environment", "gamma",
             "--expected-manifest-sha256", MANIFEST_SHA256,
@@ -349,29 +335,29 @@ class HostedAuthorityAdapterTest(unittest.TestCase):
         self.assertNotIn("resolver_receipt", vars(parsed))
 
     def test_hosted_smoke_normalizes_repository_relative_and_absolute_manifest_paths(self) -> None:
-        owner_ref, _owner_bytes = manifest_fixture()
-        owner_path = ROOT / owner_ref
+        candidate_ref, _candidate_bytes = candidate_fixture()
+        owner_path = ROOT / candidate_ref
         self.addCleanup(owner_path.unlink, missing_ok=True)
-        relative_path, relative_ref = _normalize_owner_manifest_path(Path(owner_ref))
-        absolute_path, absolute_ref = _normalize_owner_manifest_path(owner_path)
+        relative_path, relative_ref = _normalize_candidate_evidence_path(Path(candidate_ref))
+        absolute_path, absolute_ref = _normalize_candidate_evidence_path(owner_path)
         self.assertEqual(relative_path, owner_path.absolute())
         self.assertEqual(absolute_path, relative_path)
-        self.assertEqual(relative_ref, owner_ref)
+        self.assertEqual(relative_ref, candidate_ref)
         self.assertEqual(absolute_ref, relative_ref)
 
-    def test_hosted_smoke_rejects_owner_manifest_outside_repository(self) -> None:
+    def test_hosted_smoke_rejects_candidate_evidence_outside_repository(self) -> None:
         with tempfile.NamedTemporaryFile() as external:
             with self.assertRaises(SmokeFailure) as captured:
-                _normalize_owner_manifest_path(Path(external.name))
+                _normalize_candidate_evidence_path(Path(external.name))
         self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH")
 
     def test_hosted_smoke_same_exact_inputs_are_idempotent_and_observe_only(self) -> None:
-        _, _, owner_ref, owner_bytes, readiness, client, public = self._smoke_fixture()
-        arguments = self._arguments(owner_ref, owner_bytes, readiness, client, public)
+        _, _, candidate_ref, candidate_bytes, readiness, client, public = self._smoke_fixture()
+        arguments = self._arguments(candidate_ref, candidate_bytes, readiness, client, public)
         first = run_observe_only_smoke(**arguments)
         second = run_observe_only_smoke(**arguments)
         self.assertEqual(first["observation_identity"], second["observation_identity"])
-        self.assertEqual(first["owner_manifest_ref"], owner_ref)
+        self.assertEqual(first["candidate_evidence_ref"], candidate_ref)
         self.assertEqual(first["readiness_candidate_digest"], CANDIDATE)
         self.assertTrue(first["signature_verified"])
         self.assertFalse(first["mutation_performed"])
@@ -380,12 +366,12 @@ class HostedAuthorityAdapterTest(unittest.TestCase):
         self.assertNotIn("workflow", first)
 
     def test_hosted_smoke_identity_changes_for_each_exact_input(self) -> None:
-        _, private, owner_ref, owner_bytes, readiness, client, public = self._smoke_fixture()
-        baseline = run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, readiness, client, public))["observation_identity"]
+        _, private, candidate_ref, candidate_bytes, readiness, client, public = self._smoke_fixture()
+        baseline = run_observe_only_smoke(**self._arguments(candidate_ref, candidate_bytes, readiness, client, public))["observation_identity"]
         changed_readiness = readiness_bytes(generated_at="2026-09-01T00:00:01+00:00")
-        changed = run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, changed_readiness, client, public))["observation_identity"]
+        changed = run_observe_only_smoke(**self._arguments(candidate_ref, candidate_bytes, changed_readiness, client, public))["observation_identity"]
         self.assertNotEqual(changed, baseline)
-        second_ref, second_bytes = manifest_fixture(target="quwoquan_ops/AGENTS.md")
+        second_ref, second_bytes = candidate_fixture(target="quwoquan_ops/AGENTS.md")
         self.addCleanup((ROOT / second_ref).unlink, missing_ok=True)
         second_fingerprint = str(json.loads(second_bytes)["evidence_fingerprint"]["digest"])
         second_client = self._authority_client(private, fingerprint=second_fingerprint, public=public)
@@ -393,50 +379,50 @@ class HostedAuthorityAdapterTest(unittest.TestCase):
             run_observe_only_smoke(**self._arguments(second_ref, second_bytes, readiness, second_client, public))["observation_identity"], baseline,
         )
         authority_changed = self._authority_client(
-            private, fingerprint=str(json.loads(owner_bytes)["evidence_fingerprint"]["digest"]),
+            private, fingerprint=str(json.loads(candidate_bytes)["evidence_fingerprint"]["digest"]),
             public=public, claim_overrides={"actorId": "actor-2"},
         )
         self.assertNotEqual(
-            run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, readiness, authority_changed, public))["observation_identity"], baseline,
+            run_observe_only_smoke(**self._arguments(candidate_ref, candidate_bytes, readiness, authority_changed, public))["observation_identity"], baseline,
         )
 
     def test_hosted_smoke_rejects_noncanonical_manifest_ref_filename_and_json(self) -> None:
-        _, _, owner_ref, owner_bytes, readiness, client, public = self._smoke_fixture()
-        arguments = self._arguments(owner_ref, owner_bytes, readiness, client, public)
-        for noncanonical_ref in (".qwq_output/owner.json", f"./{owner_ref}", owner_ref.replace("/", "//", 1), str(ROOT / owner_ref)):
+        _, _, candidate_ref, candidate_bytes, readiness, client, public = self._smoke_fixture()
+        arguments = self._arguments(candidate_ref, candidate_bytes, readiness, client, public)
+        for noncanonical_ref in (".qwq_output/owner.json", f"./{candidate_ref}", candidate_ref.replace("/", "//", 1), str(ROOT / candidate_ref)):
             with self.subTest(ref=noncanonical_ref), self.assertRaises(SmokeFailure) as captured:
-                run_observe_only_smoke(**{**arguments, "owner_manifest_ref": noncanonical_ref})
+                run_observe_only_smoke(**{**arguments, "candidate_evidence_ref": noncanonical_ref})
             self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH")
-        wrong = (Path(owner_ref).parent / ("0" * 64 + ".json")).as_posix()
-        (ROOT / wrong).write_bytes(owner_bytes)
+        wrong = (Path(candidate_ref).parent / ("0" * 64 + ".json")).as_posix()
+        (ROOT / wrong).write_bytes(candidate_bytes)
         self.addCleanup((ROOT / wrong).unlink, missing_ok=True)
         with self.assertRaises(SmokeFailure) as captured:
-            run_observe_only_smoke(**{**arguments, "owner_manifest_ref": wrong})
+            run_observe_only_smoke(**{**arguments, "candidate_evidence_ref": wrong})
         self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_STALE_INPUT")
-        noncanonical = json.dumps(json.loads(owner_bytes), ensure_ascii=False, indent=2).encode()
-        noncanonical_ref = (OWNER_MANIFEST_ROOT / (__import__("hashlib").sha256(noncanonical).hexdigest() + ".json")).as_posix()
+        noncanonical = json.dumps(json.loads(candidate_bytes), ensure_ascii=False, indent=2).encode()
+        noncanonical_ref = (CANDIDATE_EVIDENCE_ROOT / (__import__("hashlib").sha256(noncanonical).hexdigest() + ".json")).as_posix()
         (ROOT / noncanonical_ref).write_bytes(noncanonical)
         self.addCleanup((ROOT / noncanonical_ref).unlink, missing_ok=True)
         with self.assertRaises(SmokeFailure) as captured:
-            run_observe_only_smoke(**{**arguments, "owner_manifest_ref": noncanonical_ref, "owner_manifest_bytes": noncanonical})
+            run_observe_only_smoke(**{**arguments, "candidate_evidence_ref": noncanonical_ref, "candidate_evidence_bytes": noncanonical})
         self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_SCHEMA_INVALID")
 
-    def test_hosted_smoke_rejects_owner_manifest_symlink_and_hardlink_nodes(self) -> None:
-        owner_bytes = b"{}"
-        filename = __import__("hashlib").sha256(owner_bytes).hexdigest() + ".json"
-        owner_ref = (OWNER_MANIFEST_ROOT / filename).as_posix()
+    def test_hosted_smoke_rejects_candidate_evidence_symlink_and_hardlink_nodes(self) -> None:
+        candidate_bytes = b"{}"
+        filename = __import__("hashlib").sha256(candidate_bytes).hexdigest() + ".json"
+        candidate_ref = (CANDIDATE_EVIDENCE_ROOT / filename).as_posix()
         for node_kind in ("ancestor-symlink", "final-symlink", "hardlink"):
             with self.subTest(node_kind=node_kind), tempfile.TemporaryDirectory(prefix="qwq-owner-node-") as temporary:
                 fixture_root = Path(temporary)
                 repository = fixture_root / "repo"
-                canonical_root = repository / OWNER_MANIFEST_ROOT
+                canonical_root = repository / CANDIDATE_EVIDENCE_ROOT
                 external = fixture_root / "external"
                 external.mkdir()
                 external_file = external / filename
-                external_file.write_bytes(owner_bytes)
+                external_file.write_bytes(candidate_bytes)
                 if node_kind == "ancestor-symlink":
                     repository.mkdir()
-                    (repository / OWNER_MANIFEST_ROOT.parts[0]).symlink_to(external, target_is_directory=True)
+                    (repository / CANDIDATE_EVIDENCE_ROOT.parts[0]).symlink_to(external, target_is_directory=True)
                 else:
                     canonical_root.mkdir(parents=True)
                     final_path = canonical_root / filename
@@ -445,7 +431,7 @@ class HostedAuthorityAdapterTest(unittest.TestCase):
                     else:
                         os.link(external_file, final_path)
                 with mock.patch("hosted_authority_smoke.REPO_ROOT", repository), self.assertRaises(SmokeFailure) as captured:
-                    _verify_owner_manifest(owner_manifest_ref=owner_ref, owner_manifest_bytes=owner_bytes)
+                    _verify_candidate_evidence(candidate_evidence_ref=candidate_ref, candidate_evidence_bytes=candidate_bytes)
                 self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH")
 
     def test_readiness_descriptor_reader_rejects_unsafe_nodes_and_replacement(self) -> None:
@@ -491,7 +477,7 @@ class HostedAuthorityAdapterTest(unittest.TestCase):
                 self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH")
 
     def test_hosted_smoke_rejects_empty_or_mismatched_readiness(self) -> None:
-        _, _, owner_ref, owner_bytes, _readiness, client, public = self._smoke_fixture()
+        _, _, candidate_ref, candidate_bytes, _readiness, client, public = self._smoke_fixture()
         cases = {
             "empty": [],
             "candidate": [readiness_result(candidate="sha256:" + "c" * 64)],
@@ -502,12 +488,12 @@ class HostedAuthorityAdapterTest(unittest.TestCase):
         for label, results in cases.items():
             readiness = readiness_bytes(generated_at="2026-09-01T00:00:00Z", results=results)
             with self.subTest(label=label), self.assertRaises(SmokeFailure) as captured:
-                run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, readiness, client, public))
+                run_observe_only_smoke(**self._arguments(candidate_ref, candidate_bytes, readiness, client, public))
             self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_READINESS_NOT_QUALIFYING")
 
     def test_hosted_smoke_rejects_wrong_or_terminal_authority_claims(self) -> None:
-        _, private, owner_ref, owner_bytes, readiness, _client, public = self._smoke_fixture()
-        fingerprint = str(json.loads(owner_bytes)["evidence_fingerprint"]["digest"])
+        _, private, candidate_ref, candidate_bytes, readiness, _client, public = self._smoke_fixture()
+        fingerprint = str(json.loads(candidate_bytes)["evidence_fingerprint"]["digest"])
         cases = {
             "fingerprint": ({"evidenceFingerprint": "sha256:" + "f" * 64}, "available"),
             "scope": ({"scope": {"objective": "sha256:" + "e" * 64}}, "available"),
@@ -519,7 +505,7 @@ class HostedAuthorityAdapterTest(unittest.TestCase):
         for label, (overrides, state) in cases.items():
             client = self._authority_client(private, fingerprint=fingerprint, public=public, claim_overrides=overrides, state=state)
             with self.subTest(label=label), self.assertRaises(SmokeFailure) as captured:
-                run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, readiness, client, public))
+                run_observe_only_smoke(**self._arguments(candidate_ref, candidate_bytes, readiness, client, public))
             self.assertEqual(captured.exception.code, "HOSTED_AUTHORITY.SMOKE_AUTHORITY_INVALID")
 
     def test_hosted_smoke_distinguishes_stale_schema_unavailable_and_readback(self) -> None:
@@ -529,14 +515,14 @@ class HostedAuthorityAdapterTest(unittest.TestCase):
         with self.assertRaises(SmokeFailure) as schema:
             _fresh_readiness({"generatedAt": "bad", "results": []}, now=datetime(2026, 9, 1, tzinfo=timezone.utc), max_age_seconds=300)
         self.assertEqual(schema.exception.code, "HOSTED_AUTHORITY.SMOKE_SCHEMA_INVALID")
-        _, _, owner_ref, owner_bytes, readiness, client, public = self._smoke_fixture()
+        _, _, candidate_ref, candidate_bytes, readiness, client, public = self._smoke_fixture()
         failed = FailedHostedAuthorityClient(client.response)
         with self.assertRaises(SmokeFailure) as unavailable:
-            run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, readiness, failed, public))
+            run_observe_only_smoke(**self._arguments(candidate_ref, candidate_bytes, readiness, failed, public))
         self.assertEqual(unavailable.exception.code, "HOSTED_AUTHORITY.SMOKE_AUTHORITY_UNAVAILABLE")
         absent = AbsentHostedAuthorityClient(client.response)
         with self.assertRaises(SmokeFailure) as readback:
-            run_observe_only_smoke(**self._arguments(owner_ref, owner_bytes, readiness, absent, public))
+            run_observe_only_smoke(**self._arguments(candidate_ref, candidate_bytes, readiness, absent, public))
         self.assertEqual(readback.exception.code, "HOSTED_AUTHORITY.SMOKE_READBACK_FAILED")
 
     def test_hosted_smoke_cli_typed_terminals_have_unique_recovery_and_exit_two(self) -> None:
@@ -546,7 +532,7 @@ class HostedAuthorityAdapterTest(unittest.TestCase):
             "HOSTED_AUTHORITY.SMOKE_READBACK_FAILED",
         )
         argv = [
-            "--owner-manifest", str(OWNER_MANIFEST_ROOT / "owner.json"),
+            "--candidate-evidence", str(CANDIDATE_EVIDENCE_ROOT / "owner.json"),
             "--readiness-bundle", str(READINESS_BUNDLE_ROOT / "readiness.json"),
             "--authority-receipt-ref", DECISION_ID, "--expected-scope-kind", "objective",
             "--expected-scope-id", CANDIDATE, "--expected-environment", "gamma",

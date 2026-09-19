@@ -79,7 +79,7 @@ func TestMongoActiveSupplyReaderUsesEnvironmentScopedActiveRelease(t *testing.T)
 		"_id": contentID, "sourceOwner": "qwq_data", "releaseId": releaseID,
 		"manifestDigest":  manifestDigest,
 		"lifecycleStatus": "active", "status": "published", "visibility": "public",
-		"moderationStatus": "approved", "contentIdentity": "work", "contentType": "video",
+		"moderationStatus": "approved", "contentType": "video",
 		"videoUrl": "https://media.example.test/video.mp4", "durationMs": int64(1000),
 	}); err != nil {
 		t.Fatalf("seed active release post: %v", err)
@@ -268,7 +268,7 @@ func TestMongoPublicPostQueriesFenceDataOwnedPostsToExactActiveRelease(t *testin
 	}
 
 	authorPage, err := reader.ListAuthorPosts(ctx, postports.NewAuthorPostReadRequest(
-		"persona-query-fence", postports.AuthorPostAccessPublic, "", "", "",
+		"persona-query-fence", postports.AuthorPostAccessPublic, "", "",
 		postports.AuthorPostCursor{}, 20, releaseID, manifestDigest,
 	))
 	if err != nil {

@@ -3,40 +3,111 @@
   "description": "单 manifest 的实体结构化事实。entityRef 是冻结逻辑身份，不随地域、分类、名称或分区目录变更；显式 geographyMode 决定地域适用性，geoTagRef 仅使用已核实的真实行政区层级。执行态头部可引用本事实约束，但发布包不得再保留 _entity.json。",
   "type": "object",
   "properties": {
-    "schema": {"type": "string"},
-    "entityId": {"type": "string", "minLength": 1},
-    "version": {"type": "integer", "minimum": 1},
-    "finalContentRef": {"const": "page.md"},
+    "schema": {
+      "type": "string"
+    },
+    "entityId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "finalContentRef": {
+      "const": "page.md"
+    },
     "assets": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["assetId", "path", "sha256", "bytes", "mimeType", "sourceRefs"],
+        "required": [
+          "assetId",
+          "path",
+          "sha256",
+          "bytes",
+          "mimeType",
+          "sourceRefs"
+        ],
         "properties": {
-          "assetId": {"type": "string", "minLength": 1},
-          "path": {"type": "string", "pattern": "^media/(?!.*(?:^|/)\\.\\.(?:/|$))[^/]+$"},
-          "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
-          "bytes": {"type": "integer", "minimum": 1},
-          "mimeType": {"type": "string", "minLength": 1},
-          "sourceRefs": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^sources/[A-Za-z0-9_-]+/source\\.json$"}}
+          "assetId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^media/(?!.*(?:^|/)\\.\\.(?:/|$))[^/]+$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "mimeType": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sourceRefs": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "pattern": "^sources/[A-Za-z0-9_-]+/source\\.json$"
+            }
+          }
         }
       }
     },
-    "label": { "type": "string", "minLength": 1, "description": "实体显示名称快照，不是身份键" },
-    "domain": { "type": "string", "minLength": 1, "description": "已冻结实体领域，如 地点" },
-    "type": { "type": "string", "minLength": 1, "description": "taxonomy 既有主类型路径，不依赖目录固定段数" },
-    "executionId": { "type": "string", "description": "生成该对象的 execution id" },
-    "entityRef": { "type": "string", "pattern": "^/entity/", "description": "不随物理目录变更的 opaque 逻辑身份" },
-    "geographyMode": {"enum": ["administrative", "none"]},
-    "summary": { "type": "string", "description": "事实摘要（源自底稿，不编造）" },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "description": "实体显示名称快照，不是身份键"
+    },
+    "domain": {
+      "type": "string",
+      "minLength": 1,
+      "description": "已冻结实体领域，如 地点"
+    },
+    "type": {
+      "type": "string",
+      "minLength": 1,
+      "description": "taxonomy 既有主类型路径，不依赖目录固定段数"
+    },
+    "executionId": {
+      "type": "string",
+      "description": "生成该对象的 execution id"
+    },
+    "entityRef": {
+      "type": "string",
+      "pattern": "^/entity/",
+      "description": "不随物理目录变更的 opaque 逻辑身份"
+    },
+    "geographyMode": {
+      "enum": [
+        "administrative",
+        "none"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "description": "事实摘要（源自底稿，不编造）"
+    },
     "aliases": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "可选：别名（主清单 aliases 透传，去重与检索辅助）"
     },
     "tagRefs": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "全量标签引用：类型标签（Entity/{domain}/**，含主类型叶子与全部次类型）+ 主题标签（Topic/**）+ 物化并入的地理标签"
     },
     "geoTagRef": {
@@ -45,25 +116,49 @@
     },
     "geoTagRefs": {
       "type": "array",
-      "items": { "type": "string" },
+      "items": {
+        "type": "string"
+      },
       "description": "可选：跨省/跨市全量地理归属（必须包含 geoTagRef 主归属）；非跨界实体缺省。物化时全量并进 tagRefs，index 分片与 geo_bucket 仍只消费 geoTagRef 单值"
     },
     "coordinates": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["lat", "lon"],
+      "required": [
+        "lat",
+        "lon"
+      ],
       "properties": {
-        "lat": { "type": "number", "minimum": -90, "maximum": 90 },
-        "lon": { "type": "number", "minimum": -180, "maximum": 180 }
+        "lat": {
+          "type": "number",
+          "minimum": -90,
+          "maximum": 90
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        }
       },
       "description": "可选：WGS84 点坐标（与 schema/governance/master_list.schema.json coordinates 同形状，来自主清单 leaf 透传）。entity-service homepage importer 据此写入 Homepage.location（2dsphere），驱动搜索 filters.near 与「附近」；缺坐标的实体不参与附近召回，禁止按行政区中心点或城市坐标推断"
     },
-    "sourceRefs": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string" }, "description": "发布态只引用包内 sources/<unit>/source.json；执行态仍是冻结 source unit ref" },
+    "sourceRefs": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {
+        "type": "string"
+      },
+      "description": "发布态只引用包内 sources/<unit>/source.json；执行态仍是冻结 source unit ref"
+    },
     "sourceUrls": {
       "type": "array",
       "minItems": 1,
       "uniqueItems": true,
-      "items": { "type": "string", "pattern": "^https://" },
+      "items": {
+        "type": "string",
+        "pattern": "^https://"
+      },
       "description": "公开、安全、规范化的直接来源 URL；不得放内部 ref"
     },
     "primarySource": {
@@ -83,20 +178,52 @@
       ],
       "properties": {
         "sourceKind": {
-          "enum": ["wikipedia", "baidu_baike", "toutiao_baike"]
+          "enum": [
+            "wikipedia",
+            "baidu_baike",
+            "toutiao_baike"
+          ]
         },
-        "entityName": { "type": "string", "minLength": 1 },
+        "entityName": {
+          "type": "string",
+          "minLength": 1
+        },
         "extractor": {
-          "enum": ["wikipedia_api", "baidu_baike_html", "toutiao_baike_html", "html_text"]
+          "enum": [
+            "wikipedia_api",
+            "baidu_baike_html",
+            "toutiao_baike_html",
+            "html_text"
+          ]
         },
-        "canonicalUrl": { "type": "string", "pattern": "^https://" },
-        "sourceUrl": { "type": "string", "pattern": "^https://" },
-        "title": { "type": "string", "minLength": 1 },
-        "fetchedAt": { "type": "string", "minLength": 1 },
-        "snapshotHash": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-        "policyRevision": { "const": "encyclopedia-primary" },
+        "canonicalUrl": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "sourceUrl": {
+          "type": "string",
+          "pattern": "^https://"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fetchedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshotHash": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "policyRevision": {
+          "const": "encyclopedia-primary"
+        },
         "sourceUseMode": {
-          "enum": ["licensed_adaptation", "factual_reference_only"]
+          "enum": [
+            "licensed_adaptation",
+            "factual_reference_only"
+          ]
         }
       }
     },
@@ -114,48 +241,111 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["openMinuteOfDay", "closeMinuteOfDay"],
+            "required": [
+              "openMinuteOfDay",
+              "closeMinuteOfDay"
+            ],
             "properties": {
-              "appliesFrom": { "type": "string", "pattern": "^[0-1][0-9]-[0-3][0-9]$", "description": "适用期起始 MM-DD；与 appliesTo 同时声明或同时省略" },
-              "appliesTo": { "type": "string", "pattern": "^[0-1][0-9]-[0-3][0-9]$", "description": "适用期结束 MM-DD" },
+              "appliesFrom": {
+                "type": "string",
+                "pattern": "^[0-1][0-9]-[0-3][0-9]$",
+                "description": "适用期起始 MM-DD；与 appliesTo 同时声明或同时省略"
+              },
+              "appliesTo": {
+                "type": "string",
+                "pattern": "^[0-1][0-9]-[0-3][0-9]$",
+                "description": "适用期结束 MM-DD"
+              },
               "weekdays": {
                 "type": "array",
-                "items": { "type": "integer", "minimum": 1, "maximum": 7 },
+                "items": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 7
+                },
                 "description": "适用星期 1=周一..7=周日；为空表示每天"
               },
-              "openMinuteOfDay": { "type": "integer", "minimum": 0, "maximum": 1439 },
-              "closeMinuteOfDay": { "type": "integer", "minimum": 0, "maximum": 2880, "description": "跨零点场次允许大于 1440（如夜场 22:00-次日 02:00 记为 1560）" },
-              "closed": { "type": "boolean", "description": "该适用期/星期闭馆；闭馆条目忽略时间字段" }
+              "openMinuteOfDay": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1439
+              },
+              "closeMinuteOfDay": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 2880,
+                "description": "跨零点场次允许大于 1440（如夜场 22:00-次日 02:00 记为 1560）"
+              },
+              "closed": {
+                "type": "boolean",
+                "description": "该适用期/星期闭馆；闭馆条目忽略时间字段"
+              }
             }
           }
         },
         "ticketPriceRange": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["currency", "minAmountCents", "maxAmountCents"],
+          "required": [
+            "currency",
+            "minAmountCents",
+            "maxAmountCents"
+          ],
           "properties": {
-            "currency": { "type": "string", "pattern": "^[A-Z]{3}$", "description": "ISO 4217 三字母币种，跨境实体不得隐式假设人民币" },
-            "minAmountCents": { "type": "integer", "minimum": 0 },
-            "maxAmountCents": { "type": "integer", "minimum": 0 },
-            "free": { "type": "boolean", "description": "免费开放，必须与 minAmountCents=0 且 maxAmountCents=0 自洽" }
+            "currency": {
+              "type": "string",
+              "pattern": "^[A-Z]{3}$",
+              "description": "ISO 4217 三字母币种，跨境实体不得隐式假设人民币"
+            },
+            "minAmountCents": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "maxAmountCents": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "free": {
+              "type": "boolean",
+              "description": "免费开放，必须与 minAmountCents=0 且 maxAmountCents=0 自洽"
+            }
           }
         },
         "recommendedDurationMinutes": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["minMinutes", "maxMinutes"],
+          "required": [
+            "minMinutes",
+            "maxMinutes"
+          ],
           "properties": {
-            "minMinutes": { "type": "integer", "minimum": 1 },
-            "maxMinutes": { "type": "integer", "minimum": 1 }
+            "minMinutes": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxMinutes": {
+              "type": "integer",
+              "minimum": 1
+            }
           }
         },
         "bestSeasonTagRefs": {
           "type": "array",
-          "items": { "type": "string", "pattern": "^Topic/(时间/四季|旅行/季节窗口)/" },
+          "items": {
+            "type": "string",
+            "pattern": "^Topic/(时间/四季|旅行/季节窗口)/"
+          },
           "description": "最佳季节 tagRef；不写自由文本，保证可与内容标签求交（同季节窗口到访）"
         },
-        "altitudeMeters": { "type": "integer", "minimum": -500, "maximum": 9000 },
-        "officialWebsite": { "type": "string", "pattern": "^https://" },
+        "altitudeMeters": {
+          "type": "integer",
+          "minimum": -500,
+          "maximum": 9000
+        },
+        "officialWebsite": {
+          "type": "string",
+          "pattern": "^https://"
+        },
         "factSources": {
           "type": "array",
           "minItems": 1,
@@ -163,7 +353,14 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["field", "sourceId", "sourceClass", "sourceUrl", "observedAt", "confidence"],
+            "required": [
+              "field",
+              "sourceId",
+              "sourceClass",
+              "sourceUrl",
+              "observedAt",
+              "confidence"
+            ],
             "properties": {
               "field": {
                 "enum": [
@@ -175,30 +372,85 @@
                   "officialWebsite"
                 ]
               },
-              "sourceId": { "type": "string", "minLength": 1, "description": "control_plane/_shared/catalogs/content_source_registry.yaml 的 sourceId" },
+              "sourceId": {
+                "type": "string",
+                "minLength": 1,
+                "description": "control_plane/_shared/catalogs/content_source_registry.yaml 的 sourceId"
+              },
               "sourceClass": {
-                "enum": ["encyclopedia", "official_site", "government_tourism"],
+                "enum": [
+                  "encyclopedia",
+                  "official_site",
+                  "government_tourism"
+                ],
                 "description": "必须落在 structuredFactsPolicy.allowedSourceClasses 内"
               },
-              "sourceUrl": { "type": "string", "pattern": "^https://" },
-              "observedAt": { "type": "string", "minLength": 1, "description": "观测时间；营业时间与票价会过期，端侧据此提示以官方为准" },
-              "confidence": { "type": "number", "exclusiveMinimum": 0, "maximum": 1 },
-              "conflictsWithSourceIds": { "type": "array", "items": { "type": "string" } }
+              "sourceUrl": {
+                "type": "string",
+                "pattern": "^https://"
+              },
+              "observedAt": {
+                "type": "string",
+                "minLength": 1,
+                "description": "观测时间；营业时间与票价会过期，端侧据此提示以官方为准"
+              },
+              "confidence": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              },
+              "conflictsWithSourceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
             }
           }
         }
       }
     },
-    "textSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "正文来源单元引用" },
-    "imageSourceRefs": { "type": "array", "items": { "type": "string" }, "description": "图片来源单元引用" },
-    "authorId": { "type": "string", "description": "仓内 creator profile 的稳定 id" },
-    "creatorProfileId": { "type": "string" },
-    "creatorArchetype": { "type": "string" },
-    "creatorProfileDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
-    "creatorDisclosure": { "type": "object", "description": "平台虚拟创作者披露（type/displayText/visible）" },
-    "experienceClaimMode": { "type": "string" },
-    "authorQualitySignals": { "type": "object" },
-    "updatedAt": { "type": "string" }
+    "textSourceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "正文来源单元引用"
+    },
+    "imageSourceRefs": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "图片来源单元引用"
+    },
+    "authorId": {
+      "type": "string",
+      "description": "仓内 creator profile 的稳定 id"
+    },
+    "creatorProfileId": {
+      "type": "string"
+    },
+    "creatorArchetype": {
+      "type": "string"
+    },
+    "creatorProfileDigest": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "creatorDisclosure": {
+      "type": "object",
+      "description": "平台虚拟创作者披露（type/displayText/visible）"
+    },
+    "experienceClaimMode": {
+      "type": "string"
+    },
+    "authorQualitySignals": {
+      "type": "object"
+    },
+    "updatedAt": {
+      "type": "string"
+    }
   },
   "required": [
     "label",
@@ -213,20 +465,99 @@
   ],
   "allOf": [
     {
-      "if": {"properties": {"schema": {"const": "quwoquan_data.entity_object"}}, "required": ["schema"]},
+      "if": {
+        "properties": {
+          "schema": {
+            "const": "quwoquan_data.entity_object"
+          }
+        },
+        "required": [
+          "schema"
+        ]
+      },
       "then": {
-        "required": ["entityId", "version", "geographyMode", "sourceRefs", "assets", "finalContentRef"],
-        "properties": {"sourceRefs": {"items": {"type": "string", "pattern": "^sources/[A-Za-z0-9_-]+/source\\.json$"}}},
-        "not": {"anyOf": [{"required": ["sourceCatalogRef"]}, {"required": ["rightsRef"]}]}
+        "required": [
+          "entityId",
+          "version",
+          "geographyMode",
+          "sourceRefs",
+          "assets",
+          "finalContentRef"
+        ],
+        "properties": {
+          "sourceRefs": {
+            "items": {
+              "type": "string",
+              "pattern": "^sources/[A-Za-z0-9_-]+/source\\.json$"
+            }
+          }
+        },
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "sourceCatalogRef"
+              ]
+            },
+            {
+              "required": [
+                "rightsRef"
+              ]
+            }
+          ]
+        }
       }
     },
     {
-      "if": {"properties": {"geographyMode": {"const": "administrative"}}, "required": ["geographyMode"]},
-      "then": {"required": ["geoTagRef"], "properties": {"geoTagRef": {"pattern": "^Topic/地理/行政区/.+"}}}
+      "if": {
+        "properties": {
+          "geographyMode": {
+            "const": "administrative"
+          }
+        },
+        "required": [
+          "geographyMode"
+        ]
+      },
+      "then": {
+        "required": [
+          "geoTagRef"
+        ],
+        "properties": {
+          "geoTagRef": {
+            "pattern": "^Topic/地理/行政区/.+"
+          }
+        }
+      }
     },
     {
-      "if": {"properties": {"geographyMode": {"const": "none"}}, "required": ["geographyMode"]},
-      "then": {"not": {"anyOf": [{"required": ["geoTagRef"]}, {"required": ["geoTagRefs"]}]}}
+      "if": {
+        "properties": {
+          "geographyMode": {
+            "const": "none"
+          }
+        },
+        "required": [
+          "geographyMode"
+        ]
+      },
+      "then": {
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "geoTagRef"
+              ]
+            },
+            {
+              "required": [
+                "geoTagRefs"
+              ]
+            }
+          ]
+        }
+      }
     }
-  ]
+  ],
+  "$id": "https://quwoquan.local/schema/publish/entity.schema.json"
 }

@@ -63,8 +63,8 @@ class ContentSurfaceViewMapper {
     final videoCoverAccessMode = mediaThumbnail != null
         ? thumbnailBinding.accessMode
         : coverBinding.accessMode;
-    final coverReference = dto.isVideoLike ? mediaVideoCover : mediaCover;
-    final coverAccessMode = dto.isVideoLike
+    final coverReference = dto.hasVideo ? mediaVideoCover : mediaCover;
+    final coverAccessMode = dto.hasVideo
         ? videoCoverAccessMode
         : coverBinding.accessMode;
     final cover = coverReference == null
@@ -117,9 +117,7 @@ class ContentSurfaceViewMapper {
 
     return ContentSurfaceView(
       postId: dto.id,
-      kind: _kindFor(dto),
       contentType: dto.type,
-      contentIdentity: dto.identity,
       author: ContentAuthorRef(
         id: dto.personaId,
         displayName: dto.displayName,
@@ -177,20 +175,6 @@ class ContentSurfaceViewMapper {
         fallbackArticleId: fallbackArticleId,
       ),
     );
-  }
-
-  /// 媒体形态判别：仅用 `ContentPostViewData` 的契约派生 getter（无 `is/as`）。
-  static ContentSurfaceKind _kindFor(ContentPostViewData dto) {
-    if (dto.isVideoLike) {
-      return ContentSurfaceKind.video;
-    }
-    if (dto.isArticleLike) {
-      return ContentSurfaceKind.article;
-    }
-    if (dto.hasImages) {
-      return ContentSurfaceKind.image;
-    }
-    return ContentSurfaceKind.micro;
   }
 
   static List<String> _tagsFrom(Map<String, dynamic>? wire) {

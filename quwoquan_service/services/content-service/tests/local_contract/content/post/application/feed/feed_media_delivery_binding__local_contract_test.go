@@ -110,7 +110,6 @@ func TestListFeedCarriesPerMediaDeliveryBindingAndAuthorAvatarAsset(t *testing.T
 		AuthorAvatarAssetID:    "avatar_travel_blogger",
 		AuthorAvatarAccessMode: "signed_grant",
 		ContentType:            postports.ContentType("video"),
-		ContentIdentity:        postports.ContentIdentity("work"),
 		VideoURL:               "media/objects/sha256/aa/bb/clip.mp4",
 		MediaURLs:              []string{"media/objects/sha256/aa/bb/clip.mp4"},
 		DurationMS:             12_000,
@@ -139,7 +138,7 @@ func TestListFeedCarriesPerMediaDeliveryBindingAndAuthorAvatarAsset(t *testing.T
 		testsupport.RankedRecommendationOptions(engine, readyActiveSupplyOption())...,
 	).ListFeed(ctx, ListFeedRequest{
 		UserID: "user_delivery_binding", SessionID: "session_delivery_binding",
-		Identity: "work", Type: "video", Limit: 10,
+		Type: "video", Limit: 10,
 	})
 	if err != nil {
 		t.Fatalf("ListFeed delivery binding: %v", err)

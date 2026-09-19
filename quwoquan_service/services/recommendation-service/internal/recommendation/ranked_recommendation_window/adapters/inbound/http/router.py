@@ -18,7 +18,6 @@ from generated.recommendation.ranked_recommendation_window.models.request_respon
     ReleaseQueryReadinessProof,
     CreateRankedRecommendationWindowCommand,
     GetRankedRecommendationPageQuery,
-    RecommendationObjectCard,
     RankedRecommendationItem,
     RankedRecommendationPage,
 )
@@ -85,26 +84,14 @@ def _wire_page(page: DomainPage) -> RankedRecommendationPage:
         items=[
             RankedRecommendationItem(
                 ordinal=item.ordinal,
-                contentId=item.content_id,
+                envelope=item.envelope,
                 score=item.score,
                 featureSnapshotDigest=item.feature_snapshot_digest,
                 itemFeatureSnapshot=dict(item.item_feature_snapshot),
             )
             for item in page.items
         ],
-        objectCards=[
-            RecommendationObjectCard(
-                objectKind=card.object_kind,
-                objectId=card.object_id,
-                title=card.title,
-                subtitle=card.subtitle,
-                coverUrl=card.cover_url,
-                tagRefs=list(card.tag_refs),
-                reasonKey=card.reason_key,
-                recallPath=card.recall_path,
-            )
-            for card in page.object_cards
-        ],
+        clientPresentationContract=page.client_presentation_contract,
         nextOrdinal=page.next_ordinal,
         expiresAt=datetime.fromisoformat(page.expires_at),
     )
@@ -151,6 +138,7 @@ def build_router(
                 scenario=command.scenario,
                 limit=command.limit,
                 content_fence=command.contentFence,
+                client_presentation_contract=command.clientPresentationContract,
             )
             outcome = "ok"
             return _wire_page(page)
@@ -192,6 +180,7 @@ def build_router(
             page = facade_provider(request).read_page(
                 subject_id=query.subjectId,
                 content_fence=query.contentFence,
+                client_presentation_contract=query.clientPresentationContract,
                 window_id=query.windowId,
                 from_ordinal=query.fromOrdinal if query.fromOrdinal is not None else 0,
                 limit=query.limit if query.limit is not None else 20,

@@ -137,7 +137,6 @@ circleFeedPostWireExamples() => const <Map<String, Object?>>[
   <String, Object?>{
     'postId': 'fixture_photo_001',
     'contentType': 'image',
-    'contentIdentity': 'work',
     'authorId': 'fixture_user_photo',
     'authorDisplayName': '契约摄影师',
     'authorAvatarUrl':

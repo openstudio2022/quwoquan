@@ -8,6 +8,14 @@ description: 'Homepage 对象页端侧 UI 配置。
   适用「想去」意图的主页类型，消除页面内硬编码。
 
   '
+# ContentUiSurface 的布局策略（DEC-003）。实体主页详情是对象页壳层，不是 Post 网格，
+# 因此不参与列数函数，也不消费首页的 presentationRecipe。
+surface_layout_policies:
+- surface: homepage_detail
+  layout_kind: object_shell
+  compact_columns: 1
+  chrome_family: homepage_object_shell
+  recipe_driven_chrome: false
 homepage_wishlist_types:
 - hotel
 - restaurant

@@ -432,8 +432,6 @@ def _local_readiness(*, level: str, parent: str, commit: str, run_dir: Path, arg
     updates_path = run_dir / f"push-updates-{level}.txt"
     updates_path.write_text(f"{local_ref} {commit} {DEV_REF} {parent}\n", encoding="utf-8")
     command = [sys.executable, "-B", str(LOCAL_READINESS), "run", "--level", level, "--push-updates", str(updates_path)]
-    if args.owner_identity:
-        command += ["--owner-identity", args.owner_identity]
     if args.candidate_evidence:
         command += ["--candidate-evidence", args.candidate_evidence]
     if args.review_consolidation:
@@ -985,7 +983,7 @@ def _offline_fact_refs(*, store: Path, fact: Mapping[str, Any], candidate: Mappi
 
 
 def _existing_candidate(*, exact: str, identity: Mapping[str, str], impact_plan_digest: str,
-                        owner_identity: str = "", store: Path | None = None) -> tuple[dict[str, str], dict[str, Any]]:
+                        store: Path | None = None) -> tuple[dict[str, str], dict[str, Any]]:
     from quwoquan_ops.ci.scoped_candidate.core import _load_exact_ref, exact_digest
 
     try:
@@ -996,23 +994,21 @@ def _existing_candidate(*, exact: str, identity: Mapping[str, str], impact_plan_
         if (candidate.get("schema") != _CANDIDATE_SCHEMA
                 or candidate.get("candidateId") != exact_digest({k: v for k, v in candidate.items() if k != "candidateId"})
                 or any(candidate.get(key) != identity[field] for key, field in (("commit", "commit"), ("tree", "tree"), ("expectedParent", "parent")))
-                or candidate.get("impactPlanDigest") != impact_plan_digest
-                or (owner_identity and candidate.get("ownerIdentityRef") != owner_identity)):
-            raise ValueError("existing candidate commit/tree/parent/ImpactPlan/owner drifted")
+                or candidate.get("impactPlanDigest") != impact_plan_digest):
+            raise ValueError("existing candidate commit/tree/parent/ImpactPlan drifted")
         claim, _ = _load_exact_ref(root, {"ref": candidate["claimRef"], "digest": candidate["claimDigest"]}, "claim")
-        if (claim.get("paths") != candidate.get("paths") or claim.get("expectedParent") != candidate["expectedParent"]
-                or claim.get("ownerIdentityRef") != candidate.get("ownerIdentityRef")):
-            raise ValueError("existing candidate claim scope or owner drifted")
+        if (claim.get("paths") != candidate.get("paths") or claim.get("expectedParent") != candidate["expectedParent"]):
+            raise ValueError("existing candidate claim scope drifted")
         return candidate_ref, candidate
     except (KeyError, TypeError, ValueError) as exc:
         raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", str(exc)) from exc
 
 
 def _candidate_matches_caller(*, store: Path, path: Path, raw: bytes, identity: Mapping[str, str],
-                              impact_plan_digest: str, owner_identity: str) -> bool:
+                              impact_plan_digest: str) -> bool:
     try:
         _existing_candidate(exact=f"{path.relative_to(store).as_posix()}={_sha256_hex(raw)}", identity=identity,
-                            impact_plan_digest=impact_plan_digest, owner_identity=owner_identity, store=store)
+                            impact_plan_digest=impact_plan_digest, store=store)
         return True
     except (IntegrationRunError, ScopedCandidateError):
         return False
@@ -1030,7 +1026,7 @@ def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str
                              profile: str, beta: bool = False, signature_verifier: Any = None,
                              expected_signer_identity: str | None = None,
                              release_inputs: Mapping[str, Any] | None = None,
-                             owner_identity: str = "") -> dict[str, Any] | None:
+                             ) -> dict[str, Any] | None:
     """寻找同源码及 exact release/rollback/handoff 输入、持有有效 passed Alpha 的 candidate。
 
     candidateId 含 claim 与创建时间，因此按 exact 身份字段匹配。Beta opt-in 只消费 passed；未 opt-in
@@ -1053,7 +1049,7 @@ def _find_reusable_candidate(*, store: Path, commit: str, tree: str, parent: str
         if not isinstance(body, Mapping) or any(body.get(key) != value for key, value in expected.items()):
             continue
         if not _candidate_matches_caller(store=store, path=path, raw=raw, identity={"commit": commit, "tree": tree, "parent": parent},
-                                         impact_plan_digest=impact_plan_digest, owner_identity=owner_identity):
+                                         impact_plan_digest=impact_plan_digest):
             continue
         candidate_id = str(body.get("candidateId") or "")
         alpha = _reusable_acceptance(
@@ -1296,7 +1292,6 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--validate-bundle-only", action="store_true",
                         help="integrate：本地 FF 前校验 exact bundle/candidate/远端 parent，仅输出 bundle_validated；不导入、不 admit/publish")
     parser.add_argument("--remote", default="origin")
-    parser.add_argument("--owner-identity", default="", help="PRE owner identity manifest ref（make feature-context 输出）")
     parser.add_argument("--candidate-evidence", default="")
     parser.add_argument("--review-consolidation", default="")
     parser.add_argument("--required-evidence", action="append", default=[])
@@ -1449,12 +1444,12 @@ def _select_candidate(*, args: argparse.Namespace, identity: Mapping[str, str], 
             store=_store(), commit=identity["commit"], tree=identity["tree"], parent=identity["parent"],
             impact_plan_digest=impact_digest, profile=args.profile, beta=args.beta,
             signature_verifier=ed25519_environment_verifier(keyring, [args.signer_identity]),
-            expected_signer_identity=args.signer_identity, owner_identity=args.owner_identity,
+            expected_signer_identity=args.signer_identity,
             release_inputs=_acceptance_release_inputs(args),
         ))
     if args.candidate_ref:
         ref, candidate = _existing_candidate(exact=args.candidate_ref, identity=identity,
-            impact_plan_digest=impact_digest, owner_identity=args.owner_identity)
+            impact_plan_digest=impact_digest)
         if reusable is not None and reusable["candidateRef"] != ref:
             reusable = None
         summary["reused"]["candidate"] = True
@@ -1465,7 +1460,7 @@ def _select_candidate(*, args: argparse.Namespace, identity: Mapping[str, str], 
     expires = (datetime.now(timezone.utc) + timedelta(hours=args.fact_ttl_hours)).isoformat().replace("+00:00", "Z")
     path = phases.run("build-head", lambda: build_head_candidate(
         repository=ROOT, policy_path=POLICY, commit=identity["commit"], expected_parent=identity["parent"],
-        owner_identity_ref=args.owner_identity or f"integration-run:{summary['runId']}", impact_plan_digest=impact_digest,
+        impact_plan_digest=impact_digest,
         writer_id=args.writer, expires_at=expires,
     ))
     ref = store_ref(repository=ROOT, policy_path=POLICY, path=path)

@@ -2,7 +2,7 @@
 
 > 所属领域：[`runtime`](../spec.md)
 >
-> 设计归属：[L1 DEC-001](../design.md#dec-001)
+> 设计引用：[L1 DEC-001](../design.md#dec-001)
 
 ## 1. 能力目标
 

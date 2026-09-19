@@ -177,7 +177,7 @@ LocalPostPublicationIntent _intent({
     command: SubmitContentPostPublicationCommand(
       publishIntentId: 'intent-$draftId',
       localDraftId: draftId,
-      contentType: ContentType.micro,
+      contentType: ContentType.article,
       body: '发布任务正文 $draftId',
     ),
     authorPersonaId: 'persona-publication',

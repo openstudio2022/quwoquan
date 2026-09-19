@@ -15,14 +15,53 @@
         "additionalProperties": false,
         "allOf": [
           {
-            "if": { "required": ["request_entity"] },
+            "if": {
+              "properties": {
+                "role": {
+                  "const": "use"
+                }
+              },
+              "required": [
+                "role"
+              ]
+            },
             "then": {
-              "required": ["request_body_kind"],
-              "properties": { "request_body_kind": { "const": "object" } }
+              "required": [
+                "scenes"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "conformance"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "adapterContracts"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "observability"
+                    ]
+                  }
+                ]
+              }
+            },
+            "else": {
+              "required": [
+                "conformance",
+                "adapterContracts"
+              ]
             }
           }
         ],
-        "required": ["capability", "port", "operations"],
+        "required": [
+          "capability",
+          "port",
+          "operations"
+        ],
         "properties": {
           "role": {
             "enum": [
@@ -129,51 +168,7 @@
               "pattern": "^[a-z][a-z0-9_]*$"
             }
           }
-        },
-        "allOf": [
-          {
-            "if": {
-              "properties": {
-                "role": {
-                  "const": "use"
-                }
-              },
-              "required": [
-                "role"
-              ]
-            },
-            "then": {
-              "required": [
-                "scenes"
-              ],
-              "not": {
-                "anyOf": [
-                  {
-                    "required": [
-                      "conformance"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "adapterContracts"
-                    ]
-                  },
-                  {
-                    "required": [
-                      "observability"
-                    ]
-                  }
-                ]
-              }
-            },
-            "else": {
-              "required": [
-                "conformance",
-                "adapterContracts"
-              ]
-            }
-          }
-        ]
+        }
       }
     },
     "readiness_cases": {
@@ -215,116 +210,262 @@
           "operation_type": {
             "const": "query"
           },
-          "request_entity": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
-          "request_body_kind": { "enum": ["object", "none"] },
+          "request_entity": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          },
+          "request_body_kind": {
+            "enum": [
+              "object",
+              "none"
+            ]
+          },
           "application": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["kind", "facet", "method", "reader", "slice"],
+            "required": [
+              "kind",
+              "facet",
+              "method",
+              "reader",
+              "slice"
+            ],
             "properties": {
-              "kind": { "const": "query" },
-              "facet": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
-              "method": { "type": "string", "pattern": "^[a-z][A-Za-z0-9]*$" },
-              "reader": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*Reader$" },
-              "slice": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" }
+              "kind": {
+                "const": "query"
+              },
+              "facet": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Za-z0-9]*$"
+              },
+              "method": {
+                "type": "string",
+                "pattern": "^[a-z][A-Za-z0-9]*$"
+              },
+              "reader": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Za-z0-9]*Reader$"
+              },
+              "slice": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Za-z0-9]*$"
+              }
             }
           },
           "authorization": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["principal", "ownership_policy"],
+            "required": [
+              "principal",
+              "ownership_policy"
+            ],
             "properties": {
               "principal": {
-                "enum": ["public", "account", "persona", "device", "persona_or_device", "service", "admin", "operator"]
+                "enum": [
+                  "public",
+                  "account",
+                  "persona",
+                  "device",
+                  "persona_or_device",
+                  "service",
+                  "admin",
+                  "operator"
+                ]
               },
               "scopes": {
                 "type": "array",
                 "uniqueItems": true,
-                "items": { "type": "string", "minLength": 1 }
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
               "permissions": {
                 "type": "array",
                 "uniqueItems": true,
-                "items": { "type": "string", "minLength": 1 }
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
               },
-              "ownership_policy": { "type": "string", "minLength": 1 }
+              "ownership_policy": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
           "commercial": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["status"],
+            "required": [
+              "status"
+            ],
             "properties": {
-              "status": { "enum": ["ready", "blocked"] },
-              "block_reason": { "type": "string", "minLength": 1 },
-              "gap_id": { "type": "string", "minLength": 1 },
-              "target_story": { "type": "string", "minLength": 1 }
+              "status": {
+                "enum": [
+                  "ready",
+                  "blocked"
+                ]
+              },
+              "block_reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "gap_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "target_story": {
+                "type": "string",
+                "minLength": 1
+              }
             },
             "allOf": [
               {
                 "if": {
-                  "properties": { "status": { "const": "blocked" } },
-                  "required": ["status"]
+                  "properties": {
+                    "status": {
+                      "const": "blocked"
+                    }
+                  },
+                  "required": [
+                    "status"
+                  ]
                 },
-                "then": { "required": ["block_reason", "gap_id", "target_story"] }
+                "then": {
+                  "required": [
+                    "block_reason",
+                    "gap_id",
+                    "target_story"
+                  ]
+                }
               }
             ]
           },
           "reliability": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["timeout_ms", "cancellation", "retry_mode", "max_attempts", "idempotency"],
+            "required": [
+              "timeout_ms",
+              "cancellation",
+              "retry_mode",
+              "max_attempts",
+              "idempotency"
+            ],
             "properties": {
-              "timeout_ms": { "type": "integer", "minimum": 1 },
-              "cancellation": { "type": "string", "minLength": 1 },
-              "retry_mode": { "type": "string", "minLength": 1 },
-              "max_attempts": { "type": "integer", "minimum": 1 },
-              "idempotency": { "type": "string", "minLength": 1 }
+              "timeout_ms": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "cancellation": {
+                "type": "string",
+                "minLength": 1
+              },
+              "retry_mode": {
+                "type": "string",
+                "minLength": 1
+              },
+              "max_attempts": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "idempotency": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
           "error_codes": {
             "type": "array",
             "minItems": 1,
             "uniqueItems": true,
-            "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*\\.[A-Z][A-Z0-9_]*\\.[a-z][a-z0-9_]*$" }
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z][A-Z0-9_]*\\.[A-Z][A-Z0-9_]*\\.[a-z][a-z0-9_]*$"
+            }
           },
           "privacy": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["request_classification", "response_classification", "log_policy"],
+            "required": [
+              "request_classification",
+              "response_classification",
+              "log_policy"
+            ],
             "properties": {
-              "request_classification": { "type": "string", "minLength": 1 },
-              "response_classification": { "type": "string", "minLength": 1 },
-              "log_policy": { "type": "string", "minLength": 1 }
+              "request_classification": {
+                "type": "string",
+                "minLength": 1
+              },
+              "response_classification": {
+                "type": "string",
+                "minLength": 1
+              },
+              "log_policy": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           },
           "telemetry": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["metric", "trace", "attributes"],
+            "required": [
+              "metric",
+              "trace",
+              "attributes"
+            ],
             "properties": {
-              "metric": { "type": "string", "minLength": 1 },
-              "trace": { "const": true },
+              "metric": {
+                "type": "string",
+                "minLength": 1
+              },
+              "trace": {
+                "const": true
+              },
               "attributes": {
                 "type": "array",
                 "minItems": 1,
                 "uniqueItems": true,
-                "items": { "type": "string", "minLength": 1 }
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
               }
             }
           },
           "slo": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["latency_p95_ms", "availability_percent"],
+            "required": [
+              "latency_p95_ms",
+              "availability_percent"
+            ],
             "properties": {
-              "latency_p95_ms": { "type": "integer", "minimum": 1 },
-              "availability_percent": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 }
+              "latency_p95_ms": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "availability_percent": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 100
+              }
             }
           },
-          "response_entity": { "type": "string", "pattern": "^[A-Z][A-Za-z0-9]*$" },
-          "response_body_kind": { "enum": ["object", "page"] },
-          "consistency": { "$ref": "#/$defs/queryConsistency" }
+          "response_entity": {
+            "type": "string",
+            "pattern": "^[A-Z][A-Za-z0-9]*$"
+          },
+          "response_body_kind": {
+            "enum": [
+              "object",
+              "page"
+            ]
+          },
+          "consistency": {
+            "$ref": "#/$defs/queryConsistency"
+          }
         }
       }
     },
@@ -373,31 +514,64 @@
           },
           {
             "if": {
-              "required": ["application", "authorization"],
+              "required": [
+                "application",
+                "authorization"
+              ],
               "properties": {
                 "application": {
-                  "required": ["kind"],
-                  "properties": {"kind": {"const": "query"}}
+                  "required": [
+                    "kind"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "query"
+                    }
+                  }
                 },
                 "authorization": {
-                  "required": ["principal"],
-                  "properties": {"principal": {"const": "service"}}
+                  "required": [
+                    "principal"
+                  ],
+                  "properties": {
+                    "principal": {
+                      "const": "service"
+                    }
+                  }
                 }
               }
             },
             "then": {
-              "required": ["security"],
+              "required": [
+                "security"
+              ],
               "properties": {
                 "authorization": {
-                  "required": ["scopes"],
-                  "properties": {"scopes": {"minItems": 1}}
+                  "required": [
+                    "scopes"
+                  ],
+                  "properties": {
+                    "scopes": {
+                      "minItems": 1
+                    }
+                  }
                 },
                 "security": {
-                  "required": ["auth_mode", "principal", "visibility"],
+                  "required": [
+                    "auth_mode",
+                    "principal",
+                    "visibility"
+                  ],
                   "properties": {
-                    "auth_mode": {"const": "required"},
-                    "principal": {"const": "service"},
-                    "visibility": {"const": "internal"}
+                    "auth_mode": {
+                      "const": "required"
+                    },
+                    "principal": {
+                      "const": "service"
+                    },
+                    "visibility": {
+                      "const": "internal"
+                    }
                   }
                 }
               }
@@ -405,28 +579,60 @@
           },
           {
             "if": {
-              "required": ["application", "authorization"],
+              "required": [
+                "application",
+                "authorization"
+              ],
               "properties": {
                 "application": {
-                  "required": ["kind"],
-                  "properties": {"kind": {"const": "query"}}
+                  "required": [
+                    "kind"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "query"
+                    }
+                  }
                 },
                 "authorization": {
-                  "required": ["principal"],
-                  "properties": {"principal": {"enum": ["admin", "operator"]}}
+                  "required": [
+                    "principal"
+                  ],
+                  "properties": {
+                    "principal": {
+                      "enum": [
+                        "admin",
+                        "operator"
+                      ]
+                    }
+                  }
                 }
               }
             },
             "then": {
-              "required": ["security"],
+              "required": [
+                "security"
+              ],
               "properties": {
                 "authorization": {
-                  "required": ["scopes"],
-                  "properties": {"scopes": {"minItems": 1}}
+                  "required": [
+                    "scopes"
+                  ],
+                  "properties": {
+                    "scopes": {
+                      "minItems": 1
+                    }
+                  }
                 },
                 "security": {
-                  "required": ["auth_mode"],
-                  "properties": {"auth_mode": {"const": "required"}}
+                  "required": [
+                    "auth_mode"
+                  ],
+                  "properties": {
+                    "auth_mode": {
+                      "const": "required"
+                    }
+                  }
                 }
               }
             }
@@ -485,17 +691,27 @@
           },
           {
             "if": {
-              "required": ["application"],
+              "required": [
+                "application"
+              ],
               "properties": {
                 "application": {
-                  "required": ["kind"],
-                  "properties": {"kind": {"const": "session"}}
+                  "required": [
+                    "kind"
+                  ],
+                  "properties": {
+                    "kind": {
+                      "const": "session"
+                    }
+                  }
                 }
               }
             },
             "then": {
               "properties": {
-                "consistency": {"$ref": "#/$defs/sessionConsistency"}
+                "consistency": {
+                  "$ref": "#/$defs/sessionConsistency"
+                }
               }
             }
           }
@@ -555,13 +771,24 @@
             "minLength": 1
           },
           "request_body_kind": {
-            "enum": ["object", "none"]
+            "enum": [
+              "object",
+              "none"
+            ]
           },
           "success_status": {
-            "enum": [200, 201, 202, 204]
+            "enum": [
+              200,
+              201,
+              202,
+              204
+            ]
           },
           "transport": {
-            "enum": ["json", "sse"]
+            "enum": [
+              "json",
+              "sse"
+            ]
           },
           "transport_role": {
             "enum": [
@@ -621,19 +848,27 @@
             "properties": {
               "path": {
                 "type": "array",
-                "items": { "$ref": "#/$defs/requestBinding" }
+                "items": {
+                  "allOf": [{"$ref": "#/$defs/requestBinding"}, {"not": {"required": ["encoding"]}}]
+                }
               },
               "query": {
                 "type": "array",
-                "items": { "$ref": "#/$defs/requestBinding" }
+                "items": {
+                  "$ref": "#/$defs/requestBinding"
+                }
               },
               "header": {
                 "type": "array",
-                "items": { "$ref": "#/$defs/requestBinding" }
+                "items": {
+                  "allOf": [{"$ref": "#/$defs/requestBinding"}, {"not": {"required": ["encoding"]}}]
+                }
               },
               "injected": {
                 "type": "array",
-                "items": { "$ref": "#/$defs/requestBinding" }
+                "items": {
+                  "allOf": [{"$ref": "#/$defs/requestBinding"}, {"not": {"required": ["encoding"]}}]
+                }
               }
             }
           },
@@ -1230,7 +1465,11 @@
             ],
             "properties": {
               "kind": {
-                "enum": ["command", "query", "session"]
+                "enum": [
+                  "command",
+                  "query",
+                  "session"
+                ]
               },
               "facet": {
                 "type": "string",
@@ -1305,97 +1544,215 @@
         },
         "allOf": [
           {
-            "if": { "properties": { "kind": { "const": "middleware" } } },
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "middleware"
+                }
+              }
+            },
             "then": {
               "properties": {
-                "phase": { "const": "post_authorization_pre_owner_proxy" },
-                "application": {
-                  "properties": { "kind": { "const": "session" } }
+                "phase": {
+                  "const": "post_authorization_pre_owner_proxy"
                 },
-                "slo": { "$ref": "#/$defs/runtimeEntrypointSynchronousSlo" }
+                "application": {
+                  "properties": {
+                    "kind": {
+                      "const": "session"
+                    }
+                  }
+                },
+                "slo": {
+                  "$ref": "#/$defs/runtimeEntrypointSynchronousSlo"
+                }
               },
               "not": {
                 "anyOf": [
-                  { "required": ["source_objects"] },
-                  { "required": ["idempotency"] }
+                  {
+                    "required": [
+                      "source_objects"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "idempotency"
+                    ]
+                  }
                 ]
               }
             }
           },
           {
-            "if": { "properties": { "kind": { "const": "projector" } } },
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "projector"
+                }
+              }
+            },
             "then": {
               "properties": {
-                "phase": { "const": "event_projection" },
-                "application": {
-                  "properties": { "kind": { "const": "command" } }
+                "phase": {
+                  "const": "event_projection"
                 },
-                "slo": { "$ref": "#/$defs/runtimeEntrypointEventStreamSlo" }
+                "application": {
+                  "properties": {
+                    "kind": {
+                      "const": "command"
+                    }
+                  }
+                },
+                "slo": {
+                  "$ref": "#/$defs/runtimeEntrypointEventStreamSlo"
+                }
               },
               "not": {
                 "anyOf": [
-                  { "required": ["source_objects"] },
-                  { "required": ["idempotency"] }
+                  {
+                    "required": [
+                      "source_objects"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "idempotency"
+                    ]
+                  }
                 ]
               }
             }
           },
           {
-            "if": { "properties": { "kind": { "const": "event_handler" } } },
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "event_handler"
+                }
+              }
+            },
             "then": {
               "properties": {
-                "phase": { "const": "event_command" },
-                "application": {
-                  "properties": { "kind": { "const": "command" } }
+                "phase": {
+                  "const": "event_command"
                 },
-                "slo": { "$ref": "#/$defs/runtimeEntrypointEventStreamSlo" }
+                "application": {
+                  "properties": {
+                    "kind": {
+                      "const": "command"
+                    }
+                  }
+                },
+                "slo": {
+                  "$ref": "#/$defs/runtimeEntrypointEventStreamSlo"
+                }
               },
               "not": {
                 "anyOf": [
-                  { "required": ["source_objects"] },
-                  { "required": ["idempotency"] }
+                  {
+                    "required": [
+                      "source_objects"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "idempotency"
+                    ]
+                  }
                 ]
               }
             }
           },
           {
-            "if": { "properties": { "kind": { "const": "subscription" } } },
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "subscription"
+                }
+              }
+            },
             "then": {
               "properties": {
-                "phase": { "const": "event_ingest" },
-                "application": {
-                  "properties": { "kind": { "const": "command" } }
+                "phase": {
+                  "const": "event_ingest"
                 },
-                "slo": { "$ref": "#/$defs/runtimeEntrypointEventStreamSlo" }
+                "application": {
+                  "properties": {
+                    "kind": {
+                      "const": "command"
+                    }
+                  }
+                },
+                "slo": {
+                  "$ref": "#/$defs/runtimeEntrypointEventStreamSlo"
+                }
               },
               "not": {
                 "anyOf": [
-                  { "required": ["source_objects"] },
-                  { "required": ["idempotency"] }
+                  {
+                    "required": [
+                      "source_objects"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "idempotency"
+                    ]
+                  }
                 ]
               }
             }
           },
           {
-            "if": { "properties": { "kind": { "const": "internal_port" } } },
-            "then": {
-              "required": ["source_objects", "idempotency"],
+            "if": {
               "properties": {
-                "phase": { "const": "transactional_append" },
-                "application": {
-                  "properties": { "kind": { "const": "command" } }
+                "kind": {
+                  "const": "internal_port"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "source_objects",
+                "idempotency"
+              ],
+              "properties": {
+                "phase": {
+                  "const": "transactional_append"
                 },
-                "slo": { "$ref": "#/$defs/runtimeEntrypointSynchronousSlo" }
+                "application": {
+                  "properties": {
+                    "kind": {
+                      "const": "command"
+                    }
+                  }
+                },
+                "slo": {
+                  "$ref": "#/$defs/runtimeEntrypointSynchronousSlo"
+                }
               }
             }
           },
           {
-            "if": { "properties": { "kind": { "const": "external_port" } } },
-            "then": {
-              "required": ["source_objects", "idempotency"],
+            "if": {
               "properties": {
-                "phase": { "const": "outbound_invocation" },
-                "slo": { "$ref": "#/$defs/runtimeEntrypointOutboundSlo" }
+                "kind": {
+                  "const": "external_port"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "source_objects",
+                "idempotency"
+              ],
+              "properties": {
+                "phase": {
+                  "const": "outbound_invocation"
+                },
+                "slo": {
+                  "$ref": "#/$defs/runtimeEntrypointOutboundSlo"
+                }
               }
             }
           }
@@ -1486,17 +1843,59 @@
           }
         }
       }
+    },
+    "external_schema_imports": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_path",
+          "loader_ref",
+          "validator_ref"
+        ],
+        "properties": {
+          "schema_path": {
+            "type": "string",
+            "pattern": "^quwoquan_data/schema/.+\\.schema\\.json$"
+          },
+          "loader_ref": {
+            "type": "string",
+            "minLength": 1
+          },
+          "validator_ref": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
     }
   },
   "$defs": {
     "runtimeEntrypointSynchronousSlo": {
       "description": "同步在途 seam（middleware / internal_port）：调用方在栈上等待结果，可判定的维度只有单次调用耗时与失败比率。没有 HTTP 状态码，因此不使用 availability_percent。",
-      "required": ["latency_p95_ms", "failure_ratio_percent"],
+      "required": [
+        "latency_p95_ms",
+        "failure_ratio_percent"
+      ],
       "not": {
         "anyOf": [
-          { "required": ["freshness_p95_seconds"] },
-          { "required": ["backlog_max_events"] },
-          { "required": ["dead_letter_ratio_percent"] }
+          {
+            "required": [
+              "freshness_p95_seconds"
+            ]
+          },
+          {
+            "required": [
+              "backlog_max_events"
+            ]
+          },
+          {
+            "required": [
+              "dead_letter_ratio_percent"
+            ]
+          }
         ]
       }
     },
@@ -1509,8 +1908,16 @@
       ],
       "not": {
         "anyOf": [
-          { "required": ["latency_p95_ms"] },
-          { "required": ["dead_letter_ratio_percent"] }
+          {
+            "required": [
+              "latency_p95_ms"
+            ]
+          },
+          {
+            "required": [
+              "dead_letter_ratio_percent"
+            ]
+          }
         ]
       }
     },
@@ -1523,18 +1930,33 @@
       ],
       "not": {
         "anyOf": [
-          { "required": ["freshness_p95_seconds"] },
-          { "required": ["backlog_max_events"] }
+          {
+            "required": [
+              "freshness_p95_seconds"
+            ]
+          },
+          {
+            "required": [
+              "backlog_max_events"
+            ]
+          }
         ]
       }
     },
     "readinessTarget": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind", "id"],
+      "required": [
+        "kind",
+        "id"
+      ],
       "properties": {
         "kind": {
-          "enum": ["operation", "page", "object"]
+          "enum": [
+            "operation",
+            "page",
+            "object"
+          ]
         },
         "id": {
           "type": "string",
@@ -1545,10 +1967,21 @@
     "readinessExecution": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["env", "platform", "device", "provider", "digest_binding"],
+      "required": [
+        "env",
+        "platform",
+        "device",
+        "provider",
+        "digest_binding"
+      ],
       "properties": {
         "env": {
-          "enum": ["alpha", "beta", "gamma", "prod"]
+          "enum": [
+            "alpha",
+            "beta",
+            "gamma",
+            "prod"
+          ]
         },
         "platform": {
           "$ref": "#/$defs/readinessIdentity"
@@ -1560,20 +1993,30 @@
           "$ref": "#/$defs/readinessIdentity"
         },
         "digest_binding": {
-          "enum": ["candidate", "release", "candidate_or_release"]
+          "enum": [
+            "candidate",
+            "release",
+            "candidate_or_release"
+          ]
         }
       },
       "allOf": [
         {
           "if": {
             "properties": {
-              "env": { "const": "prod" }
+              "env": {
+                "const": "prod"
+              }
             },
-            "required": ["env"]
+            "required": [
+              "env"
+            ]
           },
           "then": {
             "properties": {
-              "digest_binding": { "const": "release" }
+              "digest_binding": {
+                "const": "release"
+              }
             }
           }
         }
@@ -1586,7 +2029,15 @@
     "readinessCase": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["case_id", "spec_ref", "producer", "layer", "target", "runner_source_path", "executions"],
+      "required": [
+        "case_id",
+        "spec_ref",
+        "producer",
+        "layer",
+        "target",
+        "runner_source_path",
+        "executions"
+      ],
       "properties": {
         "case_id": {
           "type": "string",
@@ -1597,7 +2048,11 @@
           "pattern": "^specs/feature-tree/(?:[A-Za-z0-9_.-]+/)*spec\\.md#(?:uat|dom|sit|gwt)-[0-9]{3,}$"
         },
         "producer": {
-          "enum": ["service", "app", "ops"]
+          "enum": [
+            "service",
+            "app",
+            "ops"
+          ]
         },
         "layer": {
           "enum": [
@@ -1628,37 +2083,82 @@
       "oneOf": [
         {
           "properties": {
-            "producer": { "const": "service" },
-            "layer": { "enum": ["local_contract", "api_integration"] },
+            "producer": {
+              "const": "service"
+            },
+            "layer": {
+              "enum": [
+                "local_contract",
+                "api_integration"
+              ]
+            },
             "target": {
-              "properties": { "kind": { "enum": ["operation", "object"] } }
+              "properties": {
+                "kind": {
+                  "enum": [
+                    "operation",
+                    "object"
+                  ]
+                }
+              }
             }
           }
         },
         {
           "properties": {
-            "producer": { "const": "app" },
-            "layer": { "enum": ["local_contract", "api_integration"] },
+            "producer": {
+              "const": "app"
+            },
+            "layer": {
+              "enum": [
+                "local_contract",
+                "api_integration"
+              ]
+            },
             "target": {
-              "properties": { "kind": { "const": "operation" } }
+              "properties": {
+                "kind": {
+                  "const": "operation"
+                }
+              }
             }
           }
         },
         {
           "properties": {
-            "producer": { "const": "app" },
-            "layer": { "const": "user_acceptance" },
+            "producer": {
+              "const": "app"
+            },
+            "layer": {
+              "const": "user_acceptance"
+            },
             "target": {
-              "properties": { "kind": { "const": "page" } }
+              "properties": {
+                "kind": {
+                  "const": "page"
+                }
+              }
             }
           }
         },
         {
           "properties": {
-            "producer": { "const": "ops" },
-            "layer": { "enum": ["environment_acceptance", "rollback", "replay"] },
+            "producer": {
+              "const": "ops"
+            },
+            "layer": {
+              "enum": [
+                "environment_acceptance",
+                "rollback",
+                "replay"
+              ]
+            },
             "target": {
-              "properties": { "kind": { "const": "object" } }
+              "properties": {
+                "kind": {
+                  "const": "object"
+                }
+              }
             }
           }
         }
@@ -1667,11 +2167,25 @@
     "requestBinding": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "field"],
+      "dependentRequired": {"encoding": ["max_bytes"], "max_bytes": ["encoding"]},
+      "required": [
+        "name",
+        "field"
+      ],
       "properties": {
-        "name": { "type": "string", "minLength": 1 },
-        "field": { "type": "string", "minLength": 1 },
-        "required": { "type": "boolean" }
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "field": {
+          "type": "string",
+          "minLength": 1
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "encoding": {"const": "json"},
+        "max_bytes": {"type": "integer", "minimum": 1}
       }
     },
     "operationConsistency": {
@@ -1757,11 +2271,31 @@
         {
           "not": {
             "anyOf": [
-              {"required": ["atomic_commit"]},
-              {"required": ["source"]},
-              {"required": ["freshness"]},
-              {"required": ["max_staleness_seconds"]},
-              {"required": ["stale_result"]}
+              {
+                "required": [
+                  "atomic_commit"
+                ]
+              },
+              {
+                "required": [
+                  "source"
+                ]
+              },
+              {
+                "required": [
+                  "freshness"
+                ]
+              },
+              {
+                "required": [
+                  "max_staleness_seconds"
+                ]
+              },
+              {
+                "required": [
+                  "stale_result"
+                ]
+              }
             ]
           }
         }

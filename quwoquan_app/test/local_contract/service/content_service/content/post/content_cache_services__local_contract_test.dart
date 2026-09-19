@@ -23,10 +23,12 @@ import 'package:quwoquan_app/runtime/platform/storage/cache/cache_telemetry_sink
 import 'package:quwoquan_app/service/content_service/content/post/adapters/content_cache_services.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/adapters/user_profile_cache_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_feed_object_card.dart';
 
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 import '../../../../../support/service/recommendation_service/recommendation/recommendation_feature_profile_view/intersection_fixtures.dart';
 import '../../../../../support/runtime/cache/content_cache_fixtures.dart';
+import '../../../../../support/service/content_service/content/feed_delivery_page/content_feed_object_card_test_builder.dart';
 
 CachedContentRepository _cachedContentRepository({
   required _CountingContentRepository delegate,
@@ -188,12 +190,10 @@ void main() {
       key: key,
       items: [contentCachePostFixture('post-card')],
       activationIdentity: identity.activationIdentity,
-      objectCards: const [
-        FeedObjectCard(
-          objectKind: 'homepage',
-          objectId: 'homepage-1',
+      objectCards: [
+        buildContentFeedObjectCard(
+          homepageId: 'homepage-1',
           title: 'card',
-          tagRefs: [],
           anchorIndex: 0,
         ),
       ],
@@ -284,13 +284,11 @@ void main() {
       fetchedAt: DateTime.now(),
     ).toMap();
     map['objectCards'] = [
-      const FeedObjectCard(
-        objectKind: 'homepage',
-        objectId: 'id',
+      buildContentFeedObjectCard(
+        homepageId: 'id',
         title: 'title',
-        tagRefs: [],
         anchorIndex: 1,
-      ).toWire(),
+      ).toSnapshotMap(),
     ];
     expect(ContentQuerySnapshot.fromMap(map), isNull);
     map['objectCards'] = [
@@ -880,12 +878,10 @@ void main() {
       final first = await repo.getPost(postId: 'fixture_video_001');
       final second = await repo.getPost(postId: 'fixture_video_001');
 
-      expect(first.post.type, 'video');
-      expect(first.post.identity, 'work');
+      expect(first.post.type, ContentType.video);
       expect(first.post.mediaVideoUrl, videoUrl);
       expect(first.post.mediaThumbnailUrl, thumbnailUrl);
       expect(first.post.durationMs, 45000);
-      expect(first.post.isVideoLike, isTrue);
       expect(second.post.mediaVideoUrl, videoUrl);
       expect(delegate.detailRequestCount, 1);
     });
@@ -1797,8 +1793,7 @@ ContentPostViewData _videoPostDto(
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: id,
-      contentType: 'video',
-      contentIdentity: 'work',
+      contentType: ContentType.video,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'user_1',
       authorDisplayName: '用户一',

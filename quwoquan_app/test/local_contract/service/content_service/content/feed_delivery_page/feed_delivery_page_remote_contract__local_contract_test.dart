@@ -46,7 +46,6 @@ void main() {
 
       final photoFeed = (await query.listDiscoveryFeedPage(
         category: 'photo',
-        identity: 'work',
         type: 'photo',
         limit: 20,
       )).items;
@@ -63,7 +62,6 @@ void main() {
 
       final videoFeed = (await query.listDiscoveryFeedPage(
         category: 'video',
-        identity: 'work',
         type: 'video',
         limit: 20,
       )).items;
@@ -72,7 +70,6 @@ void main() {
 
       final followingFeed = (await query.listDiscoveryFeedPage(
         category: 'following',
-        identity: 'moment',
         limit: 20,
       )).items;
       expect(followingFeed.length, greaterThanOrEqualTo(3));

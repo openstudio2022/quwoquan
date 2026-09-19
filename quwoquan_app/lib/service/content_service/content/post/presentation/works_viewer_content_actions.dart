@@ -17,7 +17,6 @@ abstract final class PostWorksViewerContentActions {
   static Future<void> showShareSheet(
     BuildContext context, {
     required ContentSurfaceView surfaceView,
-    required bool enableIdentityTemplate,
     required String visibility,
     required CirclePostPlacementCommands circlePostPlacementWriter,
     required CircleMembershipQueries circleMembershipQuery,
@@ -28,7 +27,6 @@ abstract final class PostWorksViewerContentActions {
       context,
       template: _shareTemplate(
         surfaceView: surfaceView,
-        enableIdentityTemplate: enableIdentityTemplate,
         visibility: visibility,
       ),
       circlePostPlacementWriter: circlePostPlacementWriter,
@@ -41,14 +39,12 @@ abstract final class PostWorksViewerContentActions {
   static Future<WorksViewerShareResult> copyLink(
     BuildContext context, {
     required ContentSurfaceView surfaceView,
-    required bool enableIdentityTemplate,
     required String visibility,
   }) async {
     final result = await const DefaultContentShareActionHandler().execute(
       context,
       _shareTemplate(
         surfaceView: surfaceView,
-        enableIdentityTemplate: enableIdentityTemplate,
         visibility: visibility,
       ),
       const ContentShareAction(id: 'copy_link', label: FoundationText.copyLink),
@@ -98,12 +94,10 @@ abstract final class PostWorksViewerContentActions {
 
   static ContentShareTemplate _shareTemplate({
     required ContentSurfaceView surfaceView,
-    required bool enableIdentityTemplate,
     required String visibility,
   }) {
     return ContentShareTemplateBuilder.build(
       surfaceView: surfaceView,
-      enableIdentityTemplate: enableIdentityTemplate,
       visibility: visibility,
     );
   }

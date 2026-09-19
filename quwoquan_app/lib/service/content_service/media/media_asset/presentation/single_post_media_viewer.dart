@@ -11,12 +11,11 @@ import 'package:quwoquan_app/runtime/di/content_surface_view_mapper.dart';
 /// 由「单帖详情」构造沉浸式浏览器路由参数。
 ///
 /// 直达 / 深链 / 通知统一走这里，避免各入口各自拼装 [MediaViewerExtra]
-/// 归因 [source] / [referralSource] / [feedRequestId]
+/// 归因 [referralSource] / [feedRequestId]
 /// 由调用方按入口语义传入，保持推荐归因链完整（R21）。
 MediaViewerExtra buildSinglePostMediaViewerExtra(
   WidgetRef ref, {
   required ContentPostDetailPayload detail,
-  required String source,
   required ReferralSource referralSource,
   String? feedRequestId,
   MediaViewerCommentContext commentContext = const MediaViewerCommentContext(),
@@ -33,7 +32,6 @@ MediaViewerExtra buildSinglePostMediaViewerExtra(
     ],
     dtoPosts: <ContentPostViewData>[dto],
     initialIndex: 0,
-    source: source,
     // fromDynamicMap 内部已做防御拷贝，这里不再重复复制。
     rawPostsById: <String, MediaViewerPostWireRow>{
       dto.id: MediaViewerPostWireRow.fromDynamicMap(raw),

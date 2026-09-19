@@ -36,7 +36,6 @@ type contentFixtureSeedSet struct {
 type contentFixturePost struct {
 	PostID       string   `json:"postId"`
 	ContentType  string   `json:"contentType"`
-	Identity     string   `json:"contentIdentity"`
 	AuthorID     string   `json:"authorId"`
 	DisplayName  string   `json:"authorDisplayName"`
 	AvatarURL    string   `json:"authorAvatarUrl"`
@@ -131,7 +130,7 @@ func buildContentContractSeed(seedRef string) (contentFixtureSeedSet, bool) {
 		mediaBase := "media/image/s/archived-image/post/" + id + "/v1"
 		createdAt := time.Date(2026, time.May, 1, offset, 0, 0, 0, time.UTC)
 		return contentFixturePost{
-			PostID: id, ContentType: contentType, Identity: "work",
+			PostID: id, ContentType: contentType,
 			AuthorID: authorID, DisplayName: displayName,
 			AvatarURL: "media/avatar/s/archived-avatar/user/" + authorID + "/v1/avatar.png",
 			Title:     title, Body: title + "固定 seed 正文", Summary: title,
@@ -157,7 +156,7 @@ func buildContentContractSeed(seedRef string) (contentFixtureSeedSet, bool) {
 			post("fixture_photo_002", "image", "fixture_user_photo", "契约摄影师", "城市傍晚的光影层次", 1),
 			post("fixture_video_001", "video", "fixture_user_travel", "契约旅行家", "杭州一日游契约视频", 2),
 			post("fixture_article_001", "article", "fixture_user_article", "契约撰稿人", "契约驱动的发现页文章", 3),
-			post("fixture_moment_001", "micro", "fixture_user_current", "新同学", "契约周末早餐", 4),
+			post("fixture_moment_001", "article", "fixture_user_current", "新同学", "契约周末早餐", 4),
 			post("fixture_post_photography_001", "image", "fixture_user_photo", "契约摄影师", "晨光 #1", 5),
 			post("fixture_post_lifestyle_001", "image", "fixture_user_current", "新同学", "窗边 #1", 6),
 		}
@@ -346,7 +345,6 @@ func contentPostFromFixture(fp contentFixturePost) *postmodel.Post {
 		AuthorDisplayNameSnapshot: fp.DisplayName,
 		AuthorAvatarUrlSnapshot:   fp.AvatarURL,
 		ContentType:               fp.ContentType,
-		ContentIdentity:           fp.Identity,
 		Title:                     fp.Title,
 		Body:                      fp.Body,
 		TagRefs:                   fp.Tags,
@@ -381,7 +379,6 @@ func TestContentPostFromFixtureRequiresCanonicalPostID(t *testing.T) {
 	post := contentPostFromFixture(contentFixturePost{
 		PostID:      "fixture-post-id",
 		ContentType: "image",
-		Identity:    "work",
 		AuthorID:    "fixture-author",
 		CreatedAt:   "2026-07-13T00:00:00Z",
 	})

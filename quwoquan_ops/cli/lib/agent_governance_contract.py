@@ -18,8 +18,8 @@ CONTRACT_PATH = (
 @lru_cache(maxsize=1)
 def load_agent_governance_contract() -> dict[str, Any]:
     value = yaml.safe_load(CONTRACT_PATH.read_text(encoding="utf-8"))
-    if not isinstance(value, dict) or value.get("schema_version") != 1:
-        raise ValueError("agent governance contract schema_version 必须为 1")
+    if not isinstance(value, dict) or value.get("schema_version") != 2:
+        raise ValueError("agent governance contract schema_version 必须为 2")
     for section in (
         "feature_context_manifest",
         "candidate_evidence_manifest",
@@ -272,7 +272,7 @@ def _validate_evidence_fingerprint_contract(definition: dict[str, Any]) -> None:
         "review-tracked-untracked-deleted",
         "retired-review-algorithm-not-consumed",
         "handoff-stale-missing-fingerprint-and-recovery-failure",
-        "feature-manifest-v4-content-addressed-owner-identity-and-budget",
+        "feature-manifest-v5-context-query-and-budget",
         "named-evidence-dedup-drift-failure-and-result",
         "handoff-six-trigger-producer-and-ordinary-noop",
         "human-decision-create-once-tamper-ref-drift",
@@ -372,7 +372,7 @@ def validate_feature_context_manifest(payload: dict[str, Any]) -> None:
     validate_schema_version(payload, "feature_context_manifest")
     validate_required_fields(payload, "feature_context_manifest")
     for field, declaration in (
-        ("owner_chain", "owner_chain_fields"),
+        ("feature_chain", "feature_chain_fields"),
         ("canonical_contexts", "context_fields"),
         ("open_items", "open_item_fields"),
     ):
@@ -387,13 +387,13 @@ def validate_feature_context_manifest(payload: dict[str, Any]) -> None:
                 "feature_context_manifest",
                 declaration,
             )
-    for field in ("applicable_agents",):
+    for field in ("applicable_agents", "dependency_evidence"):
         values = payload[field]
         if not isinstance(values, list) or not all(
             isinstance(value, str) and value for value in values
         ):
             raise TypeError(f"feature_context_manifest.{field} 必须为非空字符串列表")
-    for field in ("target", "resolved_owner"):
+    for field in ("target", "context_status"):
         if not isinstance(payload[field], str) or not payload[field]:
             raise TypeError(f"feature_context_manifest.{field} 必须为非空字符串")
     binding = payload["evidence_fingerprint"]
@@ -408,7 +408,7 @@ def validate_feature_context_manifest(payload: dict[str, Any]) -> None:
 
 
 def allowed_delivery_sources(repo_root: Path | None = None) -> set[str]:
-    """交付来源由同一版本化分支政策裁决，Feature owner 不随来源改变。"""
+    """交付来源由同一版本化分支政策裁决。"""
     rule = contract_section("candidate_evidence_manifest")["delivery_source_policy"]
     root = repo_root if repo_root is not None else CONTRACT_PATH.parents[2]
     policy = yaml.safe_load((root / rule["path"]).read_text(encoding="utf-8"))
@@ -425,107 +425,37 @@ def allowed_delivery_sources(repo_root: Path | None = None) -> set[str]:
 
 
 def validate_candidate_evidence_manifest(payload: dict[str, Any]) -> None:
-    """Validate exact candidate evidence v3 at every boundary."""
-
+    """Validate exact candidate evidence without feature-tree write authority."""
     validate_schema_version(payload, "candidate_evidence_manifest")
     validate_required_fields(payload, "candidate_evidence_manifest")
-    for field, declaration in (
-        ("context_snapshots", "context_snapshot_fields"),
-    ):
-        values = payload[field]
-        if not isinstance(values, list):
-            raise TypeError(f"candidate_evidence_manifest.{field} 必须为列表")
-        for value in values:
-            if not isinstance(value, dict):
-                raise TypeError(f"candidate_evidence_manifest.{field} 项必须为映射")
-            validate_declared_fields(value, "candidate_evidence_manifest", declaration)
-    for field in (
-        "owner_identity_ref", "owner_identity_canonical_bytes_sha256", "delivery_owner",
-        "lead_lane", "target", "resolved_owner",
-    ):
+    for value in payload["context_snapshots"]:
+        validate_declared_fields(value, "candidate_evidence_manifest", "context_snapshot_fields")
+    for field in ("delivery_writer", "lead_lane"):
         if not isinstance(payload[field], str) or not payload[field]:
             raise TypeError(f"candidate_evidence_manifest.{field} 必须为非空字符串")
-    if payload["delivery_owner"] != payload["lead_lane"]:
-        raise ValueError("candidate delivery_owner/lead_lane 必须一致")
-    if payload["delivery_owner"] not in allowed_delivery_sources():
-        raise ValueError("candidate delivery source 不在版本化分支政策中")
-    policy_digests = payload["delivery_policy_digests"]
-    if not isinstance(policy_digests, dict):
-        raise TypeError("candidate delivery_policy_digests 必须为映射")
-    validate_declared_fields(
-        policy_digests, "candidate_evidence_manifest", "delivery_policy_digest_fields"
-    )
-    workspace = payload["workspace_digests"]
-    if not isinstance(workspace, dict):
-        raise TypeError("candidate workspace_digests 必须为映射")
-    validate_declared_fields(
-        workspace, "candidate_evidence_manifest", "workspace_digest_fields"
-    )
-    if not isinstance(payload["path_set_identity"], dict):
-        raise TypeError("candidate path set identity 必须为映射")
+    if payload["delivery_writer"] != payload["lead_lane"]:
+        raise ValueError("candidate delivery_writer/lead_lane 必须一致")
+    validate_declared_fields(payload["delivery_policy_digests"], "candidate_evidence_manifest", "delivery_policy_digest_fields")
+    validate_declared_fields(payload["workspace_digests"], "candidate_evidence_manifest", "workspace_digest_fields")
     validate_declared_fields(payload["path_set_identity"], "candidate_path_set", "identity_fields")
+    validate_declared_fields(payload["impact_plan_identity"], "candidate_evidence_manifest", "impact_plan_identity_fields")
     identity = payload["path_set_identity"]
-    if not isinstance(identity["ref"], str) or not identity["ref"]:
-        raise ValueError("candidate path set ref 必须为非空字符串")
-    for field in ("byte_count", "path_count", "owner_count"):
+    for field in ("byte_count", "path_count"):
         if type(identity[field]) is not int or identity[field] <= 0:
             raise ValueError(f"candidate path set {field} 必须为正整数")
-    if identity["byte_count"] > contract_section("candidate_path_set")["max_bytes"]:
-        raise ValueError("candidate path set 超出资源边界")
-    if identity["owner_count"] > identity["path_count"]:
-        raise ValueError("candidate owner count 超过 path count")
-    for field in ("canonical_bytes_sha256", "changed_paths_digest", "impacted_owner_groups_digest"):
+    for field in ("canonical_bytes_sha256", "changed_paths_digest"):
         if not isinstance(identity[field], str) or re.fullmatch(r"sha256:[0-9a-f]{64}", identity[field]) is None:
             raise ValueError(f"candidate path set {field} 非法")
-    identity = payload["impact_plan_identity"]
-    if not isinstance(identity, dict):
-        raise TypeError("candidate impact_plan_identity 必须为映射")
-    validate_declared_fields(identity, "candidate_evidence_manifest", "impact_plan_identity_fields")
     if not isinstance(payload["evidence_fingerprint"], dict):
         raise TypeError("candidate evidence_fingerprint 必须为映射")
 
 
 def validate_candidate_path_set(payload: dict[str, Any]) -> None:
-    """完整路径对象独立校验，不接受仅有摘要的路径事实。"""
+    """完整且唯一地保存 actual changed paths。"""
     validate_schema_version(payload, "candidate_path_set")
     validate_required_fields(payload, "candidate_path_set")
-    groups = payload["impacted_owner_groups"]
-    if not isinstance(groups, list) or not groups:
-        raise TypeError("candidate impacted_owner_groups 必须为非空列表")
-    group_keys: list[str] = []
-    grouped_paths: list[str] = []
-    for group in groups:
-        if not isinstance(group, dict):
-            raise TypeError("candidate impacted_owner_groups 项必须为映射")
-        validate_declared_fields(
-            group, "candidate_evidence_manifest", "impacted_owner_group_fields"
-        )
-        identity = group["owner_identity"]
-        if not isinstance(identity, dict):
-            raise TypeError("candidate impacted owner identity 必须为映射")
-        validate_declared_fields(
-            identity, "candidate_evidence_manifest", "impacted_owner_identity_fields"
-        )
-        owner = identity["resolved_owner"]
-        if not isinstance(owner, str) or not owner:
-            raise TypeError("candidate impacted resolved_owner 必须为非空字符串")
-        chain_digest = identity["owner_chain_digest"]
-        if (
-            not isinstance(chain_digest, str)
-            or re.fullmatch(r"sha256:[0-9a-f]{64}", chain_digest) is None
-        ):
-            raise ValueError("candidate impacted owner_chain_digest 必须为 sha256")
-        group_paths = group["paths"]
-        if (
-            not isinstance(group_paths, list)
-            or not group_paths
-            or not all(isinstance(item, str) and item for item in group_paths)
-            or group_paths != sorted(set(group_paths), key=lambda item: item.encode("utf-8"))
-        ):
-            raise ValueError("candidate impacted owner paths 必须非空、稳定排序且无重复")
-        group_keys.append(owner)
-        grouped_paths.extend(group_paths)
-    if group_keys != sorted(set(group_keys), key=lambda item: item.encode("utf-8")):
-        raise ValueError("candidate impacted owner groups 必须按 owner 稳定排序且无重复")
-    if len(grouped_paths) != len(set(grouped_paths)):
-        raise ValueError("candidate impacted owner groups 必须无重复覆盖 exact changed paths")
+    paths = payload["changed_paths"]
+    if not isinstance(paths, list) or not paths or not all(isinstance(item, str) and item for item in paths):
+        raise TypeError("candidate changed_paths 必须为非空字符串列表")
+    if paths != sorted(set(paths), key=lambda item: item.encode("utf-8")):
+        raise ValueError("candidate changed_paths 必须稳定排序且无重复")

@@ -12,7 +12,7 @@ def payload():
     for name, field in cls.model_fields.items():
         if field.is_required():
             wire[name] = 1 if field.annotation is int else "2026-09-13T00:00:00Z" if name in {"createdAt", "updatedAt"} else "value"
-    wire.update(postId="post", status="published", visibility="public", moderationStatus="approved", publishedAt="2026-09-13T00:00:00Z", visitedAt=None, sourceVersion=1)
+    wire.update(postId="post", contentType="article", status="published", visibility="public", moderationStatus="approved", publishedAt="2026-09-13T00:00:00Z", visitedAt=None, sourceVersion=1)
     wire.update(dict.fromkeys(["environment", "sourceOwner", "releaseId", "manifestDigest", "releaseDigest"]))
     return wire
 

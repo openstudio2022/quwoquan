@@ -79,8 +79,6 @@ def _verify_detail(
         )
     if _required_text(payload, "contentType", endpoint="post detail") != case.content_type.value:
         raise PostApiVerificationError(f"post detail content type mismatch for {case.post_ref}")
-    if _required_text(payload, "contentIdentity", endpoint="post detail") != "work":
-        raise PostApiVerificationError(f"post detail content identity mismatch for {case.post_ref}")
     media_urls, cover_url, video_url = _require_media(payload, case.content_type)
     _verify_source_attribution(payload, case)
     observed_urls = {url for url in (*media_urls, cover_url, video_url) if url}

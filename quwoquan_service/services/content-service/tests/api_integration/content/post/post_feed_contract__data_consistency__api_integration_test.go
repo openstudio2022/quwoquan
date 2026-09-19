@@ -28,7 +28,7 @@ import (
 func TestMongoPostFeedReaderDecodesCanonicalProjection(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := submitPublishedPost(t, `{"contentType":"image","contentIdentity":"work","title":"Typed feed projection","deviceInfo":{"width":1280,"height":720}}`)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Typed feed projection","deviceInfo":{"width":1280,"height":720}}`)
 	createdID, _ := created["postId"].(string)
 	if createdID == "" {
 		t.Fatalf("created post is missing id: %+v", created)
@@ -58,7 +58,7 @@ func TestMongoPostFeedReaderDecodesCanonicalProjection(t *testing.T) {
 	reader := persistence.NewMongoPostQueryReader(mongoDB.Collection("posts"))
 	page, err := reader.ListPublishedFeedPosts(
 		context.Background(),
-		postports.NewPostFeedReadRequest("work", "image", "", 10),
+		postports.NewPostFeedReadRequest("image", "", 10),
 	)
 	if err != nil {
 		t.Fatalf("list typed feed projection: %v", err)
@@ -94,7 +94,7 @@ func TestMongoPostFeedReaderDecodesCanonicalProjection(t *testing.T) {
 func TestMongoPostFeedReaderBatchFindByIDs(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	created := submitPublishedPost(t, `{"contentType":"image","contentIdentity":"work","title":"Batch feed read"}`)
+	created := submitPublishedPost(t, `{"contentType":"image","title":"Batch feed read"}`)
 	createdID, _ := created["postId"].(string)
 	if createdID == "" {
 		t.Fatalf("created post is missing id: %+v", created)
@@ -146,7 +146,7 @@ func TestMongoPostFeedReaderBindsCanonicalHydrationAndVideoQueryToActiveRelease(
 	const wrongDigestID = "feed_release_wrong_digest_video"
 	const ugcID = "feed_release_ugc_video"
 	base := bson.M{
-		"contentType": "video", "contentIdentity": "work", "authorId": "release_reader_author",
+		"contentType": "video", "authorId": "release_reader_author",
 		"status": "published", "visibility": "public", "moderationStatus": "approved",
 		"videoUrl": "https://media.example.test/release-reader.mp4", "durationMs": int64(5000),
 		"createdAt": now, "publishedAt": now,
@@ -206,7 +206,7 @@ func TestMongoPostFeedReaderBindsCanonicalHydrationAndVideoQueryToActiveRelease(
 	videoPage, err := reader.ListPublishedFeedPosts(
 		ctx,
 		postports.NewPostFeedReadRequest(
-			"work", "video", "", 20, activeReleaseID, manifestDigest,
+			"video", "", 20, activeReleaseID, manifestDigest,
 		),
 	)
 	if err != nil {
@@ -293,7 +293,7 @@ func TestVideoPostProjectionCarriesAuthoritativeTimelineDescriptor(t *testing.T)
 
 	published := submitPublishedPost(
 		t,
-		`{"contentType":"video","contentIdentity":"work","title":"125 秒拖动回归视频"}`,
+		`{"contentType":"video","title":"125 秒拖动回归视频"}`,
 	)
 	postID := asTestString(published["postId"])
 	if postID == "" {
@@ -341,17 +341,17 @@ func TestVideoPostProjectionCarriesAuthoritativeTimelineDescriptor(t *testing.T)
 	}
 }
 
-// TestGetFeedByIdentity verifies discovery feed can filter by content identity.
-func TestGetFeedByIdentity(t *testing.T) {
+// TestGetFeedByArticleType 验证 canonical contentType 过滤，不再使用退役 identity。
+func TestGetFeedByArticleType(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	submitPublishedPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"点滴 1"}`)
-	submitPublishedPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"点滴 2"}`)
-	submitPublishedPost(t, `{"contentType":"image","contentIdentity":"work","title":"作品 1"}`)
+	submitPublishedPost(t, `{"contentType":"article","body":"点滴 1"}`)
+	submitPublishedPost(t, `{"contentType":"article","body":"点滴 2"}`)
+	submitPublishedPost(t, `{"contentType":"image","title":"作品 1"}`)
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/content/feed?identity=moment&type=image&limit=10",
+		"/content/feed?type=article&limit=10",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -366,35 +366,36 @@ func TestGetFeedByIdentity(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &page); err != nil {
 		t.Fatalf("decode response: %v", err)
 	}
-	if len(page.Items) == 0 {
-		t.Fatal("expected moment items in identity filtered feed")
+	if len(page.Items) != 2 {
+		t.Fatalf("expected both article items, got %+v", page.Items)
 	}
 	for _, item := range page.Items {
-		if item["type"] != "moment" && item["contentType"] != "micro" {
-			t.Fatalf("expected only moment items, got %v", item)
+		if item["contentType"] != "article" {
+			t.Fatalf("expected only article items, got %v", item)
+		}
+		if _, present := item["contentIdentity"]; present {
+			t.Fatalf("retired contentIdentity leaked into feed: %v", item)
 		}
 	}
 }
 
-// TestGetFeedIdentityFilterCannotBeStarvedByNewerWorks 守护存储侧 identity
-// 过滤。旧实现先读取固定窗口的最新 Post，再在 application 内过滤；当较新的
-// work 占满窗口时，合法 moment 会被错误隐藏。limit=1 时旧四轮窗口最多扫描
-// 八条记录，因此九条较新 work 足以稳定复现该架构缺陷。
-func TestGetFeedIdentityFilterCannotBeStarvedByNewerWorks(t *testing.T) {
+// TestGetFeedArticleFilterCannotBeStarvedByNewerImages 守护存储侧类型过滤。
+// 九条较新 image 不得挤掉较旧 article，避免应用层固定窗口过滤导致饥饿。
+func TestGetFeedArticleFilterCannotBeStarvedByNewerImages(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
-	moment := submitPublishedPost(t, `{"contentType":"micro","contentIdentity":"moment","body":"不能被较新作品饿死的点滴"}`)
-	momentID, _ := moment["postId"].(string)
+	article := submitPublishedPost(t, `{"contentType":"article","body":"不能被较新图片挤掉的文章"}`)
+	articleID, _ := article["postId"].(string)
 	for i := range 9 {
 		submitPublishedPost(t, fmt.Sprintf(
-			`{"contentType":"image","contentIdentity":"work","title":"newer work %d"}`,
+			`{"contentType":"image","title":"newer work %d"}`,
 			i,
 		))
 	}
 
 	req := httptest.NewRequest(
 		http.MethodGet,
-		"/content/feed?identity=moment&type=image&limit=1",
+		"/content/feed?type=article&limit=1",
 		nil,
 	)
 	rec := httptest.NewRecorder()
@@ -409,10 +410,10 @@ func TestGetFeedIdentityFilterCannotBeStarvedByNewerWorks(t *testing.T) {
 		t.Fatalf("decode response: %v", err)
 	}
 	if len(page.Items) != 1 {
-		t.Fatalf("expected the older moment after storage-side identity filtering, got %+v", page.Items)
+		t.Fatalf("expected the older article after storage-side type filtering, got %+v", page.Items)
 	}
-	if page.Items[0]["postId"] != momentID {
-		t.Fatalf("expected moment %q, got %+v", momentID, page.Items[0])
+	if page.Items[0]["postId"] != articleID {
+		t.Fatalf("expected article %q, got %+v", articleID, page.Items[0])
 	}
 }
 
@@ -423,15 +424,15 @@ func TestGetFeedExcludesPrivatePosts(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	// Create one public and one private moment
-	pub := submitPublishedPost(t, `{"contentType":"micro","body":"Public moment","visibility":"public"}`)
-	priv := submitPublishedPost(t, `{"contentType":"micro","body":"Private moment","visibility":"private"}`)
+	pub := submitPublishedPost(t, `{"contentType":"article","body":"Public moment","visibility":"public"}`)
+	priv := submitPublishedPost(t, `{"contentType":"article","body":"Private moment","visibility":"private"}`)
 
 	privateID, _ := priv["postId"].(string)
 	if privateID == "" {
 		t.Fatal("private post missing id")
 	}
 
-	req := httptest.NewRequest(http.MethodGet, "/content/feed?type=moment&limit=20", nil)
+	req := httptest.NewRequest(http.MethodGet, "/content/feed?type=article&limit=20", nil)
 	rec := httptest.NewRecorder()
 	testHandler.ServeHTTP(rec, req)
 

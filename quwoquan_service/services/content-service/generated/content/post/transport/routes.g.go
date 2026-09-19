@@ -26,7 +26,6 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "GET", pathTemplate: "/content/posts/{postId}", operation: "GetPost"},
 	{method: "GET", pathTemplate: "/content/posts/{postId}/counters", operation: "GetCounters"},
 	{method: "PATCH", pathTemplate: "/content/posts/{postId}/settings", operation: "UpdatePostSettings"},
-	{method: "POST", pathTemplate: "/content/posts/{postId}:promoteToWork", operation: "PromotePostToWork"},
 	{method: "POST", pathTemplate: "/content/posts:publish", operation: "SubmitPostPublication"},
 	{method: "GET", pathTemplate: "/content/social-proof/{anchorKind}/{objectId}", operation: "GetGatheringSocialProof"},
 	{method: "GET", pathTemplate: "/internal/content/active-release-fence", operation: "ReadActiveReleaseFence"},
@@ -145,15 +144,15 @@ func generatedSplitPath(raw string) []string {
 }
 
 type GeneratedGetFeedParams struct {
-	Identity      string
-	Type          string
-	Sort          string
-	Cursor        string
-	SubCategory   string
-	ChannelId     string
-	SessionId     string
-	FeedRequestId string
-	Limit         int
+	ClientPresentationContract *GeneratedGetFeedClientPresentationContractQuery
+	Type                       string
+	Sort                       string
+	Cursor                     string
+	SubCategory                string
+	ChannelId                  string
+	SessionId                  string
+	FeedRequestId              string
+	Limit                      int
 }
 
 const (
@@ -164,7 +163,11 @@ const (
 func BindGeneratedGetFeedParams(r *http.Request) (GeneratedGetFeedParams, error) {
 	out := GeneratedGetFeedParams{Limit: GeneratedGetFeedDefaultItems}
 	q := r.URL.Query()
-	out.Identity = strings.TrimSpace(q.Get("identity"))
+	valueClientPresentationContract, errClientPresentationContract := BindGeneratedGetFeedClientPresentationContractQuery(r)
+	if errClientPresentationContract != nil {
+		return GeneratedGetFeedParams{}, errClientPresentationContract
+	}
+	out.ClientPresentationContract = valueClientPresentationContract
 	out.Type = strings.TrimSpace(q.Get("type"))
 	out.Sort = strings.TrimSpace(q.Get("sort"))
 	out.Cursor = strings.TrimSpace(q.Get("cursor"))
@@ -210,23 +213,6 @@ var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
 		"expectedHomepagePreparationVersion": {},
 		"idempotencyKey":                     {},
 	},
-	"PromotePostToWork": {
-		"contentType":             {},
-		"title":                   {},
-		"summary":                 {},
-		"semanticMentions":        {},
-		"coverUrl":                {},
-		"articleMarkdown":         {},
-		"semanticDocument":        {},
-		"markdownDialect":         {},
-		"articleAssetManifest":    {},
-		"articleRenderProfile":    {},
-		"primaryHomepageId":       {},
-		"primaryHomepageType":     {},
-		"primaryHomepageSnapshot": {},
-		"visibility":              {},
-		"assistantUsePolicy":      {},
-	},
 	"ReadContentReleaseCommitReceipt": {
 		"release":  {},
 		"expected": {},
@@ -245,7 +231,6 @@ var generatedRequestBodyFieldSetByOperation = map[string]map[string]struct{}{
 		"publishIntentId":           {},
 		"localDraftId":              {},
 		"contentType":               {},
-		"contentIdentity":           {},
 		"title":                     {},
 		"body":                      {},
 		"summary":                   {},

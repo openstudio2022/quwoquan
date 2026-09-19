@@ -45,19 +45,12 @@ final class CanonicalSearchTypedDouble implements CanonicalSearchQueryFacet {
       if (postID.isEmpty) {
         continue;
       }
-      final contentIdentity = _optionalText(post['contentIdentity']);
       final content = CanonicalSearchContentHit(
         postId: postID,
         contentType: ContentType.fromWire(
           contentType,
           'CanonicalSearchTypedDouble.contentType',
         ),
-        contentIdentity: contentIdentity == null
-            ? null
-            : ContentIdentity.fromWire(
-                contentIdentity,
-                'CanonicalSearchTypedDouble.contentIdentity',
-              ),
         title: title.isEmpty ? postID : title,
         summary: _optionalText(post['summary']),
         coverUrl: _optionalText(post['coverUrl']),
@@ -125,7 +118,6 @@ final class CanonicalSearchTypedDouble implements CanonicalSearchQueryFacet {
       <String, Object?>{
         'postId': 'search-photo-1',
         'contentType': 'image',
-        'contentIdentity': 'work',
         'title': '西湖晨光摄影测试详情',
         'summary': '杭州旅行摄影样本',
         'body': '清晨在西湖记录光影',
@@ -139,7 +131,6 @@ final class CanonicalSearchTypedDouble implements CanonicalSearchQueryFacet {
       <String, Object?>{
         'postId': 'search-article-1',
         'contentType': 'article',
-        'contentIdentity': 'work',
         'title': '旅行摄影路线',
         'summary': '城市漫游文章',
         'body': '路线与器材建议',

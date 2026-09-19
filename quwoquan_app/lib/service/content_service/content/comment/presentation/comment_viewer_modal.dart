@@ -7,7 +7,7 @@ import 'package:quwoquan_app/design_system/surfaces/app_modal_presenter.dart';
 import 'package:quwoquan_app/design_system/surfaces/app_modal_surface.dart';
 import 'package:quwoquan_app/runtime/testing/test_keys.dart';
 
-/// 卡片弹窗评论入口：从发现页 / Moment 卡 / 媒体卡片底部弹出。
+/// 卡片弹窗评论入口：从发现页 / 媒体卡片底部弹出。
 class CommentViewer {
   const CommentViewer._();
 

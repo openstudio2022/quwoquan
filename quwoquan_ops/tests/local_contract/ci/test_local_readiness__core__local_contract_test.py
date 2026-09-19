@@ -169,6 +169,20 @@ def test_spec_contract_is_only_a_local_projection() -> None:
     assert "spec_contract" not in classify_hosted([path])
 
 
+# spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-009.t6
+def test_contract_closure_static_check_uses_exact_dependency_surfaces() -> None:
+    for path in (
+        "quwoquan_data/schema/content/post_manifest.schema.json",
+        "quwoquan_service/services/content-service/internal/content/post/infrastructure/releaseimport/loader.go",
+        "quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/content/post.g.dart",
+        "quwoquan_ops/cli/lib/premium_pool_release.py",
+    ):
+        plan = build_impact_plan([path], level="fast")
+        assert sum(check["id"] == "static:contract_closure" for check in plan["checks"]) == 1
+    unrelated = build_impact_plan(["quwoquan_ops/cli/lib/local_worktree_inventory.py"], level="fast")
+    assert not any(check["id"] == "static:contract_closure" for check in unrelated["checks"])
+
+
 def test_local_readiness_contract_declares_five_independent_fact_dimensions() -> None:
     contract = __import__("yaml").safe_load((ROOT / "quwoquan_ops/policies/local_readiness_contract.yaml").read_text(encoding="utf-8"))
     assert contract["schema_version"] == 2
@@ -227,6 +241,12 @@ def test_plan_checks_have_canonical_bounded_timeout_identity() -> None:
         for check in fast["checks"]
     )
     assert all(type(check["timeout_seconds"]) is int for check in scope["checks"])
+
+
+def test_contract_closure_has_frozen_l0_hard_budget() -> None:
+    plan = build_impact_plan(["quwoquan_data/schema/content/post_manifest.schema.json"], level="fast")
+    check = next(item for item in plan["checks"] if item["id"] == "static:contract_closure")
+    assert check["timeout_seconds"] == 15
 
 
 def test_candidate_impact_identity_closes_timeout_policy() -> None:
@@ -412,35 +432,21 @@ def test_exact_input_pass_cache_hits_then_command_and_toolchain_miss(monkeypatch
 
 
 
-def test_source_lockfile_owner_manifest_and_command_all_change_exact_input() -> None:
+def test_source_lockfile_candidate_and_command_all_change_exact_input() -> None:
     with _repo() as directory:
-        repo = Path(directory)
-        _init(repo)
+        repo = Path(directory); _init(repo)
         (repo / "lock.txt").write_text("lock-one\n", encoding="utf-8")
-        (repo / "owner.json").write_text('{"owner":"one"}\n', encoding="utf-8")
-        base = _minimal_plan(repo, "true")
-        base["lockfiles"] = ["lock.txt"]
-        with pytest.raises(LocalReadinessError, match="current canonical manifest"):
-            capture_fingerprint(base, repo_root=repo, mode="workspace", owner_manifest=repo / "owner.json")
+        base = _minimal_plan(repo, "true"); base["lockfiles"] = ["lock.txt"]
         first = capture_fingerprint(base, repo_root=repo, mode="workspace")["digest"]
-
         (repo / "source.txt").write_text("source-two\n", encoding="utf-8")
-        source_changed = capture_fingerprint(base, repo_root=repo, mode="workspace")["digest"]
-        assert source_changed != first
+        assert capture_fingerprint(base, repo_root=repo, mode="workspace")["digest"] != first
         (repo / "source.txt").write_text("one\n", encoding="utf-8")
-
         (repo / "lock.txt").write_text("lock-two\n", encoding="utf-8")
-        lock_changed = capture_fingerprint(base, repo_root=repo, mode="workspace")["digest"]
-        assert lock_changed != first
+        assert capture_fingerprint(base, repo_root=repo, mode="workspace")["digest"] != first
         (repo / "lock.txt").write_text("lock-one\n", encoding="utf-8")
-
-        (repo / "owner.json").write_text('{"owner":"two"}\n', encoding="utf-8")
-        with pytest.raises(LocalReadinessError, match="current canonical manifest"):
-            capture_fingerprint(base, repo_root=repo, mode="workspace", owner_manifest=repo / "owner.json")
-
         command_changed_plan = {**base, "checks": [{**base["checks"][0], "command": ["bash", "-c", "printf changed >/dev/null"]}]}
-        command_changed = capture_fingerprint(command_changed_plan, repo_root=repo, mode="workspace")["digest"]
-        assert command_changed != first
+        assert capture_fingerprint(command_changed_plan, repo_root=repo, mode="workspace")["digest"] != first
+
 
 # spec_ref:
 # - specs/feature-tree/runtime/runtime-control-plane-foundation/human-authority-role-cards/spec.md#gwt-001.t1
@@ -781,7 +787,7 @@ def test_hook_contract_contains_single_recovery_and_no_full_gate_or_sensitive_pr
     assert "logs:" not in contract
 
 
-def test_scope_producer_requires_current_owner_review_and_required_evidence_before_any_pass() -> None:
+def test_scope_producer_requires_candidate_review_and_required_evidence_before_any_pass() -> None:
     with _repo() as directory:
         repo = Path(directory)
         _init(repo)
@@ -789,7 +795,7 @@ def test_scope_producer_requires_current_owner_review_and_required_evidence_befo
         plan = plan_readiness(level="scope", paths=["source.txt"], repo_root=repo, mode="workspace")
         with pytest.raises(
             LocalReadinessError,
-            match=r"scope/release readiness 要求 owner identity \+ candidate evidence",
+            match=r"scope/release readiness 要求 canonical candidate evidence",
         ):
             run_readiness(plan, repo_root=repo, state_root=state)
         assert not (state / "process/receipts/current").exists()

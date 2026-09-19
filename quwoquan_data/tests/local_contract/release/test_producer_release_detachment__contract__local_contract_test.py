@@ -509,7 +509,7 @@ def _repository_handoff_fixture(root: Path) -> tuple[Path, dict]:
 
     release_id = "repository-detachment"
     release = root / "data/releases" / release_id
-    logical_ref = "entities/地点/景区/p0001/entity-a/1"
+    logical_ref = "entities/travel/test/entity-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
     sealed, row, manifest, _record, _review = _sealed_handoff_fixture(
         release, logical_ref=logical_ref, review_ref=logical_ref,
     )
@@ -716,7 +716,7 @@ def _write_handoff_fixture_documents(sealed_root: Path, row: dict, manifest: dic
 
 @pytest.mark.parametrize("source_identity", [False, True])
 @pytest.mark.parametrize("logical_ref", [
-    "entities/地点/景区/p0001/entity-a/1",
+    "entities/travel/test/entity-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     "entities/travel/hubei/yichang/p0001/three-gorges-dam/1",
 ])
 def test_handoff_separates_sealed_locator_from_frozen_review_owner(
@@ -726,7 +726,7 @@ def test_handoff_separates_sealed_locator_from_frozen_review_owner(
     from content.release.canonical.producer_release_handoff import _validate_embedded_pool_rows
 
     sealed, row, _manifest, _record, _review = _sealed_handoff_fixture(
-        tmp_path, logical_ref=logical_ref, review_ref="entities/地点/景区/p0001/entity-a/1",
+        tmp_path, logical_ref=logical_ref, review_ref="entities/travel/test/entity-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
         source_identity=source_identity,
     )
     before = {path: path.read_bytes() for path in sealed.parent.rglob("*") if path.is_file()}
@@ -751,7 +751,7 @@ def test_handoff_rejects_drift_even_when_query_and_pool_agree(
 
     logical_ref = "entities/travel/hubei/yichang/p0001/three-gorges-dam/1"
     sealed, row, manifest, record, review = _sealed_handoff_fixture(
-        tmp_path, logical_ref=logical_ref, review_ref="entities/地点/景区/p0001/entity-a/1",
+        tmp_path, logical_ref=logical_ref, review_ref="entities/travel/test/entity-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
         source_identity=True,
     )
     admission_mutations = {
@@ -804,7 +804,7 @@ def test_handoff_review_locator_keeps_source_and_asset_digest_bindings(
 
     logical_ref = "entities/travel/hubei/yichang/p0001/three-gorges-dam/1"
     sealed, row, manifest, record, review = _sealed_handoff_fixture(
-        tmp_path, logical_ref=logical_ref, review_ref="entities/地点/景区/p0001/entity-a/1",
+        tmp_path, logical_ref=logical_ref, review_ref="entities/travel/test/entity-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     )
     source_ref, asset_ref = "sources/s001/source.json", "sources/s001/assets/cover.jpg"
     source_asset = {"sourceUrl": "https://example.test/cover.jpg", "license": "CC BY 4.0",

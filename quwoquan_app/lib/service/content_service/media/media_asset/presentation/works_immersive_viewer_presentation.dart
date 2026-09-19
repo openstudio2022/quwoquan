@@ -24,41 +24,19 @@ final class _WorksInternalFeedAggregate {
 extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   List<ContentPostViewData> _buildFeed() {
     if (_usesExternalFeed) {
-      final external = widget.externalPosts!;
-      final filterTypes = _effectiveFilterContentTypes;
-      if (filterTypes.contains('image') && filterTypes.length == 1) {
-        return external.where(_isImageLikePost).toList(growable: false);
-      }
-      if (filterTypes.contains('video') && filterTypes.length == 1) {
-        return external.where(_isVideoLikePost).toList(growable: false);
-      }
-      if (filterTypes.contains('article') && filterTypes.length == 1) {
-        return external
-            .where(
-              (post) => _isArticleLikePost(post) || _isTextOnlyMomentPost(post),
-            )
-            .toList(growable: false);
-      }
-      if (filterTypes.isNotEmpty) {
-        return external
-            .where((post) {
-              if (filterTypes.contains('image') && _isImageLikePost(post)) {
-                return true;
-              }
-              if (filterTypes.contains('video') && _isVideoLikePost(post)) {
-                return true;
-              }
-              if (filterTypes.contains('article') &&
-                  (_isArticleLikePost(post) || _isTextOnlyMomentPost(post))) {
-                return true;
-              }
-              return false;
-            })
-            .toList(growable: false);
-      }
-      return external;
+      return _filterPostsByDeclaredContentType(widget.externalPosts!);
     }
     return _buildInternalFeedAggregate().posts;
+  }
+
+  List<ContentPostViewData> _filterPostsByDeclaredContentType(
+    List<ContentPostViewData> posts,
+  ) {
+    final filterTypes = _effectiveFilterContentTypes;
+    if (filterTypes.isEmpty) return posts;
+    return posts
+        .where((post) => filterTypes.contains(post.type.wireName))
+        .toList(growable: false);
   }
 
   List<ContentPostViewData> _buildInternalFeedPosts(
@@ -69,25 +47,7 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       // 池召回（recallPath=premium_pool）；池空返回空列表即空态，不混入浏览流。
       final premium =
           snapshots['premium']?.items ?? const <ContentPostViewData>[];
-      final filterTypes = _effectiveFilterContentTypes;
-      if (filterTypes.isEmpty) {
-        return premium;
-      }
-      return premium
-          .where((post) {
-            if (filterTypes.contains('image') && _isImageLikePost(post)) {
-              return true;
-            }
-            if (filterTypes.contains('video') && _isVideoLikePost(post)) {
-              return true;
-            }
-            if (filterTypes.contains('article') &&
-                (_isArticleLikePost(post) || _isTextOnlyMomentPost(post))) {
-              return true;
-            }
-            return false;
-          })
-          .toList(growable: false);
+      return _filterPostsByDeclaredContentType(premium);
     }
     final photos = snapshots['photo']?.items ?? const <ContentPostViewData>[];
     final videos = snapshots['video']?.items ?? const <ContentPostViewData>[];
@@ -314,9 +274,6 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
           (_articleInnerIndex[current.id] ?? 0).clamp(0, total - 1) + 1;
       return (current: currentCard, total: total);
     }
-    if (_isTextOnlyMomentPost(current)) {
-      return (current: 1, total: 1);
-    }
     if (_isVideoLikePost(current)) {
       final items = _videoItemsFor(current);
       final total = items.isEmpty ? 1 : items.length.clamp(1, 99);
@@ -326,32 +283,15 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
     return (current: 1, total: 1);
   }
 
-  bool _isVideoLikePost(ContentPostViewData post) {
-    if (post.isVideoLike) {
-      return true;
-    }
-    if (post.type.trim().toLowerCase() == 'video') {
-      return true;
-    }
-    return _videoItemsFor(post).isNotEmpty;
-  }
+  // 形态判别只读写入时确定的 contentType；禁止从 mediaUrls/videoUrl 反推。
+  bool _isVideoLikePost(ContentPostViewData post) =>
+      post.type == ContentType.video;
 
-  bool _isArticleLikePost(ContentPostViewData post) {
-    return post.isArticleLike;
-  }
+  bool _isArticleLikePost(ContentPostViewData post) =>
+      post.type == ContentType.article;
 
-  bool _isTextOnlyMomentPost(ContentPostViewData post) {
-    return post.identity == 'moment' && post.isTextOnly;
-  }
-
-  bool _isImageLikePost(ContentPostViewData post) {
-    if (_isVideoLikePost(post) ||
-        _isArticleLikePost(post) ||
-        _isTextOnlyMomentPost(post)) {
-      return false;
-    }
-    return _imageUrlsForPost(post).isNotEmpty;
-  }
+  bool _isImageLikePost(ContentPostViewData post) =>
+      post.type == ContentType.image;
 
   bool get _canSwipePrimaryTabs =>
       widget.showTopNavigation &&
@@ -772,26 +712,22 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   }
 
   String _overlayTitleForPost(ContentPostViewData post) {
-    if (_isArticleLikePost(post) || _isTextOnlyMomentPost(post)) {
+    if (_isArticleLikePost(post)) {
       return '';
     }
     return _titleForPost(post);
   }
 
-  String _overlayBodyForPost(ContentPostViewData post) {
-    if (_isArticleLikePost(post) || _isTextOnlyMomentPost(post)) {
-      return '';
-    }
-    if (_isImageLikePost(post)) {
-      final item = _workItemFor(post);
-      final total = item.effectiveImageUrls.length;
-      if (total == 0) return '';
-      final index = (_photoInnerIndex[post.id] ?? _defaultImageIndexFor(post))
-          .clamp(0, total - 1);
-      // 图集只显示当前资产真实 caption，不拿作品 title/body 充当逐图说明。
-      return item.imageCaptionAt(index) ?? '';
-    }
-    return _bodyForPost(post);
+  String _overlayBodyForPost(ContentPostViewData post) =>
+      _isArticleLikePost(post) ? '' : _bodyForPost(post);
+
+  String _overlayImageCaptionForPost(ContentPostViewData post) {
+    if (!_isImageLikePost(post)) return '';
+    // 逐图说明与整帖配文分区呈现，两者不互相补写；无对应资产则不显示说明。
+    return _workItemFor(post).imageCaptionAt(
+          _photoInnerIndex[post.id] ?? _defaultImageIndexFor(post),
+        ) ??
+        '';
   }
 
   _WorksTopChromeTheme _topChromeThemeForPost(
@@ -886,15 +822,13 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
       return true;
     }
     return _overlayTitleForPost(post).isNotEmpty ||
-        _overlayBodyForPost(post).isNotEmpty;
+        _overlayBodyForPost(post).isNotEmpty ||
+        _overlayImageCaptionForPost(post).isNotEmpty;
   }
 
   ImmersiveViewerStageLayoutSpec _layoutSpecForPost(ContentPostViewData post) {
     if (_isArticleLikePost(post)) {
       return ImmersiveViewerStageLayoutSpec.articleStage;
-    }
-    if (_isTextOnlyMomentPost(post)) {
-      return ImmersiveViewerStageLayoutSpec.textStage;
     }
     return ImmersiveViewerStageLayoutSpec.mediaStage;
   }
@@ -904,9 +838,6 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
   ) {
     if (_isArticleLikePost(post)) {
       return ImmersiveViewerStageLayoutSpec.articleStage;
-    }
-    if (_isTextOnlyMomentPost(post)) {
-      return ImmersiveViewerStageLayoutSpec.textStage;
     }
     return ImmersiveViewerStageLayoutSpec.mediaStage;
   }
@@ -950,42 +881,5 @@ extension _WorksImmersiveViewerPresentation on _WorksImmersiveViewerState {
         _expandedCaptionPostIds.add(postId);
       }
     });
-  }
-
-  /// 文本 moment 背景封面的 typed 交付绑定（DEC-033）。
-  ///
-  /// 渲染 URL 取自 raw projection 的 `coverUrl`，而资产身份与交付形态只在投影
-  /// `mediaItems` 的逐媒体声明里；两者按 URL 对齐。投影未声明该 URL 时落契约
-  /// 缺席走公开路，不猜一个资产身份去换签。
-  MediaDeliveryBinding _textMomentBackgroundBinding(ContentPostViewData post) {
-    final coverUrl =
-        _rawPostById(
-          post.id,
-        )?[ContentMediaPostProjectionKeys.coverUrl]?.toString() ??
-        '';
-    if (coverUrl.isEmpty) {
-      return const MediaDeliveryBinding.absent();
-    }
-    for (final media in post.mediaItems) {
-      if ((media.coverUrl ?? '') == coverUrl) {
-        return MediaDeliveryBinding(
-          assetId: media.coverAssetId?.trim() ?? '',
-          accessMode: media.accessMode,
-          publicUrl: coverUrl,
-        );
-      }
-      if (media.url == coverUrl) {
-        return MediaDeliveryBinding(
-          assetId: media.mediaAssetId?.trim() ?? '',
-          accessMode: media.accessMode,
-          publicUrl: coverUrl,
-        );
-      }
-    }
-    return MediaDeliveryBinding(
-      assetId: '',
-      accessMode: null,
-      publicUrl: coverUrl,
-    );
   }
 }

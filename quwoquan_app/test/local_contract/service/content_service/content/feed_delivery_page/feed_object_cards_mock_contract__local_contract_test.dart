@@ -9,6 +9,8 @@
 library;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentUiSurface, ListObjectKind;
 
 import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
@@ -17,7 +19,7 @@ InMemoryContentDiscoveryFeedQuery _query() {
   return InMemoryContentDiscoveryFeedQuery(
     InMemoryContentPostStore(
       posts: contentPostListBuilder(
-        contentType: 'micro',
+        contentType: 'article',
         count: 9,
         idPrefix: 'object-card-post',
       ),
@@ -44,9 +46,10 @@ void main() {
           reason: '首刷内容足量时必须注入对象卡（与云侧 policy everyN=8 同构）',
         );
         final card = page.objectCards.first;
-        expect(card.objectKind, 'entity_homepage');
+        expect(card.objectKind, ListObjectKind.entityHomepage);
+        expect(card.openSurface, ContentUiSurface.homepageDetail);
         expect(card.objectId, isNotEmpty);
-        expect(card.title, isNotEmpty);
+        expect(card.homepage.title, isNotEmpty);
         expect(card.anchorIndex, greaterThan(0));
         expect(
           card.anchorIndex,

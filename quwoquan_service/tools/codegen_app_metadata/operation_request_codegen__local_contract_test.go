@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -813,6 +815,171 @@ func TestRequestFieldWireExpressionInfersGeneratedValueObjectSerialization(t *te
 	}
 	if got != "request.subject.toWire()" {
 		t.Fatalf("custom value object wire expression = %q", got)
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md
+func TestRequestFieldWireExpressionRejectsObjectStringCoercion(t *testing.T) {
+	for _, field := range []fieldDef{
+		{Name: "filter", Type: "FeedFilter"},
+		{Name: "filter", Type: "FeedFilter", Constraints: []string{"NULLABLE"}},
+		{Name: "filter", Type: "FeedFilter", ClientWire: "toWire"},
+		{Name: "filter", Type: "FeedFilter", ClientWire: "toWireMap"},
+		{Name: "filter", Type: "FeedFilter", ClientWire: "toJson"},
+		{Name: "filter", Type: "object", ClientDartType: "Map<String, Object?>"},
+		{Name: "filter", Type: "semantic_document"},
+	} {
+		t.Run(field.Type+"/"+field.ClientWire+"/"+strings.Join(field.Constraints, ","), func(t *testing.T) {
+			_, err := requestFieldWireExpression("request.filter", field, true, nil)
+			if err == nil || !strings.Contains(err.Error(), "explicit JSON query binding") {
+				t.Fatalf("object string position error = %v, want explicit JSON binding rejection", err)
+			}
+			if _, err := requestFieldWireExpression("request.filter", field, false, nil); err != nil {
+				t.Fatalf("object body encoding must remain valid: %v", err)
+			}
+		})
+	}
+}
+
+func TestRequestFieldWireExpressionPreservesScalarStringPositions(t *testing.T) {
+	for _, test := range []struct {
+		field fieldDef
+		want  string
+	}{
+		{fieldDef{Name: "value", Type: "string"}, "request.value"},
+		{fieldDef{Name: "value", Type: "int"}, "(request.value).toString()"},
+		{fieldDef{Name: "value", Type: "bool"}, "(request.value).toString()"},
+		{fieldDef{Name: "value", Type: "datetime"}, "(request.value.toUtc().toIso8601String()).toString()"},
+		{fieldDef{Name: "value", Type: "State", ClientWire: "wireValue"}, "(request.value.wireValue).toString()"},
+	} {
+		got, err := requestFieldWireExpression("request.value", test.field, true, nil)
+		if err != nil || got != test.want {
+			t.Errorf("%s string position = %q, %v; want %q", test.field.Type, got, err, test.want)
+		}
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/system-architecture-and-engineering-guide/design.md
+func TestJSONQueryActualPresentationDigestDart(t *testing.T) {
+	preservePresentationManifest(t)
+	root, err := filepath.Abs("../../contracts/metadata")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := initializeMetadataDocumentSource(root, []string{"_shared/types.yaml"}); err != nil {
+		t.Fatal(err)
+	}
+	models, err := loadCanonicalSharedValueModels()
+	if err != nil {
+		t.Fatal(err)
+	}
+	enums, err := loadCanonicalSharedEnumValues()
+	if err != nil {
+		t.Fatal(err)
+	}
+	model, ok := models["ClientContentPresentationContract"]
+	if !ok {
+		t.Fatal("missing real presentation contract")
+	}
+	// 同一真实 typed model 分别覆盖 response/provider 与 request constructor/decoder。
+	spec := domainOperationContractSpec{OwnerImport: "../generated/shared_operation_types.g.dart", Models: map[string]requestModelSpec{model.Name: model}, EnumMembers: map[string][]canonicalRequestEnumMember{}}
+	if err := collectDomainEnumMembers(spec.EnumMembers, model, enums); err != nil {
+		t.Fatal(err)
+	}
+	var output strings.Builder
+	helperPath, err := filepath.Abs("../../../quwoquan_app/packages/quwoquan_cloud_contracts/lib/src/canonical_sha256_digest.dart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Fprintf(&output, "import %q;\n", "file://"+helperPath)
+	for name, members := range spec.EnumMembers {
+		renderDomainWireEnum(&output, name, members, "")
+	}
+	var rendered strings.Builder
+	if err := renderRequestModel(&rendered, model, enums); err != nil {
+		t.Fatal(err)
+	}
+	writeGeneratedRequestWireDecoderHelpers(&output, rendered.String())
+	output.WriteString(rendered.String())
+	runner := `
+void main() {
+ final valid='sha256:${'a' * 64}';
+ final payload=<String,Object?>{'contentTypes':<Object?>[], 'listObjectKinds':<Object?>[], 'openSurfaces':<Object?>[], 'presentationRecipes':<Object?>[], 'contractDigest':valid};
+ final model=ClientContentPresentationContract.fromWire(payload);
+ if(model.toWire()['contractDigest']!=valid) throw StateError('digest roundtrip');
+ for(final digest in ['', 'a'*64, 'sha256:${'A'*64}', 'sha256:${'a'*63}', 'sha256:${'a'*65}', 'sha256:${'g'*64}', '$valid\n']) {
+  var rejected=false;
+  try {ClientContentPresentationContract.fromWire({...payload,'contractDigest':digest});} catch (_) {rejected=true;}
+  if(!rejected) throw StateError('accepted malformed canonical digest');
+ }
+}
+`
+	owner, err := renderDomainOperationContract(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner = strings.Replace(owner, `import "../canonical_sha256_digest.dart";`, fmt.Sprintf("import %q;", "file://"+helperPath), 1)
+	for name, source := range map[string]string{"request": output.String(), "provider": owner} {
+		t.Run(name, func(t *testing.T) {
+			script := filepath.Join(t.TempDir(), "actual.dart")
+			if err := os.WriteFile(script, []byte(source+runner), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if result, err := exec.Command("dart", script).CombinedOutput(); err != nil {
+				t.Fatalf("actual presentation digest Dart: %v\n%s", err, result)
+			}
+		})
+	}
+}
+
+func TestJSONQueryDartEncoderRuntime(t *testing.T) {
+	library := requestLibrarySpec{OwnerImport: "fixture.dart", Models: map[string]requestModelSpec{
+		"Request": {Name: "Request", Fields: []fieldDef{{Name: "filter", Type: "Filter"}}},
+		"Filter":  {Name: "Filter", Fields: []fieldDef{{Name: "label", Type: "string", MaxUTF8Bytes: 8, Constraints: []string{"MAX_LENGTH_8"}}}},
+	}, Operations: []requestOperationSpec{{CanonicalOperationID: "sample.item.Lookup", RequestType: "Request", RequestBodyKind: "none", RequestBindings: appRequestBindings{Query: []appRequestBinding{{Name: "filter", Field: "filter", Encoding: "json", MaxBytes: 64}}}}}}
+	rendered, err := renderOperationRequestPart(library, "fixture.dart", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(rendered, "_encodeGeneratedJSONQuery(request.filter.toWire(), 64)") || strings.Contains(rendered, "body: <String, Object?>{") {
+		t.Fatalf("invalid JSON query encoder: %s", rendered)
+	}
+	dart, err := exec.LookPath("dart")
+	if err != nil {
+		t.Fatal("Dart runtime required for generated JSON query acceptance")
+	}
+	script := strings.Replace(rendered, "part of 'fixture.dart';", "import 'dart:convert';", 1)
+	script += `
+final class CloudOperationRequestPayload {
+ const CloudOperationRequestPayload({this.queryParameters = const {}});
+ final Map<String,String> queryParameters;
+}
+void main() {
+ final request=Request(filter:Filter(label:'中文'));
+ final payload=` + generatedOperationRequestEncoder("sample.item.Lookup") + `(request);
+ final value=jsonDecode(payload.queryParameters['filter']!);
+ if(value['label']!='中文') throw StateError('JSON roundtrip failed');
+ final decoded=Filter.fromWire(Map<String,Object?>.from(value));
+ if(decoded.label!='中文') throw StateError('typed decoder failed');
+ for(final bad in <Map<String,Object?>>[{}, {'label':null}, {'label':'x','unknown':true}, {'label':123}, {'label':'123456789'}, {'label':'中文中'}]) {
+  var rejected=false;try {Filter.fromWire(bad);} catch (_) {rejected=true;}
+  if(!rejected) throw StateError('typed decoder accepted invalid object');
+ }
+ for(final value in <Object?>[null, [], 1, 'text']) {
+  var rejected=false;try {_encodeGeneratedJSONQuery(value,64);} on FormatException {rejected=true;}
+  if(!rejected) throw StateError('accepted non-object');
+ }
+ var rejected=false;try {_encodeGeneratedJSONQuery({'a':'中'},10);} on FormatException {rejected=true;}
+ if(!rejected) throw StateError('UTF8 byte bound not enforced');
+}
+`
+	file := filepath.Join(t.TempDir(), "fixture.dart")
+	if err := os.WriteFile(file, []byte(script), 0600); err != nil {
+		t.Fatal(err)
+	}
+	command := exec.Command(dart, file)
+	if output, err := command.CombinedOutput(); err != nil {
+		t.Fatalf("Dart runtime: %v\n%s", err, output)
 	}
 }
 

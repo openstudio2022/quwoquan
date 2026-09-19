@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：不直接参与用户 Journey；为治理流水线提供只读证据聚合、准入解释与运行观测契约
 >
-> 设计归属：父 L2 后续由主会话接线；当前实现只细化既有 Human/Objective/HOTL 单轨边界，不修改其 owner
+> 设计引用：父 L2 后续由主会话接线；当前实现只细化既有 Human/Objective/HOTL 单轨边界，不修改其 owner
 
 ## 1. 用户价值
 
@@ -14,7 +14,7 @@
 
 ### In Scope
 
-- 从 Skill PRE 生成的 fingerprint-indexed owner manifest immutable exact ref 开始，分层消费本地 scope/release readiness、Review、Human-owned calibration readback、hosted authority、Objective、effect、Portal、hosted CI、环境/设备/UAT、Commercial/Prod/channel/outcome、handoff consumer 与 HOTL inspect 的 readback。
+- 从 Skill PRE 生成的 fingerprint-indexed context manifest immutable exact ref 开始，分层消费本地 scope/release readiness、Review、Human-owned calibration readback、hosted authority、Objective、effect、Portal、hosted CI、环境/设备/UAT、Commercial/Prod/channel/outcome、handoff consumer 与 HOTL inspect 的 readback。
 - 只读输出 `blocked / not_admitted / eligible_observe_only / observe_only`，按 schema、freshness、fingerprint 和独立证据 owner 进行 fail-closed 聚合。
 - 定义治理运行指标的 schema 与安全维度；evaluator 只验证指标存在和 shape，不采集指标。
 
@@ -29,7 +29,7 @@
 <a id="req-001"></a>
 ### REQ-001 分层证据只聚合、不互相冒充
 
-- evaluator 必须从 owner manifest immutable exact ref 开始分别消费各层 exact readback；manifest ref 缺失、摘要漂移、schema 无效、证据过期或 fingerprint mismatch 优先返回 `blocked`。代码存在、命名证据未执行、集成未证明与 live 外部依赖缺失必须使用不同终态和 blocker，不得统一写成 `absent`。
+- evaluator 必须从 context manifest immutable exact ref 开始分别消费各层 exact readback；manifest ref 缺失、摘要漂移、schema 无效、证据过期或 fingerprint mismatch 优先返回 `blocked`。代码存在、命名证据未执行、集成未证明与 live 外部依赖缺失必须使用不同终态和 blocker，不得统一写成 `absent`。
 - 各层证据必须保持独立：machine baseline 不得替代 Human-owned calibration readback，Review `READY` 不得替代 `PASS`，且 consolidation 中出现任一 `GATE_BLOCK` finding 时必须拒绝 Review PASS；`scope_ready` 不得替代 `release_ready`。hosted code/integration 不得替代 hosted live，Portal test/build 不得替代 Portal UAT，released、published 与 outcome attained 不得互推。
 - 每层由 contract 冻结唯一 producer/adapter 身份、允许的 provider kind、release eligibility、candidate/scope/fingerprint binding 与最大证据年龄。freshness 只能由 adapter 对 provider-owned timestamp 验证，不接受 `fresh=true`；bundle 保存显式 receipt ref 与 exact bytes，不保存调用方自报 truth boolean。
 - canonical contract 只拥有 schema、required evidence、真实 hosted Story/service contract/adapter 实现引用与命名 evidence 身份，不拥有随运行变化的当前 PASS/absent 状态。当前状态只能从绑定 current EvidenceFingerprint 的 canonical receipt 读取。
@@ -82,7 +82,7 @@
 <a id="gwt-003"></a>
 ### GWT-003 CLI、指标 shape 与当前仓终态诚实
 
-- GIVEN canonical contract、只读 CLI、当前仓真实 code、owner manifest immutable exact ref、明确命名的 readiness/Review/code/integration/Portal receipt 与尚未完成的外部依赖。
+- GIVEN canonical contract、只读 CLI、当前仓真实 code、context manifest immutable exact ref、明确命名的 readiness/Review/code/integration/Portal receipt 与尚未完成的外部依赖。
 - WHEN gate 不带 bundle 仅执行 evaluator safety self-check，或显式从受限 `.qwq_output/env/repo/runs/governance-pipeline/**` evidence bundle 读取 owner receipt refs、冻结 exact bytes 并验证 current canonical EvidenceFingerprint；receipt 缺失、伪造、过期、跨 fingerprint、仅文件存在或自报 boolean。
 - THEN typed JSON 不输出 traceback，只有 exact current receipt 能投影对应层 PASS；Review `READY`、Portal pass、代码存在和 activation self-assert 均不得冒充下游事实。输出包含首个优先 blocker 与完整 blocker 集。
 - AND gate 对当前仓输出 `not_admitted/manual` 的预期终态；成功退出只表示 expected fail-closed evaluator 有效，不是 admission PASS，production/commercial/HOTL claims 恒为 false。
@@ -92,7 +92,7 @@
 - Human 与真实 calibration：`human-agent-delivery-interaction` 的 Human provider/calibration OPEN。
 - Hosted authority：`hosted-human-authority` 的 contract/provider/consumer、identity/infrastructure/live UAT OPEN。
 - Objective/HOTL：只动态消费现有 owner readback，不复制其 wire 或升级其 authority。
-- owner manifest exact ref、父节点与 Makefile/gate_repo 接线均由当前 canonical producer、consumer 与 gate 直接验证；不得以固定 current pointer 或另一个 admission receipt 代替。
+- context manifest exact ref、父节点与 Makefile/gate_repo 接线均由当前 canonical producer、consumer 与 gate 直接验证；不得以固定 current pointer 或另一个 admission receipt 代替。
 
 ## 7. 开放事项
 

@@ -1,5 +1,7 @@
-// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-008
-// readiness_case: promote-post-to-work-api
+// spec_ref: specs/feature-tree/discovery-content/content-type-framework/spec.md#sit-003
+// readiness_case: update-post-settings-api
+// spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/post-create-update/spec.md#gwt-009
+// 发布后设置持久化与作者回读的服务侧证据；不代表完整端云设置旅程通过。
 package api_integration
 
 import (
@@ -7,28 +9,32 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"strings"
 	"testing"
 
 	semanticfixture "quwoquan_service/services/content-service/tests/support/semanticfixture"
 )
 
-func TestSubmitPostPublicationPersistsIdentityAndAssistantUsePolicy(t *testing.T) {
+func TestSubmitPostPublicationPersistsContentTypeAndAssistantUsePolicy(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	resp := submitPublishedPostWithAuthor(t, "identity_author", `{
-			"contentType":"micro",
-			"contentIdentity":"moment",
-			"assistantUsePolicy":"exclude",
-			"body":"只给自己看的点滴"
-		}`)
-	if resp["contentIdentity"] != "moment" {
-		t.Fatalf("expected contentIdentity=moment, got %v", resp["contentIdentity"])
-	}
-	if resp["assistantUsePolicy"] != "exclude" {
-		t.Fatalf("expected assistantUsePolicy=exclude, got %v", resp["assistantUsePolicy"])
-	}
-	if resp["status"] != "published" {
-		t.Fatalf("expected status=published after atomic publication, got %v", resp["status"])
+	for _, contentType := range []string{"image", "video", "article"} {
+		t.Run(contentType, func(t *testing.T) {
+			resp := submitPublishedPostWithAuthor(t, "content_type_author_"+contentType, `{
+				"contentType":"`+contentType+`",
+				"assistantUsePolicy":"exclude",
+				"body":"发布后保留的正文"
+			}`)
+			if resp["contentType"] != contentType {
+				t.Fatalf("expected contentType=%s, got %v", contentType, resp["contentType"])
+			}
+			if resp["assistantUsePolicy"] != "exclude" {
+				t.Fatalf("expected assistantUsePolicy=exclude, got %v", resp["assistantUsePolicy"])
+			}
+			if resp["status"] != "published" {
+				t.Fatalf("expected status=published after atomic publication, got %v", resp["status"])
+			}
+		})
 	}
 }
 
@@ -37,7 +43,6 @@ func TestUpdatePostSettingsContract(t *testing.T) {
 
 	created := submitPublishedPostWithAuthor(t, "settings_author", `{
 		"contentType":"article",
-		"contentIdentity":"work",
 		"title":"可调整设置的作品",
 		"body":"发布内容保持不可变"
 	}`)
@@ -92,7 +97,6 @@ func TestUpdatePostSettingsRejectsRetiredCirclePlacementFields(t *testing.T) {
 
 	created := submitPublishedPostWithAuthor(t, "settings_author", `{
 		"contentType":"image",
-		"contentIdentity":"work",
 		"title":"初始作品"
 	}`)
 	postID, _ := created["postId"].(string)
@@ -117,61 +121,13 @@ func TestUpdatePostSettingsRejectsRetiredCirclePlacementFields(t *testing.T) {
 	}
 }
 
-func TestPromotePostToWorkContract(t *testing.T) {
-	t.Cleanup(func() { cleanPosts(t) })
-
-	created := submitPublishedPostWithAuthor(t, "promote_author", `{
-		"contentType":"micro",
-		"contentIdentity":"moment",
-		"body":"旅行路上的随手记录"
-	}`)
-	postID, _ := created["postId"].(string)
-
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/content/posts/"+postID+":promoteToWork",
-		strings.NewReader(`{
-			"contentType":"image",
-			"title":"东京旅行相册",
-			"summary":"整理为可长期保存的旅行作品",
-			"coverUrl":"https://example.com/travel-cover.jpg",
-			"assistantUsePolicy":"exclude"
-		}`),
-	)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Client-User-Id", "promote_author")
-	ensureIdempotencyHeader(req, "promote-to-work")
-	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var resp map[string]any
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if resp["postId"] != postID {
-		t.Fatalf("expected same post id, got %v", resp["postId"])
-	}
-	if resp["contentIdentity"] != "work" {
-		t.Fatalf("expected contentIdentity=work, got %v", resp["contentIdentity"])
-	}
-	if resp["contentType"] != "image" {
-		t.Fatalf("expected contentType=image, got %v", resp["contentType"])
-	}
-	if resp["title"] != "东京旅行相册" {
-		t.Fatalf("expected title updated, got %v", resp["title"])
-	}
-}
-
-func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
+func TestRetiredPromoteRouteCannotMutateArticleCountersOrCommentThread(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 
 	created := submitPublishedPostWithAuthor(t, "promote_thread_author", `{
-		"contentType":"micro",
-		"contentIdentity":"moment",
-		"body":"升级前的点滴"
+		"contentType":"article",
+		"title":"不可变文章",
+		"body":"旧入口不得改变的正文"
 	}`)
 	postID, _ := created["postId"].(string)
 	if postID == "" {
@@ -201,10 +157,21 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 	if likeRec.Code != http.StatusOK {
 		t.Fatalf("expected 200 like response, got %d: %s", likeRec.Code, likeRec.Body.String())
 	}
-	// ContentReaction owns the authoritative relation and updates Post/feed
-	// counters through its durable outbox. Wait for that production convergence
-	// boundary before proving PromotePost preserves the projected counter.
+	// 先经过 ContentReaction 的生产 outbox 收敛，再验证退役入口不能改变已有计数。
 	drainReactionOutbox(t)
+	beforeCountersReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID+"/counters", nil)
+	beforeCountersRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(beforeCountersRec, beforeCountersReq)
+	if beforeCountersRec.Code != http.StatusOK {
+		t.Fatalf("read counters before retired request status=%d body=%s", beforeCountersRec.Code, beforeCountersRec.Body.String())
+	}
+	var beforeCounters map[string]any
+	if err := json.Unmarshal(beforeCountersRec.Body.Bytes(), &beforeCounters); err != nil {
+		t.Fatalf("decode counters before retired request: %v", err)
+	}
+	if beforeCounters["likeCount"] != float64(1) || beforeCounters["commentCount"] != float64(1) {
+		t.Fatalf("must establish existing like and comment before retired request: %+v", beforeCounters)
+	}
 
 	promoteBody, err := json.Marshal(map[string]any{"contentType": "article", "title": "升级后的长文", "articleMarkdown": "# 升级后的长文\n\n升级后正文", "markdownDialect": "qwq-rich-md", "semanticDocument": semanticfixture.Map(t), "articleAssetManifest": map[string]any{"assets": []any{}}})
 	if err != nil {
@@ -216,19 +183,25 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 	ensureIdempotencyHeader(promoteReq, "promote-thread")
 	promoteRec := httptest.NewRecorder()
 	testHandler.ServeHTTP(promoteRec, promoteReq)
-	if promoteRec.Code != http.StatusOK {
-		t.Fatalf("expected 200 promote response, got %d: %s", promoteRec.Code, promoteRec.Body.String())
+	if promoteRec.Code != http.StatusNotFound {
+		t.Fatalf("retired route must return 404, got %d: %s", promoteRec.Code, promoteRec.Body.String())
 	}
 
-	var promoteResp map[string]any
-	if err := json.Unmarshal(promoteRec.Body.Bytes(), &promoteResp); err != nil {
-		t.Fatalf("decode promote response: %v", err)
+	articleReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID, nil)
+	articleReq.Header.Set("X-Client-User-Id", "promote_thread_author")
+	articleRec := httptest.NewRecorder()
+	testHandler.ServeHTTP(articleRec, articleReq)
+	if articleRec.Code != http.StatusOK {
+		t.Fatalf("read unchanged article status=%d body=%s", articleRec.Code, articleRec.Body.String())
 	}
-	if promoteResp["postId"] != postID {
-		t.Fatalf("expected promote keep same post id, got %v", promoteResp["postId"])
+	var article map[string]any
+	if err := json.Unmarshal(articleRec.Body.Bytes(), &article); err != nil {
+		t.Fatalf("decode unchanged article: %v", err)
 	}
-	if promoteResp["contentIdentity"] != "work" {
-		t.Fatalf("expected work identity after promote, got %v", promoteResp["contentIdentity"])
+	for _, field := range []string{"postId", "contentType", "title", "body", "articleMarkdown", "articleMarkdownDigest", "semanticDocument", "assistantUsePolicy"} {
+		if !reflect.DeepEqual(article[field], created[field]) {
+			t.Fatalf("retired route changed %s: before=%v after=%v", field, created[field], article[field])
+		}
 	}
 
 	countersReq := httptest.NewRequest(http.MethodGet, "/content/posts/"+postID+"/counters", nil)
@@ -240,6 +213,9 @@ func TestPromotePostKeepsCountersAndCommentThread(t *testing.T) {
 	var counters map[string]any
 	if err := json.Unmarshal(countersRec.Body.Bytes(), &counters); err != nil {
 		t.Fatalf("decode counters: %v", err)
+	}
+	if !reflect.DeepEqual(counters, beforeCounters) {
+		t.Fatalf("retired route changed counters: before=%+v after=%+v", beforeCounters, counters)
 	}
 	if counters["likeCount"] != float64(1) {
 		t.Fatalf("expected like counter preserved, got %v", counters["likeCount"])
@@ -273,7 +249,6 @@ func TestAssistantAccessRevokedAfterSettingsChange(t *testing.T) {
 
 	created := submitPublishedPostWithAuthor(t, "assistant_author", `{
 		"contentType":"article",
-		"contentIdentity":"work",
 		"title":"可被小趣引用的作品",
 		"body":"初始正文"
 	}`)
@@ -364,9 +339,8 @@ func assertStablePostNotFound(t *testing.T, raw []byte) {
 
 func TestPostCreateRejectsDirectCirclePlacement(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-	request := newPostPublicationRequestForTest(t, "circle_author", `{
+	payload := completePublicationFixturePrerequisites(t, "circle_author", `{
 		"contentType":"article",
-		"contentIdentity":"work",
 		"title":"圈内作品",
 		"body":"仅圈成员可见",
 		"articleMarkdown":"# 圈内作品\n\n仅圈成员可见",
@@ -375,6 +349,7 @@ func TestPostCreateRejectsDirectCirclePlacement(t *testing.T) {
 		"visibility":"circle_visible",
 		"circleIds":["circle_alpha"]
 	}`)
+	request := newPostPublicationRequestForTest(t, "circle_author", payload)
 	recorder := httptest.NewRecorder()
 	testHandler.ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusBadRequest {
@@ -382,45 +357,38 @@ func TestPostCreateRejectsDirectCirclePlacement(t *testing.T) {
 	}
 }
 
-func TestListUserPostsByIdentity(t *testing.T) {
+func TestListUserPostsByContentType(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
-
-	submitPublishedPostWithAuthor(t, "identity_feed_author", `{
-		"contentType":"micro",
-		"contentIdentity":"moment",
-		"body":"早安点滴"
-	}`)
-	submitPublishedPostWithAuthor(t, "identity_feed_author", `{
-		"contentType":"article",
-		"contentIdentity":"work",
-		"title":"旅行笔记",
-		"body":"整理成笔记"
-	}`)
-
-	req := httptest.NewRequest(
-		http.MethodGet,
-		"/content/personas/identity_feed_author/posts?identity=work&type=article&limit=20",
-		nil,
-	)
-	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	postIDs := make(map[string]any)
+	for _, contentType := range []string{"image", "video", "article"} {
+		created := submitPublishedPostWithAuthor(t, "content_type_feed_author", `{
+			"contentType":"`+contentType+`",
+			"title":"旅行记录",
+			"body":"各类型独立筛选"
+		}`)
+		postIDs[contentType] = created["postId"]
 	}
-	var resp struct {
-		Items []map[string]any `json:"items"`
-	}
-	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode response: %v", err)
-	}
-	if len(resp.Items) != 1 {
-		t.Fatalf("expected 1 work article, got %d", len(resp.Items))
-	}
-	if resp.Items[0]["contentIdentity"] != "work" {
-		t.Fatalf("expected contentIdentity=work, got %v", resp.Items[0]["contentIdentity"])
-	}
-	if resp.Items[0]["contentType"] != "article" {
-		t.Fatalf("expected contentType=article, got %v", resp.Items[0]["contentType"])
+	for _, contentType := range []string{"image", "video", "article"} {
+		t.Run(contentType, func(t *testing.T) {
+			req := httptest.NewRequest(http.MethodGet,
+				"/content/personas/content_type_feed_author/posts?type="+contentType+"&limit=20", nil)
+			rec := httptest.NewRecorder()
+			testHandler.ServeHTTP(rec, req)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+			}
+			var resp struct {
+				Items []map[string]any `json:"items"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("decode response: %v", err)
+			}
+			if len(resp.Items) != 1 {
+				t.Fatalf("expected one %s post among three types, got %d", contentType, len(resp.Items))
+			}
+			if resp.Items[0]["contentType"] != contentType || resp.Items[0]["postId"] != postIDs[contentType] {
+				t.Fatalf("content type filter returned another post: %+v", resp.Items[0])
+			}
+		})
 	}
 }

@@ -39,7 +39,6 @@ void main() {
 
     test('postReadPreviewFromPublishConfirmSummary work article branch', () {
       final preview = postReadPreviewFromPublishConfirmSummary(
-        contentIdentity: CreateContentIdentity.work,
         title: 'T',
         body: 'B',
         hasVideo: false,
@@ -51,7 +50,6 @@ void main() {
 
     test('createPublishConfirmPreviewWire video uses contentType video', () {
       final wire = createPublishConfirmPreviewWire(
-        contentIdentity: CreateContentIdentity.moment,
         title: '',
         body: 'caption',
         hasVideo: true,

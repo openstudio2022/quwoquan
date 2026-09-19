@@ -92,8 +92,6 @@ def _transaction_root(output_root: Path, transaction_id: str) -> Path:
 
 def _post_media_issues(payload: dict[str, Any], ref: str) -> list[dict[str, str]]:
     issues: list[dict[str, str]] = []
-    if str(payload.get("contentIdentity") or "").strip() != "work":
-        issues.append({"code": "post_content_identity_invalid", "ref": ref})
     assets = payload.get("assets")
     if not isinstance(assets, list):
         return issues
@@ -160,7 +158,7 @@ def _document_closure_issues(
             issues.append({"code": "dangling_asset_ref", "ref": f"{rel}:{object_key}"})
     if not rel.startswith("creators/"):
         referenced_creators.update(_collect_creator_ids(payload))
-    if rel.startswith("entities/") and rel.endswith("/_entity.json"):
+    if rel.startswith("entities/") and rel.endswith("/manifest.json"):
         creator_profile_id = str(payload.get("creatorProfileId") or "").strip()
         if creator_profile_id:
             creator_refs = creator_refs_of(rel)
@@ -300,8 +298,11 @@ def validate_publish_invariants(root: Path) -> dict[str, Any]:
     referenced_media: set[str] = set()
     referenced_creators: set[str] = set()
     referenced_tags: set[str] = set()
-    from core.publish_repository import canonical_files
-    paths = canonical_files(root)
+    from core.publish_repository import PublishRepositoryError, canonical_files
+    try:
+        paths = canonical_files(root)
+    except PublishRepositoryError as exc:
+        return {"status": "failed", "scope": "full", "issues": [{"code": "noncanonical_root", "ref": str(exc)}]}
 
     def cas_resolved(object_key: str) -> bool:
         return _media_holding_resolved(object_key)

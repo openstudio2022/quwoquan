@@ -78,6 +78,8 @@ def test_stale_report_exposes_scope_and_does_not_imply_health() -> None:
     assert projection["measurementStatus"] == "unavailable"
     assert projection["selection"]["emptyMeansHealthy"] is False
     assert projection["authority"]["blocksDevelopment"] is False
+    assert projection["scopeContextStatus"] == "unavailable"
+    assert "scope_context=unavailable" in hotspots.render(projection)
 
 
 def test_unavailable_is_typed_and_does_not_block(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:

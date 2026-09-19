@@ -42,15 +42,20 @@ void main() {
           SubmitContentPostPublicationCommand(
             publishIntentId: 'my-reports-uat-$suffix',
             localDraftId: 'my-reports-uat-draft-$suffix',
-            contentType: ContentType.micro,
-            contentIdentity: ContentIdentity.moment,
+            contentType: ContentType.article,
             title: '举报生命周期验收 $suffix',
-            body: '举报对象正文只来自公开 Content command',
+            articleMarkdown:
+                '---\nmarkdownDialect: qwq-rich-md\n---\n\n'
+                '举报对象正文只来自公开 Content command',
             visibility: Visibility.public,
           ),
         );
         postId = publication.postId;
-        expect(postId.trim(), isNotEmpty, reason: 'publication must return postId');
+        expect(
+          postId.trim(),
+          isNotEmpty,
+          reason: 'publication must return postId',
+        );
 
         await harness.reports.createReport(
           CreateContentReportCommand(
@@ -73,9 +78,8 @@ void main() {
         await launchPatrolAppOnce($);
         await patrolGoTo($, AppRoutePaths.myReports);
 
-        await $(
-          find.text(ContentText.myReportsTitle),
-        ).waitUntilVisible(timeout: const Duration(seconds: 15));
+        await $(find.text(ContentText.myReportsTitle))
+            .waitUntilVisible(timeout: const Duration(seconds: 15));
 
         final lifecycleVisible = await _waitForNonEmptyLifecycleRow($);
         expect(

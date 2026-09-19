@@ -1,0 +1,16 @@
+read_model: ContentListItemProjection
+description: >-
+  Content 查询边界水合的只读列表项；envelope 是展示决策的唯一来源，
+  post/homepage 是各 owner 的公开只读投影，不得回写对象或重新计算展示决策。
+  objectKind=post 时 envelope.post 与 post 必须存在，两个 homepage 必须缺席，
+  postId/contentType 必须与信封一致；objectKind=entity_homepage 时反之，
+  homepageId 必须一致且 contentType 必须为空。组装和解码边界验证互斥及一致性。
+  独立 Post 投影保留自身内容类型作为对象事实；列表导航与卡片分派只消费信封，
+  禁止将只读副本视为第二个可写 authority。未知或无效项不得伪装为默认 Post。
+source_entities: [Post, HomepageSearchItemView]
+source_projections: [ContentPostProjection]
+consumers: [app]
+fields:
+- {name: envelope, type: ListItemPresentationEnvelope, nullable: false}
+- {name: post, type: ContentPostProjection, nullable: true}
+- {name: homepage, type: HomepageSearchItemView, nullable: true}

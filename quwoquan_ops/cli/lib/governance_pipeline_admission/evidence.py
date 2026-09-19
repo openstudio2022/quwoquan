@@ -450,8 +450,7 @@ def _assert_layer_policy(readback: dict[str, Any], *, layer: str, subject: Mappi
 
 def _default_receipts() -> dict[str, Any]:
     return {
-        "owner_manifest": None,
-        "local_scope_ready": None, "local_release_ready": None,
+        "candidate_evidence": None, "local_scope_ready": None, "local_release_ready": None,
         "review_plan": None, "named_evidence": {}, "review_consolidation": None,
         "handoff": None, "human_calibration": None, "objective_inspect": None,
         "hotl_inspect": None, "hosted_authority_source": None, "external": {},
@@ -473,7 +472,7 @@ def assemble_evidence_bundle(
     source = contract["current_repository_evidence"]
     provider = source["provider_adapters"]
     singular = {
-        "owner_manifest": provider["owner_manifest"]["provider_id"],
+        "candidate_evidence": provider["candidate_evidence"]["provider_id"],
         "local_scope_ready": provider["local_readiness"]["provider_id"],
         "local_release_ready": provider["local_readiness"]["provider_id"],
         "review_plan": "review_plan_v4",
@@ -592,18 +591,14 @@ def _named_binding_context(
     bundle: Mapping[str, Any], contract: Mapping[str, Any],
 ) -> tuple[str, str, bytes, dict[str, Any]]:
     receipts = bundle["receipts"]
+    if receipts["candidate_evidence"] is None:
+        raise EvidenceAdapterError.identity("named evidence exact candidate evidence receipt missing")
     if receipts["review_plan"] is None:
-        raise EvidenceAdapterError.identity(
-            "named evidence exact Review plan receipt missing"
-        )
-    if receipts["owner_manifest"] is None:
-        raise EvidenceAdapterError.identity(
-            "named evidence exact owner manifest receipt missing"
-        )
-    owner_ref, _owner_raw = _decode_bundle_receipt(
-        receipts["owner_manifest"],
-        expected_provider=contract["current_repository_evidence"]["provider_adapters"]["owner_manifest"]["provider_id"],
-        label="named evidence owner_manifest",
+        raise EvidenceAdapterError.identity("named evidence exact Review plan receipt missing")
+    candidate_ref, _candidate_raw = _decode_bundle_receipt(
+        receipts["candidate_evidence"],
+        expected_provider=contract["current_repository_evidence"]["provider_adapters"]["candidate_evidence"]["provider_id"],
+        label="named evidence candidate_evidence",
     )
     plan_ref, plan_raw = _decode_bundle_receipt(
         receipts["review_plan"], expected_provider="review_plan_v4",
@@ -612,19 +607,16 @@ def _named_binding_context(
     try:
         plan = json.loads(plan_raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise EvidenceAdapterError.schema(
-            f"named evidence Review plan JSON invalid: {error}"
-        ) from error
+        raise EvidenceAdapterError.schema(f"named evidence Review plan JSON invalid: {error}") from error
     if not isinstance(plan, dict):
-        raise EvidenceAdapterError.schema(
-            "named evidence Review plan must be a JSON object"
-        )
-    return owner_ref, plan_ref, plan_raw, plan
-
+        raise EvidenceAdapterError.schema("named evidence Review plan must be a JSON object")
+    if str((plan.get("candidate_evidence_identity") or {}).get("ref") or "") != candidate_ref:
+        raise EvidenceAdapterError.identity("Review plan candidate evidence ref mismatch")
+    return candidate_ref, plan_ref, plan_raw, plan
 
 def _decode_and_bind_named_receipt(
     value: object, *, layer: str, expected_evidence_id: str,
-    plan: dict[str, Any], owner_manifest_ref: str,
+    plan: dict[str, Any],
     subject: Mapping[str, Any], contract: Mapping[str, Any],
 ) -> tuple[str, bytes, dict[str, Any]]:
     ref, raw = _decode_bundle_receipt(
@@ -652,8 +644,7 @@ def _decode_and_bind_named_receipt(
     try:
         governance_contract.validate_named_evidence_plan_binding(
             plan=plan, receipt=receipt, subject=subject,
-            expected_owner_identity_ref=owner_manifest_ref,
-            expected_candidate_evidence_ref=str((plan.get("candidate_evidence_identity") or {}).get("ref") or ""),
+                        expected_candidate_evidence_ref=str((plan.get("candidate_evidence_identity") or {}).get("ref") or ""),
             contract=contract,
             label=f"{layer}:{expected_evidence_id}",
         )
@@ -692,13 +683,13 @@ def _named_receipts(bundle: Mapping[str, Any], contract: Mapping[str, Any], *, s
                 raise context_error
             if context is None:
                 raise EvidenceAdapterError.identity(
-                    "named evidence exact plan/owner binding unavailable"
+                    "named evidence exact plan/candidate binding unavailable"
                 )
-            owner_ref, _plan_ref, _plan_raw, plan = context
+            _candidate_ref, _plan_ref, _plan_raw, plan = context
             ref, raw, receipt = _decode_and_bind_named_receipt(
                 value, layer=layer,
                 expected_evidence_id=str(descriptor["evidence_id"]),
-                plan=plan, owner_manifest_ref=owner_ref, subject=subject,
+                plan=plan, subject=subject,
                 contract=contract,
             )
             if receipt["terminal"] != {"status": "PASS", "code": "EVIDENCE.PASSED", "failed_evidence": None}:
@@ -749,32 +740,24 @@ def current_repository_input(
         }
     receipts = bundle["receipts"]
     # One bundle consumption has exactly one timezone-aware verification clock.
-    manifest_ref: str | None = None
+    candidate_ref: str | None = None
     try:
-        manifest_ref, manifest_raw = _decode_bundle_receipt(receipts["owner_manifest"], expected_provider=contract["current_repository_evidence"]["provider_adapters"]["owner_manifest"]["provider_id"], label="owner_manifest")
-        readback, _ = adapters.verify_owner_manifest(
-            raw=manifest_raw, receipt_ref=manifest_ref,
-            candidate_id=subject["candidate_id"], scope_id=subject["scope_id"],
-            verification_time=now, contract=contract,
+        candidate_ref, _candidate_raw = _decode_bundle_receipt(
+            receipts["candidate_evidence"],
+            expected_provider=contract["current_repository_evidence"]["provider_adapters"]["candidate_evidence"]["provider_id"],
+            label="candidate_evidence",
         )
-        evidence["owner_manifest"] = _assert_layer_policy(readback, layer="owner_manifest", subject=subject, contract=contract, now=now)
-    except Exception as error:
-        evidence["owner_manifest"] = (
-            _failed(error, verification_time=now)
-            if receipts["owner_manifest"] is not None
-            else _failed(
-                "required owner manifest receipt missing", verification_time=now,
-            )
-        )
+    except Exception:
+        candidate_ref = None
     for level in ("scope", "release"):
         layer = f"local_{level}_ready"
         try:
-            if manifest_ref is None:
-                raise ContractError("owner manifest ref unavailable")
+            if candidate_ref is None:
+                raise ContractError("candidate evidence ref unavailable")
             ref, raw = _decode_bundle_receipt(receipts[layer], expected_provider=contract["current_repository_evidence"]["provider_adapters"]["local_readiness"]["provider_id"], label=layer)
             readback = adapters.verify_local_readiness(
                 level=level, raw=raw, receipt_ref=ref,
-                owner_manifest_ref=manifest_ref, candidate_id=subject["candidate_id"],
+                candidate_evidence_ref=candidate_ref, candidate_id=subject["candidate_id"],
                 scope_id=subject["scope_id"], verification_time=now, contract=contract,
             )
             evidence[layer] = _assert_layer_policy(readback, layer=layer, subject=subject, contract=contract, now=now)
@@ -785,7 +768,7 @@ def current_repository_input(
                 else _absent(detail=f"{layer} receipt missing", verification_time=now)
             )
     try:
-        owner_ref, plan_ref, plan_raw, plan = _named_binding_context(bundle, contract)
+        candidate_ref, plan_ref, plan_raw, plan = _named_binding_context(bundle, contract)
         named_receipts = receipts["named_evidence"]
         if not isinstance(named_receipts, Mapping):
             raise ContractError("named_evidence bundle field must be an object")
@@ -797,7 +780,7 @@ def current_repository_input(
             evidence_ref, evidence_raw, _receipt = _decode_and_bind_named_receipt(
                 value, layer=layer,
                 expected_evidence_id=str(descriptor["evidence_id"]),
-                plan=plan, owner_manifest_ref=owner_ref, subject=subject,
+                plan=plan, subject=subject,
                 contract=contract,
             )
             bound_named.append((evidence_ref, evidence_raw))

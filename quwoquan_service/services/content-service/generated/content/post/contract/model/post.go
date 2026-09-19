@@ -32,7 +32,6 @@ type Post struct {
 	AuthorAvatarUrlSnapshot   string                             `json:"authorAvatarUrlSnapshot" bson:"authorAvatarUrlSnapshot"`
 	PersonaContextVersion     int64                              `json:"personaContextVersion" bson:"personaContextVersion"`
 	ContentType               string                             `json:"contentType" bson:"contentType"`
-	ContentIdentity           string                             `json:"contentIdentity" bson:"contentIdentity"`
 	Title                     string                             `json:"title" bson:"title"`
 	Body                      string                             `json:"body" bson:"body"`
 	TagRefs                   []string                           `json:"tagRefs" bson:"tagRefs"`
@@ -249,7 +248,6 @@ type SourceAttribution struct {
 	AttributionText               string    `json:"attributionText" bson:"attributionText"`
 	RightsBasis                   string    `json:"rightsBasis" bson:"rightsBasis"`
 	CommercialAuthorizationStatus string    `json:"commercialAuthorizationStatus" bson:"commercialAuthorizationStatus"`
-	PublicationAdmission          string    `json:"publicationAdmission" bson:"publicationAdmission"`
 	AuthorizationProofUrl         string    `json:"authorizationProofUrl" bson:"authorizationProofUrl"`
 	TermsUrl                      string    `json:"termsUrl" bson:"termsUrl"`
 	DerivedModifications          []string  `json:"derivedModifications" bson:"derivedModifications"`

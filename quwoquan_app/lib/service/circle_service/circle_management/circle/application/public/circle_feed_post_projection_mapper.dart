@@ -9,8 +9,12 @@ final class CircleFeedPostProjectionMapper {
     return ContentPostViewData.fromWire(
       ContentPostProjection(
         postId: projection.postId,
-        contentType: projection.contentType,
-        contentIdentity: projection.contentIdentity,
+        // 圈子投影的 contentType 仍是 wire string（契约尚未类型化），在
+        // adapter 边界一次解成闭集；不下传裸字符串，也不放宽未知值。
+        contentType: ContentType.fromWire(
+          projection.contentType,
+          'CircleFeedItemView.contentType',
+        ),
         assistantUsePolicy: projection.assistantUsePolicy,
         authorId: projection.authorId,
         authorDisplayName: projection.authorDisplayName,

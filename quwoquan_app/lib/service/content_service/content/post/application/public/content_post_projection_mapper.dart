@@ -5,7 +5,17 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
 final class ContentPostProjectionMapper {
   const ContentPostProjectionMapper();
 
-  ContentPostViewData toDto(ContentPostProjection projection) {
-    return ContentPostViewData.fromWire(projection);
+  /// [openSurface] 与 [presentationRecipe] 来自同一列表项的信封；不下发信封的
+  /// 操作（详情、离线快照）保持缺席，端侧不按内容类型补猜。
+  ContentPostViewData toDto(
+    ContentPostProjection projection, {
+    ContentUiSurface? openSurface,
+    FeedPresentationRecipe? presentationRecipe,
+  }) {
+    return ContentPostViewData.fromWire(
+      projection,
+      openSurface: openSurface,
+      presentationRecipe: presentationRecipe,
+    );
   }
 }

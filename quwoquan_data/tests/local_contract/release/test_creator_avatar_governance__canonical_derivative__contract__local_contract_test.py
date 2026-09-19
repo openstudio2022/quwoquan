@@ -207,7 +207,7 @@ def test_materialize_creator_avatar_preserves_append_only_pool_history(
         tmp_path,
         monkeypatch,
     )
-    history = publish / "creators/creator_test/_pool/versions/1.json"
+    history = publish / "creators/creator_test/records/1.json"
     history_body = b'{"recordSequence":1}\n'
     history.parent.mkdir(parents=True, exist_ok=True)
     history.write_bytes(history_body)

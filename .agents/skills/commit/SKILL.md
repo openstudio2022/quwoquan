@@ -14,7 +14,7 @@ metadata:
 
 ## 执行
 
-1. PRE 确认用户明确要求提交与精确 scope；若存在本轮 owner manifest / Review evidence 则一并引用，缺失不阻断，不在 commit 生成替代证据。
+1. PRE 确认用户明确要求提交与精确 scope；若存在本轮 context manifest / Review evidence 则一并引用，缺失不阻断，不在 commit 生成替代证据。
 2. 重新检查 branch、HEAD、脏树、untracked、secret/PII、所有权与活跃 writer，只用显式 pathspec 暂存当前 scope；记录 lane 相对本地 `dev1.0` 的 ahead/behind，behind 超过 `worktree_policy.yaml#resync_reminder_behind_commits` 时只建议先 `sync-lane-from-dev`，不自动同步、不阻断提交。
 3. 检视 staged diff 与生成物身份，执行 L0 `quwoquan_ops/gate/commit_gate.sh`；pre-commit 的 staged boundary 与 L0 都不用 `--no-verify` 绕过。
 4. 按仓库风格提交，随后核对 SHA、提交文件与剩余工作树，不清理他人变更。

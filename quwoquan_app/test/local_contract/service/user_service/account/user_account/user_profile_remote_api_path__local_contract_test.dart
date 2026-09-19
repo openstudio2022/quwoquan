@@ -203,22 +203,6 @@ void main() {
       );
     });
 
-    test('ResolveProfileQrToken exact query wire and typed target', () async {
-      final result = await facet.resolveProfileQrToken(
-        const ResolveProfileQrTokenQuery(qr: 'qr-token-1', handle: 'xiaoq'),
-      );
-
-      expect(result.personaId, 'persona-2');
-      expect(result.scanStatus, 'accepted');
-      _expectLastRequest(
-        log,
-        operationId: AppCloudOperationIds.userUserAccountResolveProfileQrToken,
-        clientPageId: UserRequestPageIds.resolveProfileQrToken,
-        method: 'GET',
-        query: const <String, String>{'qr': 'qr-token-1', 'handle': 'xiaoq'},
-      );
-    });
-
     final failureCases =
         <
           ({
@@ -279,13 +263,6 @@ void main() {
             operationId: AppCloudOperationIds.userUserAccountGetProfileQrCard,
             invoke: (target) =>
                 target.getProfileQrCard(const GetProfileQrCardQuery()),
-          ),
-          (
-            operationId:
-                AppCloudOperationIds.userUserAccountResolveProfileQrToken,
-            invoke: (target) => target.resolveProfileQrToken(
-              const ResolveProfileQrTokenQuery(qr: 'qr-token-1'),
-            ),
           ),
         ];
 

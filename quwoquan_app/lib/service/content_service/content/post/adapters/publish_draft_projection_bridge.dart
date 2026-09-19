@@ -19,7 +19,6 @@ Map<String, dynamic> createEditorStateToArticlePreviewWire(
     'id': previewPostId,
     'contentType': 'article',
     'type': 'article',
-    'contentIdentity': 'work',
     'title': state.title.trim(),
     'body': state.body.trim(),
     'displayName': '',
@@ -57,7 +56,6 @@ ContentPostViewData postReadPreviewFromCreateEditorState(
 
 /// 发布确认页摘要 → 与 SubmitPostPublication 可写字段形状对齐的预览 wire（无真实媒体 URL）。
 Map<String, dynamic> createPublishConfirmPreviewWire({
-  required CreateContentIdentity contentIdentity,
   required String title,
   required String body,
   required bool hasVideo,
@@ -76,8 +74,6 @@ Map<String, dynamic> createPublishConfirmPreviewWire({
     'commentCount': 0,
     'shareCount': 0,
   };
-  final isMoment = contentIdentity == CreateContentIdentity.moment;
-  final identityStr = isMoment ? 'moment' : 'work';
   final caption = body.trim().isNotEmpty ? body.trim() : title.trim();
 
   if (hasVideo) {
@@ -86,8 +82,6 @@ Map<String, dynamic> createPublishConfirmPreviewWire({
       ...base,
       'contentType': 'video',
       'type': 'video',
-      'contentIdentity': identityStr,
-      'identity': identityStr,
       'body': caption,
       'videoUrl': 'draft-preview://local',
       'thumbnailUrl': thumbnailUrl,
@@ -104,31 +98,16 @@ Map<String, dynamic> createPublishConfirmPreviewWire({
       ...base,
       'contentType': 'image',
       'type': 'image',
-      'contentIdentity': identityStr,
-      'identity': identityStr,
       if (caption.isNotEmpty) 'body': caption,
       'imageUrls': urls,
       'mediaUrls': urls,
       'coverUrl': urls.first,
     };
   }
-  if (isMoment) {
-    return <String, dynamic>{
-      ...base,
-      'contentType': 'micro',
-      'type': 'micro',
-      'contentIdentity': 'moment',
-      'identity': 'moment',
-      'body': caption,
-      'mediaUrls': const <String>[],
-    };
-  }
   return <String, dynamic>{
     ...base,
     'contentType': 'article',
     'type': 'article',
-    'contentIdentity': 'work',
-    'identity': 'work',
     'title': title.trim(),
     'body': body.trim(),
     'coverUrl': '',
@@ -139,7 +118,6 @@ Map<String, dynamic> createPublishConfirmPreviewWire({
 
 /// 发布确认页 → canonical App read view，供预览文案单轨消费。
 ContentPostViewData postReadPreviewFromPublishConfirmSummary({
-  required CreateContentIdentity contentIdentity,
   required String title,
   required String body,
   required bool hasVideo,
@@ -148,7 +126,6 @@ ContentPostViewData postReadPreviewFromPublishConfirmSummary({
   String previewPostId = 'draft_preview',
 }) {
   final wire = createPublishConfirmPreviewWire(
-    contentIdentity: contentIdentity,
     title: title,
     body: body,
     hasVideo: hasVideo,

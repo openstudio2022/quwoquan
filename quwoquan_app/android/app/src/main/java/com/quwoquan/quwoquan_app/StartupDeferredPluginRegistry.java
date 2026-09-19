@@ -30,8 +30,6 @@ final class StartupDeferredPluginRegistry {
     attached &= registerPlugin(
         flutterEngine, "just_audio", "com.ryanheise.just_audio.JustAudioPlugin");
     attached &= registerPlugin(
-        flutterEngine, "mobile_scanner", "dev.steenbakker.mobile_scanner.MobileScannerPlugin");
-    attached &= registerPlugin(
         flutterEngine,
         "permission_handler_android",
         "com.baseflow.permissionhandler.PermissionHandlerPlugin");

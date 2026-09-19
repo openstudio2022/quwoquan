@@ -66,9 +66,9 @@ const _kWorksInternalFeedEmptyKeys = <ValueKey<String>>[
 const _kRelationHeader = ValueKey<String>('home-relation-card-header');
 const _kRelationActions = ValueKey<String>('home-relation-card-actions');
 
-// 内容卡内容区点击目标（进入沉浸消费）：moment 网格 / 媒体 / 文章卡。
+// 内容卡内容区点击目标（进入沉浸消费）：图片网格 / 视频媒体 / 文章卡。
 const _kContentTapKeys = <ValueKey<String>>[
-  ValueKey<String>('home-moment-grid-tile-0'),
+  ValueKey<String>('home-image-grid-tile-0'),
   ValueKey<String>('home-relation-card-media'),
   ValueKey<String>('home-article-card'),
 ];
@@ -81,7 +81,7 @@ const _kProfileKeys = <ValueKey<String>>[
 
 void main() {
   // 注：用例声明顺序 = Patrol 执行顺序。负反馈用例改放在多形态深滚用例「之前」
-  // （见该用例上方说明）：feed 已 seed 24+ 卡，负反馈本地移除单卡不再影响后续用例，
+  // （见该用例上方说明）：当前 release 须有足够内容，单卡移除后仍可验收分页，
   // 而多形态用例的视频重压会反向令负反馈降级提示时序 flaky。
   patrolTest(
     'home_rec_feed_first_load_renders_real_remote_card',
@@ -123,11 +123,7 @@ void main() {
         find.byKey(appImageLoadSuccessKey),
         timeout: const Duration(seconds: 20),
       );
-      expect(
-        imageDecoded,
-        isTrue,
-        reason: '首屏必须有至少一张 feed 图片真实解码成功（非灰占位）',
-      );
+      expect(imageDecoded, isTrue, reason: '首屏必须有至少一张 feed 图片真实解码成功（非灰占位）');
       expect(
         _existsInTree($, find.byKey(appImageLoadErrorKey)),
         isFalse,
@@ -201,17 +197,13 @@ void main() {
 
       // 终态三选一：ready（内容 + 交付 + 播放器均成立）/ 显式失败 / 合法空态。
       // 只有 ready 是验收通过；空态与失败态都必须可区分并作为红报告。
-      final settled = await _waitForAnyKeyInTree(
-        $,
-        <Key>[
-          _kVideoPlayerReady,
-          _kVideoPlayerError,
-          _kWorksVideoDeliveryUnresolved,
-          _kWorksInternalFeedError,
-          ..._kWorksInternalFeedEmptyKeys,
-        ],
-        timeout: const Duration(seconds: 45),
-      );
+      final settled = await _waitForAnyKeyInTree($, <Key>[
+        _kVideoPlayerReady,
+        _kVideoPlayerError,
+        _kWorksVideoDeliveryUnresolved,
+        _kWorksInternalFeedError,
+        ..._kWorksInternalFeedEmptyKeys,
+      ], timeout: const Duration(seconds: 45));
       expect(settled, isTrue, reason: '视频书必须在预算内到达可判定终态，不得停留在加载态');
       expect(
         _existsInTree($, find.byKey(_kWorksInternalFeedError)),
@@ -250,7 +242,7 @@ void main() {
   // 负反馈用例放在多形态深滚用例「之前」：多形态用例会重度初始化多个视频播放器
   // （真机资源敏感），若先跑会令本用例点击「不感兴趣」后的降级提示 SnackBar 渲染
   // 时序退化而 flaky（实测：video 重压后本用例耗时 28~37s 且超时，未重压时 10s 通过）。
-  // feed 已 seed 24+ 卡，负反馈本地移除单卡不再影响后续用例。
+  // 当前 release 必须提供足够真实卡片，负反馈移除单卡后仍能继续分页验收。
   patrolTest(
     'home_rec_negative_feedback_converges',
     tags: ['user-acceptance', 'home-rec', 'discovery'],
@@ -297,16 +289,14 @@ void main() {
       await launchPatrolAppOnce($);
       await _recoverToHomeFeed($);
 
-      // env-seed-first 已向 gamma 注入 24 条多形态 moment 并置顶推荐频道（见文件头
-      // 注释 1）。本用例在真机演示：① 首刷多形态非空 ② 连续下拉曝光不重复。
-
-      // ① 首刷多形态非空：连续下拉前几屏内同时命中「moment 九宫格」与「视频卡」。
+      // 仅消费当前 immutable release 的真实推荐结果，不注入 seed/fixture。
+      // ① 首刷多形态非空：连续下拉前几屏内同时命中图片网格与视频卡。
       final forms = await _collectFormsWhileScrolling($, maxDrags: 6);
       expect(
-        forms.contains('moment-grid') && forms.contains('video'),
+        forms.contains('image-grid') && forms.contains('video'),
         isTrue,
         reason:
-            '推荐频道首刷应渲染多形态（至少同时出现 moment 九宫格与视频卡）；'
+            '推荐频道首刷应渲染多形态（至少同时出现图片网格与视频卡）；'
             'forms=$forms',
       );
 
@@ -375,6 +365,15 @@ void main() {
       await $.pump(const Duration(milliseconds: 400));
       await $.pump(const Duration(seconds: 1));
 
+      expect(
+        await _waitForKeyInTree(
+          $,
+          TestKeys.worksImmersivePager,
+          timeout: const Duration(seconds: 15),
+        ),
+        isTrue,
+        reason: '点击图片、视频或文章必须进入真实沉浸内容容器，而非只隐藏首页。',
+      );
       // 进入沉浸：全屏沉浸路由覆盖首页，home chrome 不再可命中。
       final entered = await _waitUntil(
         () => !$(_kHomeSearchChrome).visible,
@@ -657,15 +656,15 @@ Future<void> _settleFeedToTopForHandoff(PatrolIntegrationTester $) async {
   await $.pump(const Duration(seconds: 1));
 }
 
-/// 连续下拉前几屏，收集出现过的形态标识（moment-grid / carousel / video）。
+/// 连续下拉前几屏，收集出现过的形态标识（image-grid / carousel / video）。
 Future<Set<String>> _collectFormsWhileScrolling(
   PatrolIntegrationTester $, {
   required int maxDrags,
 }) async {
   final forms = <String>{};
   for (var i = 0; i <= maxDrags; i++) {
-    if (_existsInTree($, find.byKey(const ValueKey('home-moment-grid')))) {
-      forms.add('moment-grid');
+    if (_existsInTree($, find.byKey(const ValueKey('home-image-grid')))) {
+      forms.add('image-grid');
     }
     if (_existsInTree(
       $,
@@ -682,7 +681,7 @@ Future<Set<String>> _collectFormsWhileScrolling(
     if (_videoContentIdsInFrame($).isNotEmpty) {
       forms.add('video');
     }
-    if (forms.contains('moment-grid') && forms.contains('video')) {
+    if (forms.contains('image-grid') && forms.contains('video')) {
       break;
     }
     await _dragFeedDown($);

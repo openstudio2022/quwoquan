@@ -206,11 +206,17 @@ func renderRequestEncoder(
 			value, err := requestFieldWireExpression(
 				"request."+dartName,
 				field,
-				true,
+				binding.Encoding == "",
 				enumValues,
 			)
 			if err != nil {
 				return err
+			}
+			if binding.Encoding != "" {
+				if group.property != "queryParameters" || binding.Encoding != "json" || binding.MaxBytes <= 0 {
+					return fmt.Errorf("binding %s requires query encoding=json and positive max_bytes", binding.Name)
+				}
+				value = fmt.Sprintf("_encodeGeneratedJSONQuery(%s, %d)", value, binding.MaxBytes)
 			}
 			if isRequestFieldNullable(field) || field.ClientOmitEmpty {
 				condition := "request." + dartName + " != null"
@@ -379,6 +385,7 @@ func requestFieldWireExpression(
 	}
 	baseDartType := strings.TrimSuffix(dartType, "?")
 	var result string
+	structured := false
 	switch {
 	case strings.HasPrefix(metaType, "[]"):
 		if mode == "mapToWire" {
@@ -414,8 +421,10 @@ func requestFieldWireExpression(
 	case mode == "name":
 		result = nonNullAccess + ".name"
 	case mode == "toWire":
+		structured = true
 		result = nonNullAccess + ".toWire()"
 	case mode == "toMap":
+		structured = true
 		result, err = requestInlineObjectWireExpression(
 			nonNullAccess,
 			baseDartType,
@@ -424,8 +433,10 @@ func requestFieldWireExpression(
 			return "", err
 		}
 	case mode == "toWireMap":
+		structured = true
 		result = nonNullAccess + ".toWireMap()"
 	case mode == "toJson":
+		structured = true
 		result = nonNullAccess + ".toJson()"
 	case mode == "toApiString":
 		result = nonNullAccess + ".toApiString()"
@@ -466,10 +477,12 @@ func requestFieldWireExpression(
 		result = "_encodeGeneratedNullableMutation(" + nonNullAccess +
 			", (value) => value.wireValue)"
 	case mode == "structuredValue":
+		structured = true
 		result = "_encodeGeneratedStructuredValue(" + nonNullAccess + ")"
 	case metaType == "timestamp" || metaType == "datetime" || metaType == "date":
 		result = nonNullAccess + ".toUtc().toIso8601String()"
 	case metaType == "semantic_document":
+		structured = true
 		result = "documentEnvelopeToWire(" + nonNullAccess + ")"
 	case metaType == "enum" && baseDartType == "String":
 		result = nonNullAccess
@@ -482,16 +495,25 @@ func requestFieldWireExpression(
 			)
 		}
 		result = nonNullAccess + "." + canonicalEnumWireGetter(field.EnumRef)
+	case strings.HasPrefix(baseDartType, "Map<"):
+		structured = true
+		result = nonNullAccess
 	case baseDartType == "String" || baseDartType == "int" ||
-		baseDartType == "double" || baseDartType == "bool" ||
-		strings.HasPrefix(baseDartType, "Map<"):
+		baseDartType == "double" || baseDartType == "bool":
 		result = nonNullAccess
 	default:
 		// Non-scalar request dependencies either remain in this generated
 		// library or are package-owned value objects selected by client_dart_type.
 		// Both own one canonical toWire encoder, so a per-field marker would
 		// duplicate type information already carried by the request graph.
+		structured = true
 		result = nonNullAccess + ".toWire()"
+	}
+	if stringPosition && structured {
+		return "", fmt.Errorf(
+			"field %s requires an explicit JSON query binding; object toString is not a wire encoding",
+			field.Name,
+		)
 	}
 	if stringPosition &&
 		baseDartType != "String" &&

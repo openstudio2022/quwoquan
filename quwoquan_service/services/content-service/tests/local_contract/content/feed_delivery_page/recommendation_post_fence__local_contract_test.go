@@ -34,7 +34,7 @@ func TestRecommendationContinuationPostsTypedFence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, _ = c.GetPage(t.Context(), transport.GetRankedRecommendationPageQuery{WindowId: "window", SubjectId: "subject", ContentFence: transport.ReleasePinnedQueryFence{Revision: 7, Release: &transport.ReleaseCandidateBinding{Environment: "gamma", SourceOwner: "qwq_data", ReleaseId: "release", ManifestDigest: "digest"}}})
+	_, _ = c.GetPage(t.Context(), transport.GetRankedRecommendationPageQuery{WindowId: "window", SubjectId: "subject", ClientPresentationContract: transport.MissingDeclarationContentPresentationContract(), ContentFence: transport.ReleasePinnedQueryFence{Revision: 7, Release: &transport.ReleaseCandidateBinding{Environment: "gamma", SourceOwner: "qwq_data", ReleaseId: "release", ManifestDigest: "digest"}}})
 	if !called {
 		t.Fatal("transport not exercised")
 	}

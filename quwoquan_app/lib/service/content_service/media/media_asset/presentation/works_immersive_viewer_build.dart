@@ -94,9 +94,6 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
             onShareTap: () => _sharePost(
               context,
               commentSplitPost,
-              enableIdentityTemplate: ref.read(
-                contentFeatureFlagProvider('enable_identity_share_template'),
-              ),
             ),
             onClose: () {
               _setMountedState(() {
@@ -389,6 +386,7 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                     header: captionHeader,
                     title: overlayTitle,
                     caption: overlayBody,
+                    imageCaption: _overlayImageCaptionForPost(currentPost),
                     isExpanded: _isCaptionExpanded(currentPost.id),
                     onToggle: () => _toggleCaptionExpanded(currentPost.id),
                   ),
@@ -573,11 +571,6 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
                         onShareTap: () => _sharePost(
                           context,
                           currentPost,
-                          enableIdentityTemplate: ref.read(
-                            contentFeatureFlagProvider(
-                              'enable_identity_share_template',
-                            ),
-                          ),
                         ),
                         onRevealSystemNav: widget.onRevealSystemNav,
                       );
@@ -910,20 +903,6 @@ extension _WorksImmersiveViewerBuild on _WorksImmersiveViewerState {
         gestureIntentController: _gestureIntentController,
         onOverflowPrevious: null,
         onOverflowNext: null,
-      );
-    }
-    if (_isTextOnlyMomentPost(post)) {
-      return TabSwipeSwitchRegion(
-        enabled: _canSwipePrimaryTabs,
-        onSwipe: _handlePrimaryTabSwipe,
-        child: _WorksTextCanvas(
-          layoutSpec: _layoutSpecForPost(post),
-          title: _titleForPost(post),
-          body: _bodyForPost(post),
-          reserveContentIntersection:
-              _primaryIntersectionReasonFor(post) != null,
-          backgroundBinding: _textMomentBackgroundBinding(post),
-        ),
       );
     }
     return Container(color: AppColors.worksBackground);

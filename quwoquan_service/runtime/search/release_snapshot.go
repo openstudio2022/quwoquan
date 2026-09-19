@@ -41,7 +41,6 @@ type ReleasePostPublicSnapshot struct {
 	AuthorDisplayName string                         `json:"authorDisplayName" bson:"authorDisplayName"`
 	AuthorAvatarURL   *string                        `json:"authorAvatarUrl" bson:"authorAvatarUrl"`
 	ContentType       string                         `json:"contentType" bson:"contentType"`
-	ContentIdentity   string                         `json:"contentIdentity" bson:"contentIdentity"`
 	Status            string                         `json:"status" bson:"status"`
 	Visibility        string                         `json:"visibility" bson:"visibility"`
 	ModerationStatus  string                         `json:"moderationStatus" bson:"moderationStatus"`
@@ -230,10 +229,7 @@ func (p ReleasePostPublicSnapshot) Validate(release ReleaseCandidateBinding) err
 	if validateSourceIdentity(p.Identity, release, "content.post") != nil || p.PostRef == "" || p.AuthorID == "" || p.AuthorDisplayName == "" || p.Status != "published" || p.Visibility != "public" || p.ModerationStatus != "approved" || p.TagRefs == nil || p.EntityRefs == nil || p.MediaAssetIDs == nil || p.MediaURLs == nil || p.DurationMs < 0 || p.Width < 0 || p.Height < 0 || p.DeepLink == "" || !validCreatorTime(p.PublishedAt) || !validCreatorTime(p.UpdatedAt) {
 		return ErrCreatorSourceInvalid
 	}
-	if p.ContentType != "article" && p.ContentType != "image" && p.ContentType != "video" && p.ContentType != "micro" {
-		return ErrCreatorSourceInvalid
-	}
-	if p.ContentIdentity != "work" && p.ContentIdentity != "moment" {
+	if p.ContentType != "article" && p.ContentType != "image" && p.ContentType != "video" {
 		return ErrCreatorSourceInvalid
 	}
 	if p.PrimaryHomepage != nil && p.PrimaryHomepage.Validate(release) != nil {

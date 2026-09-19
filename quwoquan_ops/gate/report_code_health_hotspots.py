@@ -110,7 +110,7 @@ def project(report: dict[str, Any], owner: str, *, source: str = "provided", cur
         "source": source, "observationBranch": report.get("observationBranch"),
         "freshness": _freshness(report, now, max_age_days, current_head),
         "inputScope": input_scope or {"status": "unavailable", "reason": "legacy-report-input-scope-missing"},
-        "measurementStatus": measured, "scopeKind": "structural", "featureOwnerStatus": "unavailable",
+        "measurementStatus": measured, "scopeKind": "structural", "scopeContextStatus": "unavailable",
         "selection": {"kind": "global-top-n-projection", "topN": persistence_meta.get("topN"),
                       "emptyMeansHealthy": False},
         "authority": {"blocksDevelopment": False},
@@ -135,7 +135,7 @@ def render(projection: dict[str, Any]) -> str:
         f"window_end={projection['windowEnd'][:10]} history_weeks={projection['historyWeeks']} "
         f"history_reports={projection['historyReports']} actionable={projection['actionableCount']} "
         f"source={projection['source']} freshness={projection['freshness']['status']} "
-        f"measured={projection['measurementStatus']} scope=structural feature_owner=unavailable "
+        f"measured={projection['measurementStatus']} scope=structural scope_context=unavailable "
         f"branch={projection['observationBranch']} empty_is_healthy=false",
     ]
     for item in projection["hotspots"]:

@@ -45,7 +45,7 @@ void main() {
 
     test('Post payload 公开+位置组合结构正确', () {
       final payload = <String, dynamic>{
-        'contentType': 'micro',
+        'contentType': 'article',
         'visibility': 'public',
         'location': {
           'type': 'Point',
@@ -314,7 +314,7 @@ void main() {
     test('非 RFC3339 的到访时间在端侧即被拒绝', () {
       expect(
         () => submitContentPostPublicationCommandFromPreparedPayload(
-          <String, Object?>{'contentType': 'micro', 'visitedAt': '去年春天'},
+          <String, Object?>{'contentType': 'article', 'visitedAt': '去年春天'},
           localDraftId: 'draft-visited-invalid',
           mediaAssetIds: const <String>[],
         ),
@@ -323,44 +323,17 @@ void main() {
     });
   });
 
-  group('PublishPayload — 显式形态确认（GWT-001）', () {
-    test('用户确认 micro 优先于长文建议，提交阶段不再静默推导', () {
+  group('PublishPayload — 文字发布只产出 article', () {
+    test('长文字正文提交 article，不再按长度推导第二种形态', () {
       final state = CreateEditorState.initial().copyWith(
-        body: '这是一段足够长的正文内容，用来触发系统的文章形态建议。' * 8,
-        settings: const PublishSettings(textContentType: 'micro'),
+        body: '这是一段足够长的正文内容。' * 8,
       );
-      // 系统建议是 article，但用户确认了 micro。
-      expect(shouldPublishAsArticleForPayload(state), isTrue);
-      expect(resolveTextPublishAsArticle(state), isFalse);
-      final payload = buildPostPublicationPayloadMap(state);
-      expect(payload['contentType'], 'micro');
+      expect(buildPostPublicationPayloadMap(state)['contentType'], 'article');
     });
 
-    test('用户确认 article 优先于短文建议', () {
-      final state = CreateEditorState.initial().copyWith(
-        body: '短句',
-        settings: const PublishSettings(textContentType: 'article'),
-      );
-      expect(shouldPublishAsArticleForPayload(state), isFalse);
-      expect(resolveTextPublishAsArticle(state), isTrue);
-      final payload = buildPostPublicationPayloadMap(state);
-      expect(payload['contentType'], 'article');
-    });
-
-    test('textContentType 只进草稿持久化，不进发布 payload 字段', () {
-      const settings = PublishSettings(textContentType: 'micro');
-      expect(
-        settings.toPayloadFields().containsKey('textContentType'),
-        isFalse,
-      );
-      expect(PublishSettings.fromMap(settings.toMap()).textContentType, 'micro');
-      // 非法草稿值不得被迁移成确认态。
-      expect(
-        PublishSettings.fromMap(<String, dynamic>{
-          'textContentType': 'video',
-        }).textContentType,
-        isEmpty,
-      );
+    test('短文字正文同样提交 article，形态不由用户确认', () {
+      final state = CreateEditorState.initial().copyWith(body: '短句');
+      expect(buildPostPublicationPayloadMap(state)['contentType'], 'article');
     });
   });
 
@@ -370,31 +343,12 @@ void main() {
     test('编辑器消费的上限与建议阈值均来自 codegen 契约常量，无第二份边界', () {
       // codegen 值与 publication_policy.yaml 声明一致（云侧 Go 常量同源生成）。
       expect(ContentPublicationPolicy.titleMaxRunes, 80);
-      expect(ContentPublicationPolicy.microBodyMaxRunes, 5000);
+      expect(ContentPublicationPolicy.articleBodyMaxRunes, 5000);
       expect(ContentPublicationPolicy.articleMarkdownMaxRunes, 20000);
       expect(ContentPublicationPolicy.articleBodyMinRunes, 140);
       expect(ContentPublicationPolicy.articleParagraphMinCount, 2);
-      // 契约声明「最终形态由用户确认」，端侧确认页行为以此为据（GWT-001）。
-      expect(ContentPublicationPolicy.userConfirmationRequired, isTrue);
     });
 
-    test('形态建议在契约阈值边界上翻转', () {
-      final belowThreshold = CreateEditorState.initial().copyWith(
-        body: '短' * (ContentPublicationPolicy.articleBodyMinRunes - 1),
-      );
-      expect(shouldPublishAsArticleForPayload(belowThreshold), isFalse);
-
-      final atThreshold = CreateEditorState.initial().copyWith(
-        body: '长' * ContentPublicationPolicy.articleBodyMinRunes,
-      );
-      expect(shouldPublishAsArticleForPayload(atThreshold), isTrue);
-
-      final titled = CreateEditorState.initial().copyWith(
-        title: '有标题即建议文章',
-        body: '短',
-      );
-      expect(shouldPublishAsArticleForPayload(titled), isTrue);
-    });
   });
 
   // spec_ref: specs/feature-tree/discovery-content/publish-comment-reaction/text-post-commercial-publication/spec.md#gwt-006.t1
@@ -595,8 +549,8 @@ void main() {
       expect(payload, isNot(contains('circleIds')));
     });
 
-    test('四类 contentType 均支持 payload 字段', () {
-      const types = ['micro', 'image', 'video', 'article'];
+    test('三类 contentType 均支持 payload 字段', () {
+      const types = ['image', 'video', 'article'];
       for (final t in types) {
         final payload = <String, dynamic>{
           'contentType': t,
@@ -615,7 +569,6 @@ Set<String> _submitPostPublicationRequestBodyFields() {
     publishIntentId: 'intent-contract-fields',
     localDraftId: 'draft-contract-fields',
     contentType: ContentType.article,
-    contentIdentity: ContentIdentity.work,
     title: '标题',
     body: '正文',
     summary: '摘要',
@@ -631,7 +584,7 @@ Set<String> _submitPostPublicationRequestBodyFields() {
     ],
     mediaAssetIds: const <String>['asset-contract'],
     articleMarkdown: '# 标题',
-    markdownDialect: 'qwq-rich-md',
+    markdownDialect: SemanticDocumentMarkdownDialect.qwqRichMd,
     articleAssetManifest: PostArticleAssetManifestInput(
       schema: 'article-asset-manifest',
       assets: const <PostArticleAssetInput>[

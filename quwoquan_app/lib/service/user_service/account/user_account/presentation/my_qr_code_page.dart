@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 
 import 'package:flutter/cupertino.dart';
@@ -112,18 +113,7 @@ class _MyQrCodePageState extends ConsumerState<MyQrCodePage> {
             sharePresenter: widget.sharePresenter,
             validateCard: _validateCard,
             onValidationRetry: _reload,
-            onScanPressed: () {
-              unawaited(
-                ref
-                    .read(journeyEventTrackerProvider)
-                    .trackAction(
-                      journey: 'contact_add',
-                      action: 'open_scanner_from_my_qr',
-                      pageName: 'MyQrCodePage',
-                    ),
-              );
-              context.push(AppRoutePaths.addContactScan);
-            },
+            onScanPressed: null,
           );
         },
       ),

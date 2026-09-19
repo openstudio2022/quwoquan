@@ -195,7 +195,6 @@ class _NoopIncomingCallCoordinator extends IncomingCallCoordinator {
         readRouter: () => throw UnimplementedError(
           'incoming call routing is disabled in web shell tests',
         ),
-        firebaseRuntime: ref.read(firebaseIncomingCallRuntimeProvider),
         nativeBridge: ref.read(incomingCallNativeBridgeProvider),
       );
 

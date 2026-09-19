@@ -53,7 +53,7 @@ def _fields(*, valid_identity: bool = True) -> dict[bytes, bytes]:
         "deviceActorId": "",
         "sessionId": "session-001",
         "contentId": "post-001",
-        "contentType": "post",
+        "contentType": "article",
         "action": "like",
         "state": "interaction",
         "duration": 0.0,

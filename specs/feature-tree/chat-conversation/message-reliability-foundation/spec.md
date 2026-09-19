@@ -2,7 +2,7 @@
 
 > 所属领域：[`chat-conversation`](../spec.md)
 >
-> 设计归属：`本层 design.md`
+> 设计引用：`本层 design.md`
 
 ## 1. 能力目标
 

@@ -8,16 +8,62 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from enum import Enum
+from pydantic_core import core_schema
+
+
+class _ContractEnum(str, Enum):
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        return core_schema.no_info_before_validator_function(
+            cls._validate_wire,
+            handler(source_type),
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize_wire),
+        )
+
+    @classmethod
+    def _serialize_wire(cls, value):
+        return cls._validate_wire(value).value
+
+    @classmethod
+    def _validate_wire(cls, value):
+        if isinstance(value, cls):
+            return value
+        if type(value) is not str:
+            raise ValueError("enum wire value must be a string")
+        return cls(value)
+
+
+class GatheringLifecycleStatus(_ContractEnum):
+    VALUE_DRAFT = "draft"
+    VALUE_PUBLISHED = "published"
+    VALUE_CANCELLED = "cancelled"
+    VALUE_COMPLETED = "completed"
+
+
+class GatheringOutcomeStatus(_ContractEnum):
+    VALUE_OCCURRED = "occurred"
+    VALUE_DID_NOT_HAPPEN = "did_not_happen"
+    VALUE_ENDED_EARLY = "ended_early"
+    VALUE_SAFETY_TERMINATED = "safety_terminated"
+    VALUE_DISPUTED = "disputed"
+    VALUE_UNVERIFIED = "unverified"
+
+
+class GatheringRoomBindingStatus(_ContractEnum):
+    VALUE_PENDING = "pending"
+    VALUE_READY = "ready"
+    VALUE_FAILED = "failed"
 
 
 class GatheringEventPayload(BaseModel):
     """事务日志与 outbox 共用的 typed Gathering event payload。"""
     gatheringId: str
     aggregateVersion: int
-    lifecycleStatus: str
+    lifecycleStatus: GatheringLifecycleStatus
     actorPersonaId: str | None = None
-    outcomeStatus: str | None = None
-    roomBindingStatus: str
+    outcomeStatus: GatheringOutcomeStatus | None = None
+    roomBindingStatus: GatheringRoomBindingStatus
     conversationId: str | None = None
     participantPersonaIds: list[str] | None = None
     occurredAt: datetime

@@ -8,6 +8,44 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from enum import Enum
+from pydantic_core import core_schema
+
+
+class _ContractEnum(str, Enum):
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type, handler):
+        return core_schema.no_info_before_validator_function(
+            cls._validate_wire,
+            handler(source_type),
+            serialization=core_schema.plain_serializer_function_ser_schema(cls._serialize_wire),
+        )
+
+    @classmethod
+    def _serialize_wire(cls, value):
+        return cls._validate_wire(value).value
+
+    @classmethod
+    def _validate_wire(cls, value):
+        if isinstance(value, cls):
+            return value
+        if type(value) is not str:
+            raise ValueError("enum wire value must be a string")
+        return cls(value)
+
+
+class CircleMemberRole(_ContractEnum):
+    VALUE_OWNER = "owner"
+    VALUE_ADMIN = "admin"
+    VALUE_MEMBER = "member"
+
+
+class CircleMembershipState(_ContractEnum):
+    VALUE_PENDING = "pending"
+    VALUE_ACTIVE = "active"
+    VALUE_REJECTED = "rejected"
+    VALUE_LEFT = "left"
+    VALUE_REMOVED = "removed"
 
 
 class CircleMembershipLifecyclePayload(BaseModel):
@@ -16,8 +54,8 @@ class CircleMembershipLifecyclePayload(BaseModel):
     version: int
     circleId: str
     personaId: str
-    role: str
-    state: str
+    role: CircleMemberRole
+    state: CircleMembershipState
     joinedAt: datetime | None = None
     createdAt: datetime
     updatedAt: datetime

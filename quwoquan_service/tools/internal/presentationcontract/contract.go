@@ -1,0 +1,196 @@
+// Package presentationcontract 从唯一共享类型定义生成客户端能力协议。
+package presentationcontract
+
+import (
+	"bytes"
+	"crypto/sha256"
+	"encoding/json"
+	"fmt"
+	"sort"
+	"strings"
+	"unicode/utf8"
+
+	"gopkg.in/yaml.v3"
+)
+
+const TypeName = "ClientContentPresentationContract"
+
+// Field 保留 canonical wire 字段、枚举全集和固定缺声明基线。
+type Field struct {
+	Name     string
+	EnumRef  string
+	Values   []string
+	Baseline []string
+	MaxItems int
+}
+
+type Model struct{ Fields []Field }
+
+type fieldSource struct {
+	Name     string `yaml:"name"`
+	Type     string `yaml:"type"`
+	EnumRef  string `yaml:"enum_ref"`
+	MaxItems int    `yaml:"max_items"`
+}
+
+func loadField(f fieldSource, enums map[string][]string, missing map[string][]string) (Field, error) {
+	values, exists := enums[f.EnumRef]
+	baseline, declared := missing[f.Name]
+	if !exists || len(values) == 0 || !declared || baseline == nil {
+		return Field{}, fmt.Errorf("%s enum or missing declaration absent", f.Name)
+	}
+	field := Field{Name: f.Name, EnumRef: f.EnumRef, MaxItems: f.MaxItems}
+	var err error
+	field.Values, err = sortedMembers(values, values, f.MaxItems)
+	if err != nil {
+		return Field{}, fmt.Errorf("%s enum: %w", f.Name, err)
+	}
+	field.Baseline, err = sortedMembers(baseline, values, f.MaxItems)
+	if err != nil {
+		return Field{}, fmt.Errorf("%s baseline: %w", f.Name, err)
+	}
+	return field, nil
+}
+
+// Load 不读取描述正文、不推断基线；missing_declaration 必须由共享类型显式声明。
+func Load(data []byte) (Model, error) {
+	var doc struct {
+		Types map[string]struct {
+			Fields  []fieldSource       `yaml:"fields"`
+			Missing map[string][]string `yaml:"missing_declaration"`
+		} `yaml:"types"`
+		Enums map[string][]string `yaml:"enums"`
+	}
+	if err := yaml.Unmarshal(data, &doc); err != nil {
+		return Model{}, err
+	}
+	typ, ok := doc.Types[TypeName]
+	if !ok || typ.Missing == nil {
+		return Model{}, fmt.Errorf("%s.missing_declaration is required", TypeName)
+	}
+	expected := map[string]bool{"contentTypes": true, "listObjectKinds": true, "openSurfaces": true, "presentationRecipes": true}
+	model := Model{}
+	seen := map[string]bool{}
+	for _, f := range typ.Fields {
+		if f.Name == "contractDigest" {
+			continue
+		}
+		if !expected[f.Name] || seen[f.Name] || f.Type != "[]enum" || f.MaxItems <= 0 {
+			return Model{}, fmt.Errorf("invalid capability field %q", f.Name)
+		}
+		seen[f.Name] = true
+		field, err := loadField(f, doc.Enums, typ.Missing)
+		if err != nil {
+			return Model{}, err
+		}
+		model.Fields = append(model.Fields, field)
+	}
+	if len(seen) != len(expected) || len(typ.Missing) != len(expected) {
+		return Model{}, fmt.Errorf("capability fields must be exactly the four canonical collections")
+	}
+	sort.Slice(model.Fields, func(i, j int) bool { return model.Fields[i].Name < model.Fields[j].Name })
+	return model, nil
+}
+
+func sortedMembers(values, allowed []string, max int) ([]string, error) {
+	if values == nil || len(values) > max {
+		return nil, fmt.Errorf("expected bounded non-null array")
+	}
+	valid := map[string]bool{}
+	for _, v := range allowed {
+		valid[v] = true
+	}
+	seen := map[string]bool{}
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if v == "" || !utf8.ValidString(v) || strings.TrimSpace(v) != v || !valid[v] || seen[v] {
+			return nil, fmt.Errorf("invalid or duplicate member %q", v)
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	sort.Strings(out)
+	return out, nil
+}
+
+func (m Model) Collections(baseline bool) map[string][]string {
+	out := map[string][]string{}
+	for _, f := range m.Fields {
+		v := f.Values
+		if baseline {
+			v = f.Baseline
+		}
+		out[f.Name] = append([]string{}, v...)
+	}
+	return out
+}
+
+func (m Model) Canonical(collections map[string][]string) ([]byte, error) {
+	if len(collections) != len(m.Fields) {
+		return nil, fmt.Errorf("expected four capability collections")
+	}
+	normalized := map[string][]string{}
+	for _, f := range m.Fields {
+		values, err := sortedMembers(collections[f.Name], f.Values, f.MaxItems)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", f.Name, err)
+		}
+		normalized[f.Name] = values
+	}
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(normalized); err != nil {
+		return nil, err
+	}
+	return bytes.TrimSuffix(buf.Bytes(), []byte("\n")), nil
+}
+
+func (m Model) Digest(collections map[string][]string) (string, error) {
+	data, err := m.Canonical(collections)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("sha256:%x", sha256.Sum256(data)), nil
+}
+
+// GoldenFixture 从同一 authoring 产生跨语言测试向量，避免测试另维护能力表。
+func (m Model) GoldenFixture() ([]byte, error) {
+	cases := []map[string]any{}
+	for _, baseline := range []bool{false, true} {
+		values := m.Collections(baseline)
+		raw, err := m.Canonical(values)
+		if err != nil {
+			return nil, err
+		}
+		digest, _ := m.Digest(values)
+		name := "compiled"
+		if baseline {
+			name = "missing_declaration"
+		}
+		cases = append(cases, map[string]any{
+			"_generated":   "Code generated by tools/codegen_rec_model_python from recommendation/ranked_recommendation_window. DO NOT EDIT.",
+			"name":         name,
+			"collections":  values,
+			"canonical":    string(raw),
+			"digest":       digest,
+		})
+	}
+	empty := map[string][]string{}
+	for _, f := range m.Fields {
+		empty[f.Name] = []string{}
+	}
+	raw, err := m.Canonical(empty)
+	if err != nil {
+		return nil, err
+	}
+	digest, _ := m.Digest(empty)
+	cases = append(cases, map[string]any{
+		"_generated":  "Code generated by tools/codegen_rec_model_python from recommendation/ranked_recommendation_window. DO NOT EDIT.",
+		"name":        "empty",
+		"collections": empty,
+		"canonical":   string(raw),
+		"digest":      digest,
+	})
+	return json.MarshalIndent(cases, "", "  ")
+}

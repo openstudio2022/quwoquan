@@ -104,7 +104,7 @@ def test_reference_closure__ordinary_release_does_not_use_control_plane_fallback
     tag_ref = "Topic/测试/仅控制面"
     entity_root = publish_root / "entities" / entity_ref
     _write_json(entity_root / "manifest.json", {
-        "entityId": entity_ref, "creatorProfileId": creator_ref, "tagRefs": [tag_ref], "assets": [],
+        "entityId": entity_ref, "entityRef": "/entity/" + entity_ref, "version": 1, "creatorProfileId": creator_ref, "tagRefs": [tag_ref], "assets": [],
     })
     _write_json(
         publish_root / "creators" / creator_ref / "_creator.json",

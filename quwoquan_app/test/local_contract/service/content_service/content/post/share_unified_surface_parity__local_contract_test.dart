@@ -22,7 +22,6 @@ ContentPostViewData _post({
   ContentPostProjection(
     postId: id,
     contentType: contentType,
-    contentIdentity: identity,
     authorId: authorId,
     authorDisplayName: displayName,
     authorAvatarUrl: '',
@@ -47,7 +46,6 @@ void main() {
     }) {
       final template = ContentShareTemplateBuilder.build(
         surfaceView: ContentSurfaceViewMapper.fromDto(dto, wire: wire),
-        enableIdentityTemplate: true,
         publicLinks: testPublicContentLinks,
       );
       expect(
@@ -109,7 +107,7 @@ void main() {
       expectSurfaceTemplate(
         _post(
           id: 'm1',
-          contentType: 'micro',
+          contentType: 'article',
           identity: 'moment',
           authorId: 'a4',
           displayName: '作者丁',

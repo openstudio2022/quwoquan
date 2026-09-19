@@ -1,7 +1,8 @@
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_activation_identity.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_feed_object_card.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show ContentFeedEmptyReason, ContentFeedOutcome, FeedObjectCard;
+    show ContentFeedEmptyReason, ContentFeedOutcome;
 
 /// 首页发现流的跨对象公开强类型 envelope。
 ///
@@ -13,7 +14,7 @@ class DiscoveryFeedPage {
     required this.items,
     this.outcome = ContentFeedOutcome.content,
     this.emptyReason,
-    this.objectCards = const <FeedObjectCard>[],
+    this.objectCards = const <ContentFeedObjectCard>[],
     this.nextCursor,
     this.previousCursor,
     this.paginationExpiresAt,
@@ -29,9 +30,9 @@ class DiscoveryFeedPage {
   final ContentFeedOutcome outcome;
   final ContentFeedEmptyReason? emptyReason;
 
-  /// 混合对象卡（B4 插卡模式）：anchorIndex 指示插入在 items[anchorIndex] 之前；
-  /// 空即本页无对象卡（策略关闭 / 候选不足 / 匿名）。
-  final List<FeedObjectCard> objectCards;
+  /// 统一列表中的实体主页项：anchorIndex 指示插入在 items[anchorIndex] 之前；
+  /// 空即本页无实体主页项（云按能力闭集过滤后没有候选）。
+  final List<ContentFeedObjectCard> objectCards;
   final String? nextCursor;
   final String? previousCursor;
   final DateTime? paginationExpiresAt;

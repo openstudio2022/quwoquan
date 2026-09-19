@@ -98,9 +98,8 @@
     "recoveryAction": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["command", "action"],
+      "required": ["action"],
       "properties": {
-        "command": {"const": "resolve_invalid_canonical_identity"},
         "action": {"enum": ["record_repair", "payload_rebuild", "terminate"]}
       }
     },

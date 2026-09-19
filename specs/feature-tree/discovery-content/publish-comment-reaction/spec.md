@@ -2,7 +2,7 @@
 
 > 所属领域：[`discovery-content`](../spec.md)
 >
-> 设计归属：[本层 design.md](./design.md)
+> 设计引用：[本层 design.md](./design.md)
 
 ## 1. 能力目标
 
@@ -51,7 +51,7 @@
 - [`image-editing`](./image-editing/spec.md)：全仓无占位符号；工具确认路径全部经 ImageEditorExportEngine 烘焙。
 - [`post-create-update`](./post-create-update/spec.md)：从拍摄得到的图片可进入图片选择器底部缩略条或创作编辑器图片列表，并参与排序、编辑和发布。
 - [`reaction-state-counter`](./reaction-state-counter/spec.md)：定义“互动状态状态计数”的可观察主路径、失败语义及父能力交接。
-- [`text-post-commercial-publication`](./text-post-commercial-publication/spec.md)：micro 与 article 两种确认结果均有 widget 与 payload 合同证据。
+- [`text-post-commercial-publication`](./text-post-commercial-publication/spec.md)：纯文字和富文图文混排均发布为文章，保留安全准入、可靠提交与真实结果回流。
 
 ## 5. 能力要求
 
@@ -67,7 +67,7 @@
 ### REQ-002 写文字发布、安全准入、分发回流与运营观测组合 SIT
 
 - LocalPostDraft 和 immutable PublishIntent 在断网、重启、限流与鉴权失效后保持可恢复。
-- micro/article 由用户显式确认，发布命令经过长度、Persona 频控与安全门后才原子创建 Post。
+- 纯文字与富文图文混排均以文章发布，不再进行短文字/文章形态确认；发布命令经过长度、Persona 频控与安全门后才原子创建 Post。
 - published receipt 只创建一个 Post，并立即回流详情或作品浏览器以及 feed/Persona 作品投影。
 - tag/entity/location/circle 关联只来自可证实事实，circle placement 失败不重复发布。
 - App 产品遥测、服务 RED、dashboard 和 alert 能对账三项黄金指标。
@@ -90,7 +90,7 @@
 - **配置统一**：业务规则参数（字数限制/回复预览/回复展开/默认排序/附件上限/频控窗口）统一由 config.yaml 管理，端侧通过 App Config 同步
 - 契约与字段策略必须引用所属服务 `contracts/`，不得复制 OpenAPI 或中心 metadata 作为第二真相源。
 - 写文字创作漏斗属于产品遥测，不得伪装成推荐行为写入 `ReportBehaviors`。
-- micro/article 可以由系统建议，但最终类型必须由用户在发布确认页显式确认。
+- 发布确认保留正文、去向与安全信息确认，不建议或切换退役内容形态；三类内容的边界只遵循 [`content-type-framework`](../content-type-framework/spec.md#req-001)。
 - 评论域业务参数不允许硬编码，必须走 config.yaml 统一管理。
 - 图片编辑器所有对用户可见的变换必须经 `ImageEditorExportEngine`；预览、导出与诊断必须读取同一编辑快照。
 - 排序真相源唯一在服务端（hotScore 投影 + 复合索引）；禁止端侧重排、禁止旧三档 `recommended/latest/most_liked` 回归、禁止 Redis 排行第二真相源。
@@ -119,7 +119,7 @@
 - GIVEN 执行“写文字发布、安全准入、分发回流与运营观测组合”所需的身份、输入与上游事实均有效。
 - WHEN 参与者发起“写文字发布、安全准入、分发回流与运营观测组合”对应动作。
 - THEN LocalPostDraft 和 immutable PublishIntent 在断网、重启、限流与鉴权失效后保持可恢复。
-- THEN micro/article 由用户显式确认，发布命令经过长度、Persona 频控与安全门后才原子创建 Post。
+- THEN 纯文字与富文图文混排均以文章发布，不再进行短文字/文章形态确认；发布命令经过长度、Persona 频控与安全门后才原子创建 Post。
 - THEN published receipt 只创建一个 Post，并立即回流详情或作品浏览器以及 feed/Persona 作品投影。
 - THEN tag/entity/location/circle 关联只来自可证实事实，circle placement 失败不重复发布。
 - THEN App 产品遥测、服务 RED、dashboard 和 alert 能对账三项黄金指标。

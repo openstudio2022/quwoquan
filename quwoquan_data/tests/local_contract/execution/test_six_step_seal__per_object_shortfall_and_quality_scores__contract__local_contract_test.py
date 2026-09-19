@@ -273,6 +273,6 @@ def test_quality_scores_outside_closed_set_are_rejected(execution: Path) -> None
         _seal(execution, "5.review", REVIEWER, reviews={GOOD: {**base, "qualityScores": {"not_a_dimension": 3}}})
     with pytest.raises(seal_module.SealError, match="不属于该载体闭集"):
         _seal(execution, "5.review", REVIEWER, reviews={GOOD: {**base, "qualityScores": {"visual_quality": 3}}})
-    with pytest.raises(seal_module.SealError, match="非空对象"):
+    with pytest.raises(ValueError, match="minProperties"):
         _seal(execution, "5.review", REVIEWER, reviews={GOOD: {**base, "qualityScores": {}}})
     assert not (execution / GOOD / "5.review/content_review.json").exists()

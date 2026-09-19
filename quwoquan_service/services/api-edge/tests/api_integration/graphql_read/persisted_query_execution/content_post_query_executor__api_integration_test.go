@@ -116,7 +116,7 @@ func contentPostEntry() domain.Entry {
 		panic(err)
 	}
 	return domain.Entry{
-		SHA256Hash:           "7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7",
+		SHA256Hash:           "eba3ff56ddbac07ac0cf1755ad0f41516b4391533d8e64f33b8613b0e08ef2bb",
 		OperationName:        "ContentPostDetailBase",
 		OperationType:        domain.OperationTypeQuery,
 		CanonicalOperationID: "content.post.GetPost",

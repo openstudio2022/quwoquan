@@ -152,7 +152,7 @@ def validate_contract(value: object) -> None:
         "inspection_result": ("schema_id", "schema_version", "result", "error_code", "detail", "subject", "status", "allowed_mode", "production_ready", "commercial_ready", "hotl_admitted", "mutation_allowed", "prod_mutation_allowed", "hotl_mutation_allowed", "max_write_concurrency", "activation_required", "activation_receipt_ref", "evaluation_digest", "evaluation_bytes_sha256", "blockers", "evidence_summary", "objective_s4_readback", "external_effect_policy", "observation_metrics", "external_open"),
         "contract_terminal": ("result", "error_code", "terminal", "recovery", "detail", "blockers"),
         "evidence_bundle": ("schema_id", "schema_version", "subject_fingerprint", "subject_fingerprint_receipt", "assembled_at", "receipts"),
-        "evidence_bundle_receipts": ("owner_manifest", "local_scope_ready", "local_release_ready", "review_plan", "named_evidence", "review_consolidation", "handoff", "human_calibration", "objective_inspect", "hotl_inspect", "hosted_authority_source", "external"),
+        "evidence_bundle_receipts": ("candidate_evidence", "local_scope_ready", "local_release_ready", "review_plan", "named_evidence", "review_consolidation", "handoff", "human_calibration", "objective_inspect", "hotl_inspect", "hosted_authority_source", "external"),
         "bundle_receipt": ("provider_id", "receipt_ref", "exact_bytes_base64"),
     }
     schemas = value.get("schemas")
@@ -163,7 +163,7 @@ def validate_contract(value: object) -> None:
             raise ContractError(f"schemas.{name}.required_fields drifted")
     layers = value.get("evidence_layers")
     expected_layers = {
-        "owner_manifest", "local_scope_ready", "local_release_ready", "review_terminal",
+        "local_scope_ready", "local_release_ready", "review_terminal",
         "human_eval_machine_baseline", "human_calibration", "hosted_authority_code",
         "hosted_authority_integration", "hosted_authority_live", "handoff_freshness",
         "objective_readback", "objective_recovery", "effect_allowlist", "effect_readback",
@@ -195,11 +195,9 @@ def validate_contract(value: object) -> None:
         if policy.get("interface") not in {"local", "external"}:
             raise ContractError(f"layer interface drifted: {layer}")
     current = value.get("current_repository_evidence")
-    expected_current = {"owner_manifest_root", "owner_manifest_target", "local_readiness_mode", "local_readiness_paths", "evidence_bundle_root", "managed_identity_paths", "named_evidence_plan_binding", "named_evidence_layers", "provider_adapters", "external_provider_interfaces"}
+    expected_current = {"local_readiness_mode", "local_readiness_paths", "evidence_bundle_root", "managed_identity_paths", "named_evidence_plan_binding", "named_evidence_layers", "provider_adapters", "external_provider_interfaces"}
     if not isinstance(current, Mapping) or set(current) != expected_current:
         raise ContractError("current repository evidence source shape drifted")
-    if current.get("owner_manifest_target") != owner or current.get("owner_manifest_root") != ".qwq_output/env/repo/runs/feature-tree/by-fingerprint" or current.get("evidence_bundle_root") != ".qwq_output/env/repo/runs/governance-pipeline":
-        raise ContractError("current repository evidence roots drifted")
     _strings(current.get("local_readiness_paths"), "current_repository_evidence.local_readiness_paths")
     _strings(current.get("managed_identity_paths"), "current_repository_evidence.managed_identity_paths")
     expected_named_binding = {
@@ -207,7 +205,6 @@ def validate_contract(value: object) -> None:
         "segment": "POST",
         "deliverable": "implementation",
         "scope": owner,
-        "owner_manifest_target": owner,
         "registry_ref": ".agents/skills/review/references/registry.yaml",
         "subject": {
             "subject_id": "current-repository",
@@ -256,7 +253,7 @@ def validate_contract(value: object) -> None:
                 f"required named evidence is not one required POST registry entry: {evidence_id}"
             )
     expected_adapters = {
-        "owner_manifest", "local_readiness", "review_consolidation", "named_evidence",
+        "candidate_evidence", "local_readiness", "review_consolidation", "named_evidence",
         "handoff", "human_calibration", "objective_inspect", "hotl_inspect",
         "hosted_authority_source",
     }
@@ -352,7 +349,6 @@ def validate_named_evidence_plan_binding(
     plan: dict[str, Any],
     receipt: dict[str, Any],
     subject: Mapping[str, Any],
-    expected_owner_identity_ref: str,
     expected_candidate_evidence_ref: str,
     contract: Mapping[str, Any],
     label: str = "named evidence receipt",
@@ -371,7 +367,6 @@ def validate_named_evidence_plan_binding(
             raise EvidenceAdapterError.identity(
                 f"named evidence Review plan {field} mismatch"
             )
-    owner = plan.get("owner_identity")
     candidate = plan.get("candidate_evidence_identity")
     if (
         not isinstance(candidate, Mapping)
@@ -381,15 +376,7 @@ def validate_named_evidence_plan_binding(
         raise EvidenceAdapterError.identity(
             "named evidence Review plan candidate identity mismatch"
         )
-    if not isinstance(owner, Mapping) or (
-        owner.get("ref") != expected_owner_identity_ref
-        or owner.get("target") != binding["owner_manifest_target"]
-        or owner.get("resolved_owner") != binding["owner_manifest_target"]
-        or owner.get("scope") != binding["scope"]
-    ):
-        raise EvidenceAdapterError.identity(
-            "named evidence Review plan owner/governance scope mismatch"
-        )
+
 
     registry_ref = str(binding["registry_ref"] or "")
     registry_path = (REPO_ROOT / registry_ref).resolve()

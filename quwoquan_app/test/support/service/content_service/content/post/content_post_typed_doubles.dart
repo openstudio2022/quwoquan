@@ -1,6 +1,7 @@
 import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/runtime/transport/models/cursor_page.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_feed_object_card.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_query.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/content_repository_contract.dart';
@@ -13,6 +14,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 import '../../../../runtime/remote_api_path_test_harness.dart';
 import 'content_post_test_builder.dart';
 import 'test_content_app_config.dart';
+import '../feed_delivery_page/content_feed_object_card_test_builder.dart';
 
 /// Post 测试状态只保存调用方显式交入的 typed 对象。
 final class InMemoryContentPostStore {
@@ -59,7 +61,6 @@ class InMemoryContentDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
   Future<DiscoveryFeedPage> listDiscoveryFeedPage({
     required String category,
     String? channelId,
-    String? identity,
     String? type,
     String? subCategory,
     int limit = 20,
@@ -77,29 +78,13 @@ class InMemoryContentDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
     final normalizedChannel = channelId?.trim() ?? '';
     final channelRouted = normalizedChannel.isNotEmpty;
     final routeCategory = channelRouted ? normalizedChannel : category.trim();
-    final resolvedIdentity = channelRouted
-        ? null
-        : (identity?.trim().isNotEmpty == true
-              ? identity!.trim()
-              : DiscoveryFeedRouteRegistry.identityForCategory(routeCategory));
     final resolvedType = channelRouted
         ? null
-        : _normalizedContentType(
-            type?.trim().isNotEmpty == true
-                ? type
-                : DiscoveryFeedRouteRegistry.routeForSurface(
-                    routeCategory,
-                  )?.type,
-          );
+        : _normalizedContentType(type) ??
+              _contentTypeForCategory(routeCategory);
 
     var items = _store.posts
-        .where(
-          (post) =>
-              (resolvedIdentity == null ||
-                  resolvedIdentity.isEmpty ||
-                  post.identity == resolvedIdentity) &&
-              (resolvedType == null || post.type == resolvedType),
-        )
+        .where((post) => resolvedType == null || post.type == resolvedType)
         .toList(growable: false);
     if (routeCategory == 'premium' || routeCategory == 'premium_stream') {
       items = items
@@ -127,8 +112,7 @@ class InMemoryContentDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
       feedRequestId: feedRequestId?.trim().isNotEmpty == true
           ? feedRequestId!.trim()
           : 'feed-request-test-$_requestSequence',
-      policyDigest:
-          'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      policyDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       objectCards: _objectCards(
         channelId: normalizedChannel,
         cursor: cursor,
@@ -137,7 +121,7 @@ class InMemoryContentDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
     );
   }
 
-  List<FeedObjectCard> _objectCards({
+  List<ContentFeedObjectCard> _objectCards({
     required String channelId,
     required String? cursor,
     required int itemCount,
@@ -145,17 +129,13 @@ class InMemoryContentDiscoveryFeedQuery implements ContentDiscoveryFeedQuery {
     if (channelId != 'recommend' ||
         cursor?.trim().isNotEmpty == true ||
         itemCount < 8) {
-      return const <FeedObjectCard>[];
+      return const <ContentFeedObjectCard>[];
     }
-    return const <FeedObjectCard>[
-      FeedObjectCard(
-        objectKind: 'entity_homepage',
-        objectId: 'homepage_sight_west_lake',
+    return <ContentFeedObjectCard>[
+      buildContentFeedObjectCard(
+        homepageId: 'homepage_sight_west_lake',
         title: '西湖',
         subtitle: '杭州 · 风景名胜',
-        tagRefs: <String>['Topic/旅行/杭州'],
-        reasonText: 'affinity',
-        recallPath: 'entity_affinity_card',
         anchorIndex: 8,
       ),
     ];
@@ -207,20 +187,16 @@ class InMemoryContentAuthorPostsReader implements ContentAuthorPostsReader {
   @override
   Future<CursorPage<ContentPostViewData>> listUserPosts({
     required String userId,
-    String? identity,
     String? type,
     String? visibility,
     String? cursor,
     int limit = ContentAuthorPostsQuery.defaultLimit,
   }) async {
     final normalizedType = _normalizedContentType(type);
-    final normalizedIdentity = identity?.trim() ?? '';
     final matches = _store.posts
         .where(
           (post) =>
               post.authorId == userId.trim() &&
-              (normalizedIdentity.isEmpty ||
-                  post.identity == normalizedIdentity) &&
               (normalizedType == null || post.type == normalizedType),
         )
         .toList(growable: false);
@@ -294,13 +270,21 @@ Never _throwContentFailure({
   );
 }
 
-String? _normalizedContentType(String? type) {
-  return switch (type?.trim().toLowerCase() ?? '') {
-    '' => null,
-    'photo' => 'image',
-    'note' => 'article',
-    final value => value,
-  };
+ContentType? _normalizedContentType(String? type) {
+  final value = type?.trim() ?? '';
+  return value.isEmpty
+      ? null
+      : ContentType.fromWire(value, 'ContentPostTestQuery.contentType');
+}
+
+ContentType? _contentTypeForCategory(String category) {
+  final routeType = DiscoveryFeedRouteRegistry.routeForSurface(category)?.type;
+  if (routeType != null) return _normalizedContentType(routeType);
+  // 推荐频道和非类型 category 不是内容类型，不把它们交给 enum decoder。
+  for (final type in ContentType.values) {
+    if (type.wireName == category) return type;
+  }
+  return null;
 }
 
 AppConfigSlice _defaultConfig() {

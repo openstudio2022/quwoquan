@@ -2,6 +2,7 @@ query ContentPostDetailSemantic($postId: ID!, $semanticFirst: Int! = 30) {
   contentPostDetailSemantic(postId: $postId) {
     postId
     contentType
+    semanticDocument
     tagRefs(first: $semanticFirst)
     entityRefs(first: $semanticFirst)
     semanticMentions(first: $semanticFirst) {

@@ -95,19 +95,7 @@
 - 可观察结果：Gathering 仍是唯一活动根，Plan current Revision 唯一且历史不可变，Experience/Post 只以引用关联，时间线与地图收敛到同一事实；所有生产调用只读目标 owner。
 - 禁止结果：不得保留长期公共 Trip 根、复制 Participation/Conversation/Post/Media、手工写投影、以消息或助手状态代替计划、双读双写或恢复 travel-service，或用合成 receipt 冒充环境迁移完成。
 
-## 7. 工程归属
-
-- App：无独立 Travel owner；旅行体验复用 Circle Gathering/Plan、Chat、Content 与 Integration 的 typed ports。
-- Contracts / Service：无 `travel-service`；目标合同与 runtime 由 Circle/Chat/Content/Integration 各对象 owner 持有。
-- Ops：`quwoquan_ops/migrations/travel_to_gathering` 只保存 target-only crosswalk、证据控制面与回滚审批协议。
-- 目标实现归 [`circle-community`](../circle-community/spec.md) 工程归属管理；本节点不重复认领 `quwoquan_app/lib/service/circle_service` 或 `circle-service`。
-- 测试：
-  - `local_contract`：`quwoquan_ops/tests/local_contract/stackctl/test_travel_to_gathering_migration__mapping__local_contract_test.py`、
-    `quwoquan_ops/tests/local_contract/stackctl/test_travel_to_gathering_migration__execute__local_contract_test.py` 与
-    `quwoquan_ops/tests/local_contract/stackctl/test_travel_to_gathering_migration__cutover_rollback__local_contract_test.py`
-  - `api_integration`：归属各目标 owner 的 Gathering/Plan/Chat/Content/Integration 证据树，不保留源服务目录。
-
-## 8. 开放事项
+## 7. 开放事项
 
 <a id="open-001"></a>
 ### OPEN-001 四环境历史 Trip 数据 target-only 迁移证据未完成

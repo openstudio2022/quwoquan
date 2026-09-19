@@ -4,7 +4,7 @@ package generated
 
 const (
 	PostPublicationTitleMaxRunes            = 80
-	PostPublicationMicroBodyMaxRunes        = 5000
+	PostPublicationArticleBodyMaxRunes      = 5000
 	PostPublicationArticleMarkdownMaxRunes  = 20000
 	PostPublicationSummaryMaxRunes          = 240
 	PostPublicationSemanticMentionsMaxItems = 30

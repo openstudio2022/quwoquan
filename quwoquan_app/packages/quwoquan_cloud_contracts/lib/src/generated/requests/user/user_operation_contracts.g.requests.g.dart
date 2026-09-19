@@ -1,5 +1,5 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: 706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31
 
 part of '../../../user/user_operation_contracts.g.dart';
 
@@ -2439,36 +2439,6 @@ final class ResolveOneTapLoginHintCommand {
   };
 }
 
-final class ResolveProfileQrTokenQuery {
-  const ResolveProfileQrTokenQuery({required String qr, String? handle})
-    : qr = qr,
-      handle = handle;
-
-  final String qr;
-  final String? handle;
-
-  factory ResolveProfileQrTokenQuery.fromWire(
-    Map<String, Object?> map, [
-    String path = "ResolveProfileQrTokenQuery",
-  ]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{
-      "qr",
-      "handle",
-    }, path);
-    return ResolveProfileQrTokenQuery(
-      qr: _generatedRequestString(map["qr"], '$path.qr'),
-      handle: map["handle"] == null
-          ? null
-          : _generatedRequestString(map["handle"], '$path.handle'),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "qr": this.qr,
-    if (this.handle?.isNotEmpty == true) "handle": this.handle!,
-  };
-}
-
 final class RetirePersonaCommand {
   RetirePersonaCommand({required String personaId})
     : personaId = personaId.trim() {
@@ -4377,18 +4347,6 @@ CloudOperationRequestPayload encodeUserUserAccountPullUserSyncGeneratedRequest(
     body: <String, Object?>{
       if (request.afterSeq != null) "afterSeq": request.afterSeq!,
       if (request.limit != null) "limit": request.limit!,
-    },
-  );
-}
-
-CloudOperationRequestPayload
-encodeUserUserAccountResolveProfileQrTokenGeneratedRequest(
-  ResolveProfileQrTokenQuery request,
-) {
-  return CloudOperationRequestPayload(
-    queryParameters: <String, String>{
-      "qr": request.qr,
-      if (request.handle?.isNotEmpty == true) "handle": request.handle!,
     },
   );
 }

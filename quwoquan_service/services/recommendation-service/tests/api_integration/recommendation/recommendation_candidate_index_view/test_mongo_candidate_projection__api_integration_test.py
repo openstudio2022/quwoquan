@@ -153,7 +153,7 @@ def test_post_lifecycle_stream_projects_mongo_candidate_before_ack(
         "manifestDigest": None, "releaseDigest": None, "sourceVersion": 1,
         "safetyRevision": 1,
         "postId": "post-stream-001", "authorId": "persona-stream-author",
-        "contentType": "article", "contentIdentity": "work",
+        "contentType": "article",
         "status": "published", "visibility": "public",
         "moderationStatus": "approved", "title": "旅行", "body": "正文",
         "summary": "摘要", "authorDisplayNameSnapshot": "作者",
@@ -353,7 +353,7 @@ def test_candidate_projection_commits_checkpoint_and_tombstone_atomically(mongo_
     assert not store.apply_source_event(event_id="post-published-7", snapshot=snapshot)
     assert mongo_database["rm_discovery_feed"].count_documents({"contentId": "post-001"}) == 1
     assert mongo_database["rm_entity_tags"].count_documents({"contentId": "post-001"}) == 1
-    object_card_candidates = store.list_object_card_candidates()
+    object_card_candidates = store.list_homepage_candidates()
     assert len(object_card_candidates) == 1
     assert object_card_candidates[0]["primaryHomepageId"] == "homepage-001"
     assert object_card_candidates[0]["primaryHomepageSnapshot"]["canonicalEntityId"] == "entity-001"

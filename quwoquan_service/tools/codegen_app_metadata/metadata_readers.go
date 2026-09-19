@@ -454,7 +454,7 @@ func readContentPublicationPolicy(
 	}
 	limits := parsed.TextLimits
 	if limits.TitleMaxRunes <= 0 ||
-		limits.MicroBodyMaxRunes <= 0 ||
+		limits.ArticleBodyMaxRunes <= 0 ||
 		limits.ArticleMarkdownMaxRunes <= 0 ||
 		limits.SummaryMaxRunes <= 0 ||
 		limits.SemanticMentionsMaxItems <= 0 {

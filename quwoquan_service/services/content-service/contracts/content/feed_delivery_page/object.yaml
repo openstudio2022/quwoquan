@@ -1,8 +1,9 @@
 kind: append_only_fact
 description: >-
-  GET /content/feed 已交付页的短期只追加事实。它只记录页面稳定身份、Post 顺序、
-  对象卡快照与锚点、前页身份及原始出站 cursor；previous cursor 只能读取本事实，
-  不得重新召回、重排、反向查询 live Post 时间线或补入替代内容。
+  GET /content/feed 已交付页的短期只追加事实。它只记录页面稳定身份、统一 items
+  序列中的 ListItemPresentationEnvelope 与交付决策、客户端能力闭集、前页身份及原始
+  出站 cursor；不保存 Post 或 Homepage 的可变展示快照。previous cursor 只能读取本事实，
+  按稳定对象引用执行当前可见性 hydration，不得重新召回、重排或补入替代内容。
 identity:
   fields:
   - deliveryPageId
@@ -40,15 +41,18 @@ assistant_access:
   denied_reason: "原始行为与遥测事实不对小趣开放；小趣只读所属域的公开投影结果。"
 business_rules:
 - 同一 deliveryPageId 只能以完全相同 payload 幂等追加，冲突必须 fail-closed
-- 单页最多 20 个 Post、20 个对象卡，未压缩 JSON 不得超过 65536 bytes
+- 单页最多 20 个统一列表项（Post 与 Homepage 合计），未压缩 JSON 不得超过 65536 bytes；不存在独立对象卡配额或 sidecar
 - 同一 scopeHash 最多保留 400 页（8 个活跃 RankedFeedWindow 各最多 50 层）且每页固定 600 秒 TTL，读取不得滑动续期
 - scopeHash 确定性映射到 256 个固定 quota shard；默认每 shard 最多 512 个 live value / 33554432 payload bytes，因此全族硬上限为 131072 个 live value / 8589934592 payload bytes
 - 分片 key/byte 上限命中只拒绝 contender，禁止淘汰其他 scope；key、payload 与 cursor 均使用无协议版本信封的唯一 canonical schema
 - 所有字符串与数组在 JSON 编码前执行字段级 byte/count 准入；单页总 payload 门不能替代字段门，禁止先物化攻击者可控的无界字符串
-- scopeHash 必须覆盖 actor/session/route/pageSize，记录另行绑定 feedRequestId、release 与 expiry
+- scopeHash 必须覆盖 actor/session/route/pageSize/clientPresentationContract.contractDigest，记录另行绑定 feedRequestId、release 与 expiry；服务端先验证闭集并重算摘要，不信任调用方 digest
+- 前后向 cursor 的认证身份必须覆盖同一 contractDigest；每次续页或回翻核对请求、cursor、窗口与交付页的摘要，不一致 typed 拒绝并要求重新首刷，不改写已交付页或其展示决策
 - 推荐交付页必须原样固化 RankedRecommendationPage.experimentBucket；该字段来自服务端策略分配，独立于可因模型失败而降级的 modelBucket，并随 FeedPageDelivered 原样发布。
-- 回放只按 items.postId 原顺序执行当前可见性 hydration；缺失或不可见 Post 只删除，不补替代内容
-- 对象卡只回放已交付快照并按仍可见 Post 重基准 anchor，禁止重新召回对象卡
+- 每项只复用 ListItemPresentationEnvelope；稳定身份是 objectKind 与该种类对应的 post.postId 或 homepage.homepageId，异类同字符串 ID 不冲突，同类重复身份拒绝；不创建第二对象种类枚举
+- 回放只按 items.envelope 原顺序对 Post/Homepage 执行当前可见性 hydration；缺失或不可见项只从响应省略，不补替代内容，不修改保存的信封、推荐决策与稳定序位
+- presentationRecipe 只由 Recommendation 建窗赋值；回放不得根据当前可变展示字段推导、改写 recipe 或 openSurface，不回放对象卡快照或重基准 anchor
+- FeedPageDelivered 仅包含持久化成功且实际进入响应的推荐项；逐项携带共享 envelope、窗口原 ordinal 与特征归因，去重使用稳定对象身份而非 Post-only ID，主页不得伪装为 Post 曝光
 - 每个非空成功响应都必须追加 FeedDeliveryPage，包括没有 nextCursor 的终页和单页；终页 outboundCursor 为空，不得因无法继续翻页而丢失交付身份。
 lifecycle:
   states:

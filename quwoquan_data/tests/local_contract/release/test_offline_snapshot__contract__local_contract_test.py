@@ -80,10 +80,17 @@ def _json(path):
 
 
 def _fixture_review(ref, execution_id, draft_ref, raw):
+    author = {"host": "cursor", "modelFamily": "gpt", "sessionId": "test-author", "invocation": {"provider": "openai", "model": "test-double", "runId": "test-author"}}
+    reviewer = {"host": "cursor", "modelFamily": "gpt", "sessionId": "test-reviewer", "invocation": {"provider": "openai", "model": "test-double", "runId": "test-reviewer"}}
+    protocol = {"schemaVersion": "1.0.0", "dialectVersion": "1.0.0", "canonicalizationVersion": "1.0.0"}
+    revision = {"contentRevision": 1, "sourceRevision": 1, "layoutRevision": 1}
+    draft_digest = digest_bytes(raw)
+    disposition = {"issueId": "semantic-exact", "objectRef": ref, "sourceAnchor": {"origin": "source", "start": 0, "end": 1, "selector": "document"}, "sourceDigest": draft_digest, "targetDigest": draft_digest, "detectedType": "SEMANTIC_EXACT", "proposedMapping": None, "lossFields": [], "severity": "info", "actor": {"actorId": "test-reviewer", "actorType": "independent_reviewer"}, "reason": "fixture preserves reviewed bytes", "policyVersion": "1.0.0", "reviewStatus": "reviewed_confirmed", "outcome": "auto_continue", "processingDisposition": "preserved", "protocol": protocol, "objectRevision": revision}
     return {"schema": "quwoquan_data.content_review", "stage": "5.review", "executionId": execution_id,
-            "objectRef": ref, "decision": "approved", "draft": {"ref": draft_ref, "digest": digest_bytes(raw)},
+            "objectRef": ref, "decision": "approved", "author": author, "reviewer": reviewer,
+            "candidateBindings": {"origin": "execution_draft", "page": {"ref": draft_ref, "digest": draft_digest}, "manifest": None, "semanticDocument": None},
             "dimensions": [{"name": "TEST DOUBLE, NOT REAL REVIEW", "decision": "approved", "issues": []}],
-            "blockingIssues": [], "assetRights": []}
+            "blockingIssues": [], "assetRights": [], "protocol": protocol, "objectRevision": revision, "dispositions": [disposition]}
 
 
 def _bind_review(manifest, ref, review_raw):
@@ -133,7 +140,12 @@ def current_source(tmp_path):
     for ref, template in zip(POST_REFS, TEMPLATES):
         manifest = _json(METADATA_ROOT / template / "manifest.json")
         carrier = ref.split("/")[1]
-        for key in ("assetRefsRef", "creatorRefsRef", "tagRefsRef", "sourceCatalogRef", "rightsRef"):
+        retired = ("assetRefsRef", "creatorRefsRef", "tagRefsRef", "sourceCatalogRef", "rightsRef", "variantPurpose", "contentIdentity")
+        branch_forbidden = {
+            "image": ("template", "carrier", "generatorModel", "citedSourceRefs", "reviewDecision", "markdownDialect", "articleRenderProfile", "publishLayout", "articleCategory", "writingIntent", "baseSourceRef", "imageBindings", "videoBindings"),
+            "video": ("template", "carrier", "generatorModel", "citedSourceRefs", "reviewDecision", "markdownDialect", "articleRenderProfile", "publishLayout", "articleCategory", "writingIntent", "baseSourceRef", "imageBindings", "sourceCollectionId", "creator", "collectionPageUrl", "license", "termsUrl", "authorizationProof", "rightsAuditStatus", "rightsAuditIssues"),
+        }
+        for key in (*retired, *branch_forbidden.get(carrier, ())):
             manifest.pop(key, None)
         manifest.update(objectRef=ref.removeprefix("posts/"), title=Path(ref).parent.name,
                         publishTitle=Path(ref).parent.name, caption="合成离线媒体", contentId="offline_fixture_" + carrier,
@@ -267,11 +279,15 @@ def legacy_source(tmp_path, current_source):
         path = _put(execution / receipt_ref, receipt)
         predecessor = {"scope": "execution", "ref": receipt_ref, "digest": digest_bytes(path.read_bytes())}
     record = _json(METADATA_ROOT / TEMPLATES[0] / "_pool/versions/1.json")
+    record.pop("usageScope", None)
     record.update(objectId=original["contentId"], objectRef=ref.removeprefix("posts/"),
                   sourceIdentity=original["sourceIdentity"], sourceAttribution=original["sourceAttribution"],
                   payloadDigest=_legacy_payload_digest(root), canonicalObjectDigest=_legacy_payload_digest(root),
                   **original["admission"])
     assert_valid(record, "release", "pool_object_record")
+    _put(root / "_pool/versions/1.json", record)
+    record["payloadDigest"] = _legacy_payload_digest(root)
+    record["canonicalObjectDigest"] = record["payloadDigest"]
     _put(root / "_pool/versions/1.json", record)
     authority = _put(tmp_path / "test-author-authority.json", {
         "schema": "quwoquan_data.author_admission_evidence", "authorIds": [CREATOR_ID],
@@ -441,14 +457,11 @@ def test_bundle_mutation_never_writes_a_manifest(tmp_path, current_source):
     assert not (tmp_path / "alpha/manifest.json").exists()
 
 
-def test_nonprod_only_asset_registration():
+def test_stale_alpha_assets_are_not_registered_as_runtime_inputs():
     import yaml
     pubspec = yaml.safe_load((ROOT / "quwoquan_app/pubspec.yaml").read_text())
     registrations = [r for r in pubspec["flutter"]["assets"] if isinstance(r, dict) and r["path"].startswith("assets/content/alpha/")]
-    assert {r["path"] for r in registrations} == {
-        "assets/content/alpha/manifest.json", "assets/content/alpha/bundle_identity.json", "assets/content/alpha/media/",
-    }
-    assert all(r["flavors"] == ["nonprod"] for r in registrations)
+    assert registrations == []
 
 
 def test_cli_registers_downstream_export_without_producer_fields():

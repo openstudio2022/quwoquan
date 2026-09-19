@@ -167,7 +167,6 @@ void main() {
             ..._detailCounters(),
             'postId': 'fixture_video_001',
             'contentType': 'video',
-            'contentIdentity': 'work',
             'authorId': 'fixture_user_travel',
             'authorDisplayName': '契约旅行家',
             'authorAvatarUrl': 'media/avatar/s/archived-avatar/user/fixture_user_travel/v1/avatar.png',
@@ -294,7 +293,6 @@ void main() {
 
       final result = await adapter.listUserPosts(
         userId: 'author-1',
-        identity: 'work',
         type: 'image',
         visibility: 'public',
         cursor: 'cursor-1',

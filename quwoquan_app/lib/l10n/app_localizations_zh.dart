@@ -16,9 +16,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discovery => '发现';
 
   @override
-  String get discoveryTabMoment => '微趣';
-
-  @override
   String get discoveryTabPhoto => '美图';
 
   @override
@@ -69,13 +66,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discoveryHelperTimelineThisWeek => '本周';
 
   @override
-  String get discoveryHelperExpandMoments => '展开微趣';
-
-  @override
   String get discoveryHelperExpandArticles => '查看文章列表';
-
-  @override
-  String get discoveryHelperSectionMoments => '微趣';
 
   @override
   String get discoveryHelperSectionArticles => '文章';
@@ -849,13 +840,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get profilePersonasLabel => '分身管理';
 
   @override
-  String get momentPlaceholder => '这一刻的想法...';
-
-  @override
   String get drafts => '草稿箱';
-
-  @override
-  String get postMoment => '发微趣';
 
   @override
   String get postPhoto => '发美图';
@@ -1390,12 +1375,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get imageSavedSuccess => '保存图片成功';
 
   @override
-  String get momentImageReorderHint => '拖动图片可以调整顺序，点击可以编辑图片';
-
-  @override
-  String get momentPublished => '已发表';
-
-  @override
   String get articleCoverLabel => '封面图';
 
   @override
@@ -1415,9 +1394,6 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get draftCount => '草稿箱';
-
-  @override
-  String get draftMoment => '微趣草稿';
 
   @override
   String get draftPhoto => '美图草稿';

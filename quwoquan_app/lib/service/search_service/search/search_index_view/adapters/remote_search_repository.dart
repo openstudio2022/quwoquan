@@ -300,7 +300,6 @@ final class RemoteSearchRepository implements SearchRepository {
     for (final contentType in contentTypes) {
       switch (contentType) {
         case SearchContentTypeFilter.article:
-        case SearchContentTypeFilter.micro:
           targets.add(RetrieveTarget.article);
         case SearchContentTypeFilter.image:
           targets.add(RetrieveTarget.photo);

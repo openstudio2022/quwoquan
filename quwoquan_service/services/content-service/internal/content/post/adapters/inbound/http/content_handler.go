@@ -15,6 +15,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rthealth "quwoquan_service/runtime/health"
 	rtrec "quwoquan_service/runtime/recommendation"
+	presentation "quwoquan_service/services/content-service/generated/content/feed_delivery_page"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 	mediaasseterrors "quwoquan_service/services/content-service/generated/media/media_asset"
@@ -59,7 +60,6 @@ type ContentHandler struct {
 type postDetailClientWire struct {
 	PostID                  postports.PostID                         `json:"postId"`
 	ContentType             postports.ContentType                    `json:"contentType"`
-	ContentIdentity         postports.ContentIdentity                `json:"contentIdentity,omitempty"`
 	AssistantUsePolicy      string                                   `json:"assistantUsePolicy,omitempty"`
 	AuthorID                postports.PersonaID                      `json:"authorId,omitempty"`
 	AuthorDisplayName       string                                   `json:"authorDisplayName,omitempty"`
@@ -123,7 +123,6 @@ func ProjectPostDetailForClient(
 	return postDetailClientWire{
 		PostID:                  detail.PostID,
 		ContentType:             detail.ContentType,
-		ContentIdentity:         detail.ContentIdentity,
 		AssistantUsePolicy:      detail.AssistantUsePolicy,
 		AuthorID:                detail.AuthorPersonaID,
 		AuthorDisplayName:       detail.AuthorDisplayName,
@@ -510,6 +509,31 @@ func (h *ContentHandler) handlePrometheusMetrics(w http.ResponseWriter, r *http.
 	promhttp.Handler().ServeHTTP(w, r)
 }
 
+// declaredClientPresentationContract 归一一个读入口声明的展示能力。
+// operation binder 已按契约校验过 JSON query 的结构、长度与闭集成员；这里只做
+// 两件事：整份缺席（查询参数不存在，declared 为 nil）落到生成的
+// MissingDeclaration 固定基线；其余交给 canonical decoder 重算 digest。
+// 缺席永远不升级为全能力，自报摘要也永远不被采信。
+func declaredClientPresentationContract(
+	r *http.Request,
+	declared bool,
+) (presentation.ClientContentPresentationContract, error) {
+	if !declared {
+		return presentation.MissingDeclarationContentPresentationContract(), nil
+	}
+	contract, err := presentation.DecodeClientContentPresentationContract(
+		[]byte(r.URL.Query().Get("clientPresentationContract")),
+	)
+	if err != nil {
+		return presentation.ClientContentPresentationContract{}, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"内容展示能力声明不合法",
+			err.Error(),
+		)
+	}
+	return contract, nil
+}
+
 func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid method", "only GET is supported"))
@@ -524,12 +548,19 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		))
 		return
 	}
+	presentationContract, err := declaredClientPresentationContract(
+		r,
+		params.ClientPresentationContract != nil,
+	)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
 	recommendationActorID := ResolveRecommendationActorID(r)
 	resp, err := h.feedService.ListFeed(r.Context(), feedapp.ListFeedRequest{
 		UserID:          recommendationActorID,
 		ViewerPersonaID: ResolvePersonaID(r),
 		SessionID:       resolveSessionID(r),
-		Identity:        params.Identity,
 		Type:            params.Type,
 		Sort:            params.Sort,
 		ChannelID:       params.ChannelId,
@@ -538,6 +569,8 @@ func (h *ContentHandler) handleGetFeed(w http.ResponseWriter, r *http.Request) {
 		Limit:           params.Limit,
 		FeedRequestID:   params.FeedRequestId,
 		BlockedKeywords: ResolveBlockedKeywords(r),
+
+		ClientPresentationContract: presentationContract,
 	})
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -556,13 +589,27 @@ func (h *ContentHandler) handleGetPost(w http.ResponseWriter, r *http.Request) {
 		writeHTTPError(w, r, rterr.NewInvalidArgument(rterr.ModuleContent, "invalid post id", "missing postId path segment"))
 		return
 	}
+	declaredContract, err := BindGeneratedGetPostClientPresentationContractQuery(r)
+	if err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"内容展示能力声明不合法",
+			err.Error(),
+		))
+		return
+	}
+	presentationContract, err := declaredClientPresentationContract(r, declaredContract != nil)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
 	viewerPersonaID := ResolvePersonaID(r)
 	detail, err := h.postQueryService.GetPost(
 		r.Context(),
 		postports.NewPostDetailQuery(
 			postports.NewPostID(postID),
 			postports.NewViewerContext(postports.NewPersonaID(viewerPersonaID)),
-		),
+		).WithClientPresentationContract(presentationContract),
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)
@@ -722,30 +769,6 @@ func (h *ContentHandler) handleUpdatePostSettings(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, projectPostForClient(post))
 }
 
-func (h *ContentHandler) handlePromotePostToWork(w http.ResponseWriter, r *http.Request) {
-	payload, err := BindGeneratedRequestBodyFromRequest(r, "PromotePostToWork")
-	if err != nil {
-		writeHTTPError(w, r, rterr.NewInvalidArgument(
-			rterr.ModuleContent,
-			"请求体字段不合法",
-			err.Error(),
-		))
-		return
-	}
-	postID := postIDFromPath(r.URL.Path)
-	post, err := h.postService.PromotePostToWork(
-		r.Context(),
-		postID,
-		ResolvePersonaID(r),
-		payload,
-	)
-	if err != nil {
-		writeHTTPError(w, r, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, projectPostForClient(post))
-}
-
 func (h *ContentHandler) handleDeletePost(w http.ResponseWriter, r *http.Request) {
 	postID := postIDFromPath(r.URL.Path)
 	receipt, err := h.postService.DeletePost(r.Context(), postID, ResolvePersonaID(r))
@@ -809,7 +832,6 @@ func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Requ
 		userID = queryUserID
 	}
 	cursor := strings.TrimSpace(r.URL.Query().Get("cursor"))
-	identity := strings.TrimSpace(r.URL.Query().Get("identity"))
 	postType := strings.TrimSpace(r.URL.Query().Get("type"))
 	visibility := strings.TrimSpace(r.URL.Query().Get("visibility"))
 	limit := 20
@@ -818,17 +840,30 @@ func (h *ContentHandler) handleListUserPosts(w http.ResponseWriter, r *http.Requ
 			limit = n
 		}
 	}
+	declaredContract, err := BindGeneratedListUserPostsClientPresentationContractQuery(r)
+	if err != nil {
+		writeHTTPError(w, r, rterr.NewInvalidArgument(
+			rterr.ModuleContent,
+			"内容展示能力声明不合法",
+			err.Error(),
+		))
+		return
+	}
+	presentationContract, err := declaredClientPresentationContract(r, declaredContract != nil)
+	if err != nil {
+		writeHTTPError(w, r, err)
+		return
+	}
 	page, err := h.postQueryService.ListUserPosts(
 		r.Context(),
 		postports.NewAuthorPostPageQuery(
 			postports.NewPersonaID(userID),
 			postports.NewViewerContext(postports.NewPersonaID(viewerID)),
-			postports.ContentIdentity(identity),
 			postports.ContentType(postType),
 			postports.PostVisibility(visibility),
 			cursor,
 			limit,
-		),
+		).WithClientPresentationContract(presentationContract),
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)

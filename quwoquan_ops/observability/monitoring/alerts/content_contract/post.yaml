@@ -5,6 +5,26 @@ groups:
     rules:
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route="/internal/content/releases:activate-at-search-barrier"})
+        labels:
+          service: "content-service"
+          operation: "content.post.ActivateContentReleaseAtSearchBarrier"
+          contract_metric: "content_release_query_barrier_activate"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "8000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route="/internal/content/releases:activate-at-search-barrier"})
+        labels:
+          service: "content-service"
+          operation: "content.post.ActivateContentReleaseAtSearchBarrier"
+          contract_metric: "content_release_query_barrier_activate"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "8000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
           sum by (status) (http_server_requests_total{service="content-service",method="DELETE",route=~"^/content/posts/[^/]+$"})
         labels:
           service: "content-service"
@@ -365,23 +385,123 @@ groups:
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
         expr: |
-          sum by (status) (http_server_requests_total{service="content-service",method="POST",route=~"^/content/posts/[^/]+:promoteToWork$"})
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route="/internal/content/release-queries:prepare"})
         labels:
           service: "content-service"
-          operation: "content.post.PromotePostToWork"
-          contract_metric: "content_post_promote_to_work"
-          commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          operation: "content.post.PreparePostReleaseQueries"
+          contract_metric: "content_release_queries_prepare"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "65000"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_duration_seconds_bucket
         expr: |
-          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route=~"^/content/posts/[^/]+:promoteToWork$"})
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route="/internal/content/release-queries:prepare"})
         labels:
           service: "content-service"
-          operation: "content.post.PromotePostToWork"
-          contract_metric: "content_post_promote_to_work"
+          operation: "content.post.PreparePostReleaseQueries"
+          contract_metric: "content_release_queries_prepare"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "65000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="GET",route="/internal/content/active-release-fence"})
+        labels:
+          service: "content-service"
+          operation: "content.post.ReadActiveReleaseFence"
+          contract_metric: "content_active_release_fence_read"
           commercial_status: "ready"
-          slo_latency_p95_ms: "800"
+          slo_latency_p95_ms: "200"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="GET",route="/internal/content/active-release-fence"})
+        labels:
+          service: "content-service"
+          operation: "content.post.ReadActiveReleaseFence"
+          contract_metric: "content_active_release_fence_read"
+          commercial_status: "ready"
+          slo_latency_p95_ms: "200"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route="/internal/content/release-commit-receipts:query"})
+        labels:
+          service: "content-service"
+          operation: "content.post.ReadContentReleaseCommitReceipt"
+          contract_metric: "content_release_commit_receipt_read"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route="/internal/content/release-commit-receipts:query"})
+        labels:
+          service: "content-service"
+          operation: "content.post.ReadContentReleaseCommitReceipt"
+          contract_metric: "content_release_commit_receipt_read"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "400"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route="/internal/content/post-candidate-safety:query"})
+        labels:
+          service: "content-service"
+          operation: "content.post.ReadPostCandidateSafety"
+          contract_metric: "content_post_candidate_safety_read"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1200"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route="/internal/content/post-candidate-safety:query"})
+        labels:
+          service: "content-service"
+          operation: "content.post.ReadPostCandidateSafety"
+          contract_metric: "content_post_candidate_safety_read"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "1200"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route="/internal/content/release-candidates:query"})
+        labels:
+          service: "content-service"
+          operation: "content.post.ReadPostReleaseCandidate"
+          contract_metric: "content_release_source_read"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "2500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route="/internal/content/release-candidates:query"})
+        labels:
+          service: "content-service"
+          operation: "content.post.ReadPostReleaseCandidate"
+          contract_metric: "content_release_source_read"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "2500"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_requests_total
+        expr: |
+          sum by (status) (http_server_requests_total{service="content-service",method="POST",route="/internal/content/release-queries:query"})
+        labels:
+          service: "content-service"
+          operation: "content.post.ReadRequiredReleaseQueries"
+          contract_metric: "content_release_queries_read"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "7000"
+          slo_availability_percent: "99.9"
+      - record: quwoquan_content_contract_operation_duration_seconds_bucket
+        expr: |
+          sum by (le) (http_server_duration_seconds_bucket{service="content-service",method="POST",route="/internal/content/release-queries:query"})
+        labels:
+          service: "content-service"
+          operation: "content.post.ReadRequiredReleaseQueries"
+          contract_metric: "content_release_queries_read"
+          commercial_status: "blocked"
+          slo_latency_p95_ms: "7000"
           slo_availability_percent: "99.9"
       - record: quwoquan_content_contract_operation_requests_total
         expr: |

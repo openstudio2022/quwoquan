@@ -193,7 +193,7 @@ def validate_promotion_review(
         evidence_pairs, exact_evidence = _review_pairs(root, documents, consolidation["evidence_identities"], "receipt_ref")
         reviewer_pairs, exact_results = _review_pairs(root, documents, consolidation["reviewer_result_identities"], "result_ref")
         plans = [value for value in documents.values() if "candidate_evidence_identity" in value
-                 and "reviewers" in value and "owner_identity" in value]
+                 and "reviewers" in value and "contexts" in value]
         if len(plans) != 1:
             raise ValueError("exactly one existing Review plan is required")
         _review_health_binding(root, documents, evidence_pairs, plans[0], report)

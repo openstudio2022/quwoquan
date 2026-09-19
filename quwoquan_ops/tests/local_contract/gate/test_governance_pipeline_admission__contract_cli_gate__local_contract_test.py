@@ -54,11 +54,10 @@ def test_contract_owns_real_sources_required_evidence_and_zero_mutation() -> Non
     assert contract["admission_policy"]["observe_only_requires_all_evidence_layers"] is True
     assert "handoff_freshness" in contract["evidence_layers"]
     assert set(contract["layer_admission"]) == set(contract["evidence_layers"])
-    assert len(contract["evidence_layers"]) == 26
-    assert next(iter(contract["evidence_layers"])) == "owner_manifest"
-    assert contract["schemas"]["evidence_bundle_receipts"]["required_fields"][0] == "owner_manifest"
-    assert contract["layer_admission"]["owner_manifest"]["provider_id"] == "feature_context_owner_identity_v4"
-    assert contract["current_repository_evidence"]["provider_adapters"]["owner_manifest"]["provider_id"] == "feature_context_owner_identity_v4"
+    assert len(contract["evidence_layers"]) == 25
+    assert next(iter(contract["evidence_layers"])) == "local_scope_ready"
+    assert contract["schemas"]["evidence_bundle_receipts"]["required_fields"][0] == "candidate_evidence"
+    assert contract["current_repository_evidence"]["provider_adapters"]["candidate_evidence"]["provider_id"] == "candidate_evidence_v4"
     assert "feature_context_manifest_v2" not in serialized
     assert contract["layer_admission"]["prod"]["provider_kinds"] == ["authenticated_external"]
     assert contract["layer_admission"]["portal_test"]["release_evidence_eligible"] is False
@@ -141,12 +140,6 @@ def test_named_evidence_requires_current_exact_plan_and_governance_subject(
         "segment": binding["segment"],
         "deliverable": binding["deliverable"],
         "scope": binding["scope"],
-        "owner_identity": {
-            "ref": "current-owner-manifest.json",
-            "target": binding["owner_manifest_target"],
-            "resolved_owner": binding["owner_manifest_target"],
-            "scope": binding["scope"],
-        },
         "candidate_evidence_identity": {"ref": "candidate.json"},
         "fingerprint_receipt": dict(current),
     }
@@ -173,7 +166,6 @@ def test_named_evidence_requires_current_exact_plan_and_governance_subject(
     )
     assert validate_named_evidence_plan_binding(
         plan=plan, receipt=receipt, subject=subject,
-        expected_owner_identity_ref="current-owner-manifest.json",
         expected_candidate_evidence_ref="candidate.json", contract=contract,
     ) is receipt
 
@@ -185,8 +177,7 @@ def test_named_evidence_requires_current_exact_plan_and_governance_subject(
     with pytest.raises(ContractError, match="different exact Review plan"):
         validate_named_evidence_plan_binding(
             plan=plan, receipt=other_plan_receipt, subject=subject,
-            expected_owner_identity_ref="current-owner-manifest.json",
-            expected_candidate_evidence_ref="candidate.json", contract=contract,
+                expected_candidate_evidence_ref="candidate.json", contract=contract,
         )
 
     other_candidate = dict(subject)
@@ -194,8 +185,7 @@ def test_named_evidence_requires_current_exact_plan_and_governance_subject(
     with pytest.raises(ContractError, match="candidate_id mismatch"):
         validate_named_evidence_plan_binding(
             plan=plan, receipt=receipt, subject=other_candidate,
-            expected_owner_identity_ref="current-owner-manifest.json",
-            expected_candidate_evidence_ref="candidate.json", contract=contract,
+                expected_candidate_evidence_ref="candidate.json", contract=contract,
         )
 
 
@@ -269,7 +259,7 @@ def test_gate_reports_expected_terminal_without_wrapping_external_blocker_as_pas
     assert "Traceback" not in completed.stdout + completed.stderr
 
 
-def test_gate_with_structurally_blocked_bundle_fails() -> None:
+def test_gate_with_structurally_blocked_bundle_reports_non_admission() -> None:
     from lib.governance_pipeline_admission import assemble_evidence_bundle
     contract = load_contract()
     path = assemble_evidence_bundle(
@@ -280,15 +270,14 @@ def test_gate_with_structurally_blocked_bundle_fails() -> None:
         cwd=ROOT, text=True, capture_output=True, check=False,
         env={"PYTHONDONTWRITEBYTECODE": "1", "PYTHONPYCACHEPREFIX": str(ROOT / ".qwq_output/env/repo/local/governance-pipeline/cache/bytecode")},
     )
-    assert completed.returncode == 1
-    assert "GATE_BLOCK" in completed.stderr
-    assert "GPA.EVIDENCE_IDENTITY_BLOCKED" in completed.stderr
+    assert completed.returncode == 0
+    assert "EXPECTED_FAIL_CLOSED" in completed.stdout
 
 
-def test_story_preserves_external_open_and_binds_current_owner_evidence() -> None:
+def test_story_preserves_external_open_and_binds_current_candidate_evidence() -> None:
     story = (ROOT / "specs/feature-tree/runtime/development-workflow-governance/governance-pipeline-observe-only/spec.md").read_text(encoding="utf-8")
     assert all(f'<a id="gwt-00{index}"></a>' in story for index in (1, 2, 3))
     assert all(f'<a id="open-00{index}"></a>' in story for index in (1, 2, 3))
-    assert "owner manifest exact ref" in story
+    assert "context manifest exact ref" in story
     assert "固定 current pointer" in story
     assert "不得声明" in story or "不证明" in story

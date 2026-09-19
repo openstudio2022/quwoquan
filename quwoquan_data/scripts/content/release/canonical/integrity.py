@@ -25,6 +25,7 @@ from core.content_source_registry import homepage_source_can_seed_base_draft
 from core.control_types import MediaClosureVerdict
 from core.tree_integrity import tree_integrity_stats
 from core.release_layout import objects_merkle, payload_file, verify_release_holdings
+from core.schema import assert_valid
 from content.release.canonical.release_consistency import scan_release_contract
 from governance.coverage.license import (
     rights_audit_status_recorded,
@@ -219,7 +220,10 @@ def _base_draft_issues(
 ) -> list[str]:
     issues: list[str] = []
     source_refs = _json(runtime_post / "1.download" / "source_refs.json")
-    writing_pack = _json(runtime_post / "3.compose" / "writing_pack.json")
+    writing_pack_path = runtime_post / "3.compose" / "writing_pack.json"
+    writing_pack = _json(writing_pack_path)
+    if writing_pack:
+        assert_valid(writing_pack, "content", "writing_pack", label=str(writing_pack_path))
     if not source_refs:
         return [f"{post_rel}: missing runtime 1.download/source_refs.json"]
     if not writing_pack:
@@ -320,8 +324,31 @@ def _entity_homepage_issues(root: Path, runtime_batch: Path | None) -> list[str]
         runtime_entity = (runtime_batch / entity_rel) if runtime_batch and runtime_batch.is_dir() else None
         if runtime_entity is None:
             continue
-        quality = _json(runtime_entity / "2.quality" / "quality_analysis.json")
-        compose = _payload(runtime_entity / "3.compose" / "entity_page_input.json")
+        quality_path = runtime_entity / "2.quality" / "quality_analysis.json"
+        quality = _json(quality_path)
+        if quality:
+            try:
+                assert_valid(quality, "content", "quality_analysis", label=str(quality_path))
+            except ValueError as exc:
+                issues.append(f"{entity_rel}: invalid quality_analysis: {exc}")
+                continue
+        compose_path = runtime_entity / "3.compose" / "entity_page_input.json"
+        compose_document = _json(compose_path)
+        try:
+            assert_valid(
+                compose_document,
+                "content",
+                "entity_page_input",
+                label=str(compose_path),
+            )
+        except ValueError as exc:
+            issues.append(f"{entity_rel}: invalid entity_page_input: {exc}")
+            continue
+        compose = (
+            compose_document["payload"]
+            if isinstance(compose_document.get("payload"), dict)
+            else compose_document
+        )
         base_source = str(((quality.get("baseDraft") or {}) if isinstance(quality.get("baseDraft"), Mapping) else {}).get("sourceRef") or "")
         compose_base = str(((compose.get("baseDraft") or {}) if isinstance(compose.get("baseDraft"), Mapping) else {}).get("sourceRef") or "")
         if not base_source:

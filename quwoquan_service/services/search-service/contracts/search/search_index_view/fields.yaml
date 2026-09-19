@@ -198,7 +198,6 @@ types:
     fields:
       - {name: postId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: contentType, type: enum, enum_ref: ContentType, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
-      - {name: contentIdentity, type: enum, enum_ref: ContentIdentity, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: title, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: summary, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: coverUrl, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
@@ -220,7 +219,7 @@ types:
       - {name: objectType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: objectId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
       - {name: title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
-      - {name: contentType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: contentType, type: enum, enum_ref: ContentType, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: snippet, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: url, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
       - {name: deepLink, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
@@ -258,7 +257,7 @@ types:
     fields:
       - {name: objectRef, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
       - {name: objectType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
-      - {name: contentType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: contentType, type: enum, enum_ref: ContentType, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: snippet, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: action, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
@@ -276,7 +275,7 @@ types:
       - {name: citationId, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
       - {name: objectRef, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
       - {name: objectType, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
-      - {name: contentType, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
+      - {name: contentType, type: enum, enum_ref: ContentType, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: title, type: string, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: snippet, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
       - {name: url, type: string, constraints: [NULLABLE], classification: PUBLIC, log_policy: hash, api_exposure: read, ops_exposure: read}
@@ -288,6 +287,10 @@ types:
       - {name: generatedAt, type: timestamp, constraints: [NOT_NULL], classification: PUBLIC, log_policy: allow, api_exposure: read, ops_exposure: read}
   CanonicalSearchQuery:
     fields:
+      - name: clientPresentationContract
+        type: ClientContentPresentationContract
+        constraints: [NULLABLE]
+        description: 正常 App 上送生成的四集合能力声明；仅服务端计算缺席声明的 effective 能力。内容命中按能力过滤并补页，非内容命中保留原对象语义，cursor 绑定有效能力摘要；不得将 contentTypes 查询筛选器当作能力声明。
       - name: sessionId
         type: string
         constraints: [NULLABLE]

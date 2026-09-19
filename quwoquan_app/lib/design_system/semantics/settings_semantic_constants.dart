@@ -35,7 +35,7 @@ class SettingsSemanticConstants {
   static Color blockBackground(bool isDark) =>
       AppColorsFunctional.getColor(isDark, ColorType.backgroundPrimary);
 
-  /// 创作页（微趣/美图/视频/文章）整体背景：浅色纯白、深色与设置页一致；分割线保持 [createInlineDividerColor]；支持深色模式
+  /// 创作页（图片/视频/文章）整体背景：浅色纯白、深色与设置页一致；分割线保持 [createInlineDividerColor]；支持深色模式
   static Color createPageBackground(bool isDark) => isDark
       ? AppColorsFunctional.getColor(true, ColorType.backgroundSecondary)
       : AppColorsFunctional.getColor(false, ColorType.backgroundPrimary);
@@ -261,7 +261,7 @@ class SettingsSemanticConstants {
   /// 创作页：正文/配文字号
   static double get createInputBodyFontSize => 16.0;
 
-  /// 创作页：微趣正文输入字号
+  /// 创作页：短配文正文输入字号
   static double get createInputMomentFontSize => 17.0;
 
   /// 创作页：文章标题字号（与图片标题一致）
@@ -419,7 +419,7 @@ class SettingsSemanticConstants {
   /// Checkbox 缩放（与列表紧凑）
   static double get checkboxScale => 0.82;
 
-  // ==================== 创作页（发微趣/美图/视频/文章） ====================
+  // ==================== 创作页（发图片/视频/文章） ====================
   /// 文字与图片之间的分割线（同一体块内，细线）
   static Color createInlineDividerColor(bool isDark) => dividerColor(isDark);
 
@@ -478,7 +478,7 @@ class SettingsSemanticConstants {
   /// 键盘之上工具栏高度（emoji 等入口，紧凑）
   static double get toolbarHeightOverKeyboard => 44.0;
 
-  /// 固定底部 Tab 栏高度（微趣/美图/视频/文章）
+  /// 固定底部 Tab 栏高度（图片/视频/文章）
   static double get toolbarHeightFixed => 48.0;
 
   /// 键盘之上工具栏下沿 ↔ 面板内容区（样式 / 表情）首行间距；与 [emojiGridSpacing] 等同源组内 sm。

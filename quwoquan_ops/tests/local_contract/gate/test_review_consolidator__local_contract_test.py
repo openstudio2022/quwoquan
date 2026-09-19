@@ -29,7 +29,6 @@ from lib.evidence_fingerprint import canonical_json_bytes
 from lib.candidate_evidence import build_candidate_evidence
 from lib.feature_tree.content_addressed_writer import _write_content_addressed_bytes  # noqa: E402
 from lib.feature_tree.commands import _context_manifest, discover_nodes  # noqa: E402
-from lib.feature_tree.ownership import resolve_target_details  # noqa: E402
 from lib.local_readiness.core import LocalReadinessError, _load_review_inputs  # noqa: E402
 
 REGISTRY_PATH = ROOT / ".agents/skills/review/references/registry.yaml"
@@ -58,9 +57,7 @@ class ReviewConsolidatorTest(unittest.TestCase):
             "agent-skill-review-context-organization/spec.md"
         )
         nodes = discover_nodes()
-        manifest = _context_manifest(
-            target, resolve_target_details(target, nodes), nodes
-        )
+        manifest = _context_manifest(target, nodes)
         manifest["evidence_fingerprint"] = review_dispatch.embedded_fingerprint_binding(
             review_dispatch.build_feature_context_fingerprint(manifest, repo_root=ROOT)
         )
@@ -79,9 +76,7 @@ class ReviewConsolidatorTest(unittest.TestCase):
         manifest_ref = manifest_path.relative_to(ROOT).as_posix()
 
         changed_paths = [target]
-        candidate = build_candidate_evidence(
-            manifest_ref, changed_paths, repo_root=ROOT
-        )
+        candidate = build_candidate_evidence(changed_paths, repo_root=ROOT)
         candidate_bytes = canonical_json_bytes(candidate)
         candidate_path = ROOT / (
             ".qwq_output/env/repo/runs/feature-tree/by-fingerprint/"
@@ -119,7 +114,6 @@ class ReviewConsolidatorTest(unittest.TestCase):
                 None,
                 changed_paths,
                 context_manifest=manifest,
-                context_manifest_ref=manifest_ref,
                 candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
             )
             evidence = evidence_runner.run_plan(
@@ -537,8 +531,7 @@ class CandidateClosureTest(unittest.TestCase):
         self.plan = {
             "workflow": "dev", "changed_paths": [self.path],
             "candidate_evidence_identity": self.candidate,
-            "owner_identity": {"resolved_owner": self.owner},
-            "contexts": [{"path": self.owner, "exists": True}],
+            "contexts": [{"path": self.owner, "anchor": None, "kind": "spec", "exists": True}],
             "reviewers": [{"role": "developer", "kind": "primary"}],
         }
         self.receipt = {"evidence": []}
@@ -583,9 +576,9 @@ class CandidateClosureTest(unittest.TestCase):
         return {"findingId": finding_id, "path": path or self.path, "terminal": terminal,
                 "code": "CODE_HEALTH.TEST", "message": "objective fixture"}
 
-    def disposition(self, *, action="owner-open", finding_id="F-1"):
+    def disposition(self, *, action="feature-open", finding_id="F-1"):
         value = {"finding_id": finding_id, "disposition": action, "reason": "named current evidence",
-                 "evidence_ids": ["health"], "open_ref": f"{self.owner}#open-003" if action == "owner-open" else None}
+                 "evidence_ids": ["health"], "open_ref": f"{self.owner}#open-003" if action == "feature-open" else None}
         self.closure["health_dispositions"].append(value)
         return value
 
@@ -672,7 +665,7 @@ class CandidateClosureTest(unittest.TestCase):
             self.validate()
 
     def test_fake_out_of_scope_path_or_owner_rejected(self):
-        for path in (self.path, "quwoquan_ops/cli/review_dispatch.py", "<candidate>"):
+        for path in (self.path, "<candidate>"):
             self.receipt["evidence"] = []
             self.closure["health_dispositions"] = []
             self.report([self.warning(path=path)])
@@ -817,17 +810,20 @@ Path(os.environ["QWQ_NAMED_EVIDENCE_RESULT_PATH"]).write_text(json.dumps(artifac
             head = git("rev-parse", "HEAD")
             git("branch", "lane/engineering", head); git("update-ref", "refs/remotes/origin/dev1.0", head)
             exact_range = {"base_sha": base, "head_sha": head, "head_tree": git("rev-parse", "HEAD^{tree}")}
-            current = candidates._current_owner(target, repo_root=source)
-            owner = {**current, "schema_version": 4, "canonical_contexts": [{"path": current["resolved_owner"], "anchor": None, "kind": "spec"}], "applicable_agents": ["AGENTS.md"], "open_items": []}
+            from lib.feature_tree.commands import _context_manifest
+            from lib.feature_tree.nodes import discover_nodes
+            with context.source_repository(source):
+                current = _context_manifest("specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md", discover_nodes())
+            owner = {**current, "schema_version": 4, "canonical_contexts": [current["canonical_contexts"][0]], "applicable_agents": ["AGENTS.md"], "open_items": []}
             owner["evidence_fingerprint"] = owner_fingerprint.embedded_fingerprint_binding(owner_fingerprint.build_feature_context_fingerprint(owner, repo_root=source))
             def publish(value, subdirectory=None):
                 with context.source_repository(source):
                     return _write_content_addressed_bytes(canonical_json_bytes(value), subdirectory=subdirectory).relative_to(source).as_posix()
             owner_ref = publish(owner)
-            candidate = candidates.build_candidate_evidence(owner_ref, [target], repo_root=source, source_identity={**exact_range, "producer_lane": "lane/engineering"})
+            candidate = candidates.build_candidate_evidence([target], repo_root=source, source_identity={**exact_range, "producer_lane": "lane/engineering"})
             candidate_ref = publish(candidate, "candidates/by-fingerprint")
             plan = review_dispatch.build_plan(registry, "dev", "POST", None, [target], context_manifest=owner,
-                context_manifest_ref=owner_ref, candidate_evidence_ref=candidate_ref, git_range=exact_range, source_repository=source)
+                candidate_evidence_ref=candidate_ref, git_range=exact_range, source_repository=source)
             plan_ref = ".qwq_output/portable/plan.json"
             (source / plan_ref).parent.mkdir(parents=True)
             (source / plan_ref).write_bytes(canonical_json_bytes(plan))
@@ -851,7 +847,7 @@ Path(os.environ["QWQ_NAMED_EVIDENCE_RESULT_PATH"]).write_text(json.dumps(artifac
             for field in ("plan_fingerprint_ref", "plan_fingerprint_digest", "execution_fingerprint_ref", "execution_fingerprint_digest", "result_fingerprint_ref", "result_fingerprint_digest"):
                 result[field] = identity[field]
             result["candidate_closure"] = {"candidate_fingerprint_ref": plan["candidate_evidence_identity"]["fingerprint_ref"], "candidate_fingerprint_digest": plan["candidate_evidence_identity"]["fingerprint_digest"], "replacements": [],
-                "health_dispositions": [{"finding_id": item["findingId"], "disposition": "owner-open", "reason": "current owner scope", "evidence_ids": ["code-health-delta"], "open_ref": current["resolved_owner"] + "#open-003"} for item in artifact["findings"] if item["terminal"] == "PR_WARN"]}
+                "health_dispositions": [{"finding_id": item["findingId"], "disposition": "feature-open", "reason": "current context scope", "evidence_ids": ["code-health-delta"], "open_ref": current["canonical_contexts"][0]["path"] + "#open-003"} for item in artifact["findings"] if item["terminal"] == "PR_WARN"]}
             result_ref = ".qwq_output/portable/review.json"
             (source / result_ref).write_bytes(canonical_json_bytes(result))
             consolidation = review_consolidator.consolidate(plan, [(receipt_ref, receipt)], [(result_ref, result)], registry=registry, source_repository=source)
@@ -863,12 +859,7 @@ Path(os.environ["QWQ_NAMED_EVIDENCE_RESULT_PATH"]).write_text(json.dumps(artifac
             original = path.read_bytes(); path.write_text("{}")
             with self.assertRaises(ValueError): validate()
             path.write_bytes(original)
-            owner_path = transport / owner_ref
-            original_owner = owner_path.read_bytes(); owner_path.unlink()
-            with self.assertRaises((ValueError, OSError)): validate()
-            owner_path.symlink_to(source / owner_ref)
-            with self.assertRaises((ValueError, OSError)): validate()
-            owner_path.unlink(); owner_path.write_bytes(original_owner)
+            # Context manifest is advisory and not part of the portable candidate closure.
             transported_plan = transport / plan_ref
             original_plan = transported_plan.read_bytes(); transported_plan.write_text("{}")
             with self.assertRaises(ValueError): validate()

@@ -18,12 +18,8 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "quwoquan_ops/cli"))
 sys.path.insert(0, str(REPO_ROOT))
 
-from lib.agent_governance_contract import validate_feature_context_manifest  # noqa: E402
 from lib.evidence_fingerprint import canonical_digest  # noqa: E402
-from lib.feature_context_fingerprint import (  # noqa: E402
-    validate_content_addressed_ref,
-    validate_current_feature_context_fingerprint,
-)
+from lib.candidate_evidence import validate_candidate_ref  # noqa: E402
 from lib.hosted_authority import (  # noqa: E402
     EnvironmentTokenProvider,
     HostedAuthorityError,
@@ -41,7 +37,7 @@ from lib.readiness_case_result import (  # noqa: E402
     validate_readiness_result_bundle,
 )
 
-OWNER_MANIFEST_ROOT = Path(".qwq_output/env/repo/runs/feature-tree/by-fingerprint")
+CANDIDATE_EVIDENCE_ROOT = Path(".qwq_output/env/repo/runs/feature-tree/by-fingerprint/candidates/by-fingerprint")
 READINESS_BUNDLE_ROOT = Path(".qwq_output/env/repo/runs/readiness-result-bundle")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _RAW_SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -50,9 +46,9 @@ _SMOKE_RECOVERY = {
     "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH":
         "replace_with_regular_single_link_file_under_canonical_repo_root",
     "HOSTED_AUTHORITY.SMOKE_STALE_INPUT":
-        "regenerate_current_owner_manifest_and_readiness_bundle",
+        "regenerate_current_candidate_evidence_and_readiness_bundle",
     "HOSTED_AUTHORITY.SMOKE_SCHEMA_INVALID":
-        "regenerate_inputs_from_canonical_owner_and_readiness_producers",
+        "regenerate_inputs_from_canonical_candidate_and_readiness_producers",
     "HOSTED_AUTHORITY.SMOKE_READINESS_NOT_QUALIFYING":
         "produce_nonempty_all_passed_readiness_for_the_expected_candidate",
     "HOSTED_AUTHORITY.SMOKE_AUTHORITY_UNAVAILABLE":
@@ -122,13 +118,13 @@ def _normalize_canonical_input_path(
     return lexical_path, relative.as_posix()
 
 
-def _normalize_owner_manifest_path(
+def _normalize_candidate_evidence_path(
     raw_path: Path, *, repo_root: Path | None = None
 ) -> tuple[Path, str]:
     return _normalize_canonical_input_path(
         raw_path,
-        allowed_root=OWNER_MANIFEST_ROOT,
-        label="owner manifest",
+        allowed_root=CANDIDATE_EVIDENCE_ROOT,
+        label="candidate evidence",
         repo_root=repo_root,
     )
 
@@ -299,73 +295,34 @@ def _json_bytes(raw: bytes, *, label: str) -> dict[str, Any]:
     return value
 
 
-def _verify_owner_manifest_descriptor(
-    *, filename: str, owner_manifest_bytes: bytes
+def _verify_candidate_evidence_descriptor(
+    *, filename: str, candidate_evidence_bytes: bytes
 ) -> None:
-    relative_ref = (OWNER_MANIFEST_ROOT / filename).as_posix()
+    relative_ref = (CANDIDATE_EVIDENCE_ROOT / filename).as_posix()
     current = _read_canonical_repo_ref(
-        relative_ref, allowed_root=OWNER_MANIFEST_ROOT, label="owner manifest"
+        relative_ref, allowed_root=CANDIDATE_EVIDENCE_ROOT, label="candidate evidence"
     )
-    if current != owner_manifest_bytes:
-        raise _block(
-            "HOSTED_AUTHORITY.SMOKE_STALE_INPUT",
-            "owner manifest exact bytes changed after input binding",
-        )
+    if current != candidate_evidence_bytes:
+        raise _block("HOSTED_AUTHORITY.SMOKE_STALE_INPUT", "candidate evidence exact bytes changed after input binding")
 
 
-def _verify_owner_manifest(
-    *, owner_manifest_ref: str, owner_manifest_bytes: bytes
+def _verify_candidate_evidence(
+    *, candidate_evidence_ref: str, candidate_evidence_bytes: bytes
 ) -> tuple[dict[str, Any], dict[str, Any], str]:
-    exact_digest = _sha256(owner_manifest_bytes)
+    exact_digest = _sha256(candidate_evidence_bytes)
     expected_name = exact_digest.removeprefix("sha256:") + ".json"
-    expected_ref = (OWNER_MANIFEST_ROOT / expected_name).as_posix()
-    canonical_prefix = OWNER_MANIFEST_ROOT.as_posix() + "/"
-    lexical_digest = owner_manifest_ref.removeprefix(canonical_prefix).removesuffix(".json")
-    if (
-        not owner_manifest_ref.startswith(canonical_prefix)
-        or not owner_manifest_ref.endswith(".json")
-        or _RAW_SHA256.fullmatch(lexical_digest) is None
-    ):
-        raise _block(
-            "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH",
-            "owner manifest ref must be one canonical repository-relative rawsha path",
-        )
-    if owner_manifest_ref != expected_ref:
-        raise _block(
-            "HOSTED_AUTHORITY.SMOKE_STALE_INPUT",
-            "owner manifest ref filename does not match its exact raw bytes sha256",
-        )
+    expected_ref = (CANDIDATE_EVIDENCE_ROOT / expected_name).as_posix()
+    if candidate_evidence_ref != expected_ref:
+        code = "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH" if not candidate_evidence_ref.startswith(CANDIDATE_EVIDENCE_ROOT.as_posix() + "/") else "HOSTED_AUTHORITY.SMOKE_STALE_INPUT"
+        raise _block(code, "candidate evidence ref must match canonical exact-byte path")
+    _verify_candidate_evidence_descriptor(filename=expected_name, candidate_evidence_bytes=candidate_evidence_bytes)
     try:
-        validated_ref = validate_content_addressed_ref(
-            owner_manifest_ref, raw_bytes=owner_manifest_bytes, repo_root=REPO_ROOT
-        )
+        ref, raw, candidate, fingerprint = validate_candidate_ref(candidate_evidence_ref, repo_root=REPO_ROOT)
     except ValueError as error:
-        raise _block(
-            "HOSTED_AUTHORITY.SMOKE_SCHEMA_INVALID", error
-        ) from error
-    if validated_ref != owner_manifest_ref:
-        raise _block(
-            "HOSTED_AUTHORITY.SMOKE_UNSAFE_PATH",
-            "owner manifest ref normalized away from its exact lexical identity",
-        )
-    _verify_owner_manifest_descriptor(
-        filename=expected_name, owner_manifest_bytes=owner_manifest_bytes
-    )
-    manifest = _json_bytes(owner_manifest_bytes, label="owner manifest")
-    try:
-        validate_feature_context_manifest(manifest)
-        fingerprint = validate_current_feature_context_fingerprint(
-            manifest, repo_root=REPO_ROOT
-        )
-    except ValueError as error:
-        code = (
-            "HOSTED_AUTHORITY.SMOKE_STALE_INPUT"
-            if "stale" in str(error).lower()
-            else "HOSTED_AUTHORITY.SMOKE_SCHEMA_INVALID"
-        )
-        raise _block(code, error) from error
-    return manifest, fingerprint, exact_digest
-
+        raise _block("HOSTED_AUTHORITY.SMOKE_SCHEMA_INVALID", error) from error
+    if ref != candidate_evidence_ref or raw != candidate_evidence_bytes:
+        raise _block("HOSTED_AUTHORITY.SMOKE_STALE_INPUT", "candidate evidence identity changed")
+    return candidate, fingerprint, exact_digest
 
 def _verify_readiness_descriptor(
     *, readiness_bundle_ref: str, readiness_bundle_bytes: bytes
@@ -482,7 +439,7 @@ def _verify_authority_bindings(
     if claims.get("evidence_fingerprint") != expected_fingerprint:
         raise _block(
             "HOSTED_AUTHORITY.SMOKE_AUTHORITY_INVALID",
-            "authority evidence fingerprint does not match owner manifest",
+            "authority evidence fingerprint does not match candidate evidence",
         )
     if claims.get("scope") != dict(expected_scope):
         raise _block(
@@ -509,8 +466,8 @@ def _verify_authority_bindings(
 
 def run_observe_only_smoke(
     *,
-    owner_manifest_ref: str,
-    owner_manifest_bytes: bytes,
+    candidate_evidence_ref: str,
+    candidate_evidence_bytes: bytes,
     readiness_bundle_ref: str,
     readiness_bundle_bytes: bytes,
     receipt_ref: str,
@@ -524,15 +481,15 @@ def run_observe_only_smoke(
     now: datetime | None = None,
     readiness_max_age_seconds: int = 300,
 ) -> dict[str, Any]:
-    """Verify exact owner/readiness/authority inputs without governed mutation."""
+    """Verify exact candidate/readiness/authority inputs without governed mutation."""
     current = now or datetime.now(timezone.utc)
     if current.tzinfo is None or current.utcoffset() is None:
         raise _block(
             "HOSTED_AUTHORITY.SMOKE_SCHEMA_INVALID", "smoke clock must be timezone-aware"
         )
-    manifest, manifest_fingerprint, manifest_digest = _verify_owner_manifest(
-        owner_manifest_ref=owner_manifest_ref,
-        owner_manifest_bytes=owner_manifest_bytes,
+    manifest, manifest_fingerprint, manifest_digest = _verify_candidate_evidence(
+        candidate_evidence_ref=candidate_evidence_ref,
+        candidate_evidence_bytes=candidate_evidence_bytes,
     )
     _verify_readiness_descriptor(
         readiness_bundle_ref=readiness_bundle_ref,
@@ -586,8 +543,8 @@ def run_observe_only_smoke(
     identity_inputs = {
         "schema_id": "hosted-authority-observe-only-smoke-input",
         "schema_version": 1,
-        "owner_manifest": {
-            "exact_ref": owner_manifest_ref,
+        "candidate_evidence": {
+            "exact_ref": candidate_evidence_ref,
             "exact_bytes_sha256": manifest_digest,
             "evidence_fingerprint": manifest_fingerprint["digest"],
         },
@@ -630,10 +587,9 @@ def run_observe_only_smoke(
         )
     return {
         "result": "observed",
-        "owner_manifest_ref": owner_manifest_ref,
-        "owner_manifest_digest": manifest_digest,
-        "owner_manifest_fingerprint": manifest_fingerprint["digest"],
-        "owner": manifest["resolved_owner"],
+        "candidate_evidence_ref": candidate_evidence_ref,
+        "candidate_evidence_digest": manifest_digest,
+        "candidate_evidence_fingerprint": manifest_fingerprint["digest"],
         "readiness_bundle_ref": readiness_bundle_ref,
         "readiness_bundle_digest": readiness_digest,
         "readiness_result_count": len(readiness["results"]),
@@ -661,7 +617,7 @@ def run_observe_only_smoke(
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--owner-manifest", required=True, type=Path)
+    parser.add_argument("--candidate-evidence", required=True, type=Path)
     parser.add_argument("--readiness-bundle", required=True, type=Path)
     parser.add_argument("--authority-receipt-ref", required=True)
     parser.add_argument(
@@ -681,10 +637,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        owner_manifest_ref, owner_manifest_bytes = _read_canonical_input(
-            args.owner_manifest,
-            allowed_root=OWNER_MANIFEST_ROOT,
-            label="owner manifest",
+        candidate_evidence_ref, candidate_evidence_bytes = _read_canonical_input(
+            args.candidate_evidence,
+            allowed_root=CANDIDATE_EVIDENCE_ROOT,
+            label="candidate evidence",
         )
         readiness_bundle_ref, readiness_bundle_bytes = _read_canonical_input(
             args.readiness_bundle,
@@ -700,8 +656,8 @@ def main(argv: list[str] | None = None) -> int:
             REPO_ROOT, token_provider=EnvironmentTokenProvider()
         )
         result = run_observe_only_smoke(
-            owner_manifest_ref=owner_manifest_ref,
-            owner_manifest_bytes=owner_manifest_bytes,
+            candidate_evidence_ref=candidate_evidence_ref,
+            candidate_evidence_bytes=candidate_evidence_bytes,
             readiness_bundle_ref=readiness_bundle_ref,
             readiness_bundle_bytes=readiness_bundle_bytes,
             receipt_ref=args.authority_receipt_ref,

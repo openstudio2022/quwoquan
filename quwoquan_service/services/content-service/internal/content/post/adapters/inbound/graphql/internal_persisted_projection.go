@@ -1,22 +1,25 @@
 package graphql
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
+// supportedContentTypes 是详情切片声明可投影的 ContentType 成员。它不是客户端
+// 能力广告：能力协商走请求上送的 ClientContentPresentationContract。
 var supportedContentTypes = map[string]struct{}{
-	"article": {}, "image": {}, "micro": {}, "video": {},
+	"article": {}, "image": {}, "video": {},
 }
 
 type contentPostDetailBase struct {
 	PostID                  string             `json:"postId"`
 	ContentType             string             `json:"contentType"`
-	ContentIdentity         *string            `json:"contentIdentity"`
 	AssistantUsePolicy      *string            `json:"assistantUsePolicy"`
 	AuthorID                *string            `json:"authorId"`
 	AuthorDisplayName       *string            `json:"authorDisplayName"`
@@ -62,7 +65,6 @@ type sourceAttribution struct {
 	AttributionText               string   `json:"attributionText"`
 	RightsBasis                   string   `json:"rightsBasis"`
 	CommercialAuthorizationStatus string   `json:"commercialAuthorizationStatus"`
-	PublicationAdmission          string   `json:"publicationAdmission"`
 	AuthorizationProofURL         *string  `json:"authorizationProofUrl"`
 	TermsURL                      *string  `json:"termsUrl"`
 	DerivedModifications          []string `json:"derivedModifications"`
@@ -125,7 +127,6 @@ func projectContentPostDetailBase(detail postports.PostDetailSlice) (any, error)
 	}
 	return contentPostDetailBase{
 		PostID: postID, ContentType: contentType,
-		ContentIdentity:        nullable(string(detail.ContentIdentity)),
 		AssistantUsePolicy:     nullable(detail.AssistantUsePolicy),
 		AuthorID:               nullable(string(detail.AuthorPersonaID)),
 		AuthorDisplayName:      nullable(detail.AuthorDisplayName),
@@ -155,7 +156,7 @@ func projectAttribution(value *postports.PostSourceAttributionSlice) (*sourceAtt
 		{"sourcePostUrl", value.SourcePostURL}, {"originalAssetUrl", value.OriginalAssetURL},
 		{"attributionText", value.AttributionText}, {"rightsBasis", value.RightsBasis},
 		{"commercialAuthorizationStatus", value.CommercialAuthorizationStatus},
-		{"publicationAdmission", value.PublicationAdmission}, {"watermarkStatus", value.WatermarkStatus},
+		{"watermarkStatus", value.WatermarkStatus},
 		{"audioRightsStatus", value.AudioRightsStatus}, {"modelReleaseStatus", value.ModelReleaseStatus},
 		{"propertyReleaseStatus", value.PropertyReleaseStatus}, {"takedownPolicy", value.TakedownPolicy},
 	}
@@ -177,8 +178,8 @@ func projectAttribution(value *postports.PostSourceAttributionSlice) (*sourceAtt
 		SourcePostURL: value.SourcePostURL, OriginalAssetURL: value.OriginalAssetURL,
 		AttributionText: value.AttributionText, RightsBasis: value.RightsBasis,
 		CommercialAuthorizationStatus: value.CommercialAuthorizationStatus,
-		PublicationAdmission:          value.PublicationAdmission, AuthorizationProofURL: nullable(value.AuthorizationProofURL),
-		TermsURL: nullable(value.TermsURL), DerivedModifications: append([]string{}, value.DerivedModifications...),
+		AuthorizationProofURL:         nullable(value.AuthorizationProofURL),
+		TermsURL:                      nullable(value.TermsURL), DerivedModifications: append([]string{}, value.DerivedModifications...),
 		WatermarkKind: nullable(value.WatermarkKind), WatermarkNote: nullable(value.WatermarkNote),
 		WatermarkStatus: value.WatermarkStatus, AudioRightsStatus: value.AudioRightsStatus,
 		ModelReleaseStatus: value.ModelReleaseStatus, PropertyReleaseStatus: value.PropertyReleaseStatus,
@@ -187,11 +188,12 @@ func projectAttribution(value *postports.PostSourceAttributionSlice) (*sourceAtt
 }
 
 type contentPostDetailSemantic struct {
-	PostID           string            `json:"postId"`
-	ContentType      string            `json:"contentType"`
-	TagRefs          []string          `json:"tagRefs"`
-	EntityRefs       []string          `json:"entityRefs"`
-	SemanticMentions []semanticMention `json:"semanticMentions"`
+	SemanticDocument *semantic.DocumentEnvelope `json:"semanticDocument"`
+	PostID           string                     `json:"postId"`
+	ContentType      string                     `json:"contentType"`
+	TagRefs          []string                   `json:"tagRefs"`
+	EntityRefs       []string                   `json:"entityRefs"`
+	SemanticMentions []semanticMention          `json:"semanticMentions"`
 }
 
 type semanticMention struct {
@@ -245,8 +247,31 @@ func projectContentPostDetailSemantic(detail postports.PostDetailSlice) (any, er
 			Location: location, RangeStart: start, RangeEnd: end, Status: status,
 			CandidateID: nullable(row.CandidateID), TargetRef: nullable(row.TargetRef)}
 	}
+	if err := validateSemanticDocument(detail.SemanticDocument); err != nil {
+		return nil, err
+	}
 	return contentPostDetailSemantic{PostID: postID, ContentType: contentType,
-		TagRefs: cloneStrings(detail.TagRefs), EntityRefs: cloneStrings(detail.EntityRefs), SemanticMentions: mentions}, nil
+		SemanticDocument: detail.SemanticDocument,
+		TagRefs:          cloneStrings(detail.TagRefs), EntityRefs: cloneStrings(detail.EntityRefs), SemanticMentions: mentions}, nil
+}
+
+// 只校验并投影 owner 持有的 typed envelope；不从 Markdown 重建第二份树。
+func validateSemanticDocument(document *semantic.DocumentEnvelope) error {
+	if document == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(document)
+	if err != nil {
+		return fmt.Errorf("semanticDocument encode: %w", err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(encoded, &fields); err != nil {
+		return fmt.Errorf("semanticDocument decode: %w", err)
+	}
+	if result := semantic.ValidateEnvelope(fields, semantic.CapabilityRegistry); result.Code != semantic.ValidationOK {
+		return fmt.Errorf("semanticDocument invalid: %s (%s)", result.Code, result.Detail)
+	}
+	return nil
 }
 
 type contentPostDetailMedia struct {

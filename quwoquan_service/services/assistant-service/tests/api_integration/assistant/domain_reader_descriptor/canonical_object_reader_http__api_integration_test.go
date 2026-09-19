@@ -50,6 +50,7 @@ func TestCanonicalObjectReadersUseGeneratedPublicQueriesAndBoundedProjection(t *
 			}
 			_ = json.NewEncoder(writer).Encode(map[string]any{
 				"postId": postID, "contentType": "article", "assistantUsePolicy": policy,
+				"contentIdentity": "work",
 				"title": "西湖一日餐饮路线", "summary": "吃玩路线", "status": "published",
 				"visibility": "public", "createdAt": timestamp, "updatedAt": timestamp,
 				"likeCount": 1, "commentCount": 2, "shareCount": 3, "viewCount": 4,
@@ -128,6 +129,10 @@ func TestCanonicalObjectReadersUseGeneratedPublicQueriesAndBoundedProjection(t *
 			result, err := test.reader.ReadObjectContext(t.Context(), test.target)
 			if err != nil {
 				t.Fatal(err)
+			}
+			// 旧上游即使返回退役身份，助手上下文也不得保留第二内容分类轴。
+			if _, exists := result.Value["contentIdentity"]; exists {
+				t.Fatal("内容上下文仍投影退役的 contentIdentity")
 			}
 			if result.Target != test.target || result.OperationRef != test.operationRef ||
 				!result.CapturedAt.Equal(observedAt) ||

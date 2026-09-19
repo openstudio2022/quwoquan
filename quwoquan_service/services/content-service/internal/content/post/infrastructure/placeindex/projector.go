@@ -73,7 +73,7 @@ func (p *PlaceProjector) Project(ctx context.Context, event ports.ProjectorEvent
 	switch event.Type {
 	case postevent.PostDeleted:
 		return p.retractAll(ctx, postID, event.Type)
-	case postevent.PostPublished, postevent.PostUpdated, postevent.PostSettingsUpdated, postevent.PostPromotedToWork:
+	case postevent.PostPublished, postevent.PostUpdated, postevent.PostSettingsUpdated:
 		return p.reconcile(ctx, postID, event.Type)
 	default:
 		// Counter-only / unrelated events: nothing place-related changed.

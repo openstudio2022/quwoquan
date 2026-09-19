@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from core.io import write_json
+from core.schema import assert_valid
 from core.paths import execution_root, release_ref
 
 
@@ -23,18 +24,17 @@ def write_release_only_ship_report(
         if not execution_id:
             raise ValueError("execution_id or output_path required")
         output_path = execution_root(execution_id) / "_shared" / "ship_report.json"
-    write_json(
-        output_path,
-        {
-            "schema": "quwoquan_data.release_only_ship_report",
+    document = {
+            "schema": "quwoquan_data.ship_report",
             "closureType": "release_only",
             "sourceReleaseId": release_id,
             "releaseRef": release_ref(release_id),
             "summary": dict(summary),
             "importRequested": False,
             "importReports": [],
-        },
-    )
+        }
+    assert_valid(document, "release", "ship_report", label=str(output_path))
+    write_json(output_path, document)
     return output_path
 
 

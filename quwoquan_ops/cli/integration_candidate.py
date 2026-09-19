@@ -70,14 +70,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
     claim = sub.add_parser("claim", help="为不重叠整文件 scope 取得 append-only claim")
     claim.add_argument("--writer", required=True)
-    claim.add_argument("--owner-identity", required=True)
     claim.add_argument("--expected-parent", required=True)
     claim.add_argument("--expires-at", required=True)
     claim.add_argument("paths", nargs="+")
 
     build = sub.add_parser("build", help="以私有 index 从 claim 构造 exact candidate commit")
     build.add_argument("--claim-ref", required=True, help="store-relative claim ref")
-    build.add_argument("--owner-identity", required=True)
     build.add_argument("--impact-plan-digest", required=True)
     build.add_argument("--message", required=True)
     build.add_argument("--author-name", required=True)
@@ -86,7 +84,6 @@ def _build_parser() -> argparse.ArgumentParser:
     head = sub.add_parser("build-head", help="把已存在的 exact commit（HEAD 或 lane head）构造为 candidate")
     head.add_argument("--commit", default="HEAD")
     head.add_argument("--expected-parent", required=True, help="必须是远端 dev1.0 当前 OID")
-    head.add_argument("--owner-identity", required=True)
     head.add_argument("--impact-plan-digest", required=True)
     head.add_argument("--writer", required=True)
     head.add_argument("--expires-at", required=True)
@@ -138,21 +135,21 @@ def main(argv: list[str] | None = None) -> int:
         if args.command == "claim":
             path = acquire_claim(
                 repository=ROOT, policy_path=POLICY, writer_id=args.writer,
-                owner_identity_ref=args.owner_identity, expected_parent=args.expected_parent,
+expected_parent=args.expected_parent,
                 paths=args.paths, expires_at=args.expires_at,
             )
             result: object = _store_ref(path)
         elif args.command == "build":
             path = build_candidate(
                 repository=ROOT, policy_path=POLICY, claim_ref=root / args.claim_ref,
-                owner_identity_ref=args.owner_identity, impact_plan_digest=args.impact_plan_digest,
+impact_plan_digest=args.impact_plan_digest,
                 message=args.message, author_name=args.author_name, author_email=args.author_email,
             )
             result = _store_ref(path)
         elif args.command == "build-head":
             path = build_head_candidate(
                 repository=ROOT, policy_path=POLICY, commit=args.commit,
-                expected_parent=args.expected_parent, owner_identity_ref=args.owner_identity,
+                expected_parent=args.expected_parent,
                 impact_plan_digest=args.impact_plan_digest, writer_id=args.writer,
                 expires_at=args.expires_at,
             )

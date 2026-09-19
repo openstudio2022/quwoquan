@@ -4,7 +4,7 @@
 >
 > Journey / Scenario：不直接参与用户 Journey；为全部交付 Objective 与 Increment 提供可恢复的状态执行协议
 >
-> 设计归属：[L2 DEC-009](../design.md#dec-009)
+> 设计引用：[L2 DEC-009](../design.md#dec-009)
 
 ## 1. 用户价值
 

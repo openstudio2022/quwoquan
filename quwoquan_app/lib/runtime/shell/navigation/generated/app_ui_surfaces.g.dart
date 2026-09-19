@@ -600,18 +600,6 @@ class AppUiSurfaces {
     ],
   );
 
-  static const AppUiSurface addContactScan = AppUiSurface(
-    id: 'addContactScan',
-    owner: 'user',
-    routeId: 'addContactScan',
-    pathTemplate: '/add-contact/scan',
-    description: '扫描对方二维码名片（相机 / 图库），解析后进入联系人确认',
-    operationIds: <String>[
-      'ResolveProfileQrToken',
-      'GetProfileQrCard',
-    ],
-  );
-
   static const AppUiSurface addContactPhone = AppUiSurface(
     id: 'addContactPhone',
     owner: 'user',
@@ -1386,7 +1374,6 @@ class AppUiSurfaces {
     interestOnboarding,
     addContact,
     addContactSearch,
-    addContactScan,
     addContactPhone,
     addContactConfirm,
     myQrCode,
@@ -1471,7 +1458,6 @@ class AppUiSurfaces {
     'interestOnboarding': interestOnboarding,
     'addContact': addContact,
     'addContactSearch': addContactSearch,
-    'addContactScan': addContactScan,
     'addContactPhone': addContactPhone,
     'addContactConfirm': addContactConfirm,
     'myQrCode': myQrCode,

@@ -96,26 +96,20 @@ abstract class _DiscoveryFeedMapLoadingCore
   /// 非首页频道（发现 tab photo/video/...）回退 [toDiscoveryFeedQuery]。
   ///
   /// feed_query.channel 是频道推荐主链路标识（B1 收口）：命中即以 channelId 请求
-  /// 推荐引擎，identity/type 不参与。仅当 feed_query 只声明 category（旧浏览流
-  /// 语义，运营远程覆盖兼容窗口）时才透传 identity/type。
+  /// 推荐引擎，contentType 不参与。仅当 feed_query 只声明 category（旧浏览流
+  /// 语义，运营远程覆盖兼容窗口）时才透传 type。
   DiscoveryFeedQuery _resolveQuery(String channelId) {
     for (final channel in ref.read(homeChannelsProvider)) {
       if (channel.id != channelId) continue;
       final routedChannel = channel.feedQuery['channel'];
       if (routedChannel != null && routedChannel.isNotEmpty) {
-        return (
-          category: routedChannel,
-          channel: routedChannel,
-          identity: null,
-          type: null,
-        );
+        return (category: routedChannel, channel: routedChannel, type: null);
       }
       final category = channel.feedQuery['category'];
       if (category != null && category.isNotEmpty) {
         return (
           category: category,
           channel: null,
-          identity: channel.feedQuery['identity'],
           type: channel.feedQuery['type'],
         );
       }
@@ -284,7 +278,6 @@ abstract class _DiscoveryFeedMapLoadingCore
       final page = await repo.listDiscoveryFeedPage(
         category: query.category,
         channelId: query.channel,
-        identity: query.identity,
         type: query.type,
         sort: kFeedSortRecommend,
         limit: 20,

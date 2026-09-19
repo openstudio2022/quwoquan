@@ -105,7 +105,6 @@ import 'package:quwoquan_app/runtime/di/profile_presentation_slots.dart'
 import 'package:quwoquan_app/runtime/shell/legal/legal_document_route_host.dart';
 import 'package:quwoquan_app/service/user_service/account/user_account/presentation/my_qr_code_page.dart';
 import 'package:quwoquan_app/service/user_service/relationship/contact_discovery_record/presentation/phone_contacts_page.dart';
-import 'package:quwoquan_app/service/user_service/account/user_account/presentation/scan_contact_qr_page.dart';
 import 'package:quwoquan_app/service/user_service/account/account_session/presentation/login_page.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/presentation/persona_management_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/my_footprint_page.dart';
@@ -629,7 +628,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             path: AppRoutePaths.createEditImageSegment,
             pageBuilder: (context, state) {
               final path = state.uri.queryParameters['path'] ?? '';
-              final source = state.uri.queryParameters['source'] ?? 'moment';
+              final source = state.uri.queryParameters['source'] ?? 'create';
               final index =
                   int.tryParse(state.uri.queryParameters['index'] ?? '0') ?? 0;
               final total =
@@ -777,7 +776,6 @@ final appRouterProvider = Provider<GoRouter>((ref) {
             state: state,
             child: WorkBrowserEntryPage(
               workId: workId,
-              source: state.uri.queryParameters['source'] ?? 'workBrowser',
               referralSource:
                   entryExtra?.referralSource ??
                   _referralSourceFromRoute(

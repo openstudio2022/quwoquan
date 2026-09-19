@@ -179,7 +179,7 @@ func DecodeContentPostDelivery(delivery messaging.StreamDelivery) (ContentPostCh
 	var doc rt.Document
 	isDeleted, terminal := false, false
 	switch fields["eventType"] {
-	case "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostPromotedToWork", "PostModerationRejected":
+	case "PostPublished", "PostUpdated", "PostSettingsUpdated", "PostModerationRejected":
 		var p post.PostLifecycleProjectionPayload
 		if err = strictPostPayload(raw, &p); err != nil {
 			return change, err
@@ -256,6 +256,13 @@ func text(p *string) string {
 	}
 	return *p
 }
+
+func enumText[T ~string](p *T) string {
+	if p == nil {
+		return ""
+	}
+	return string(*p)
+}
 func count(p *int64) int64 {
 	if p == nil {
 		return 0
@@ -273,7 +280,7 @@ func ContentPostDocument(p post.PostLifecycleProjectionPayload) rt.Document {
 	if p.EntityRefs != nil {
 		entities = *p.EntityRefs
 	}
-	d := rt.Document{ObjectType: "content.post", ObjectID: p.PostId, Title: p.Title, Body: p.Body, Summary: p.Summary, SourceDomain: "content", ContentType: p.ContentType, Visibility: p.Visibility, BadgeLabel: "内容", Tags: tags, Entities: entities, Popularity: float64(count(p.LikeCount) + count(p.CommentCount) + count(p.ShareCount)), Fields: map[string]string{"authorId": p.AuthorId, "authorName": p.AuthorDisplayNameSnapshot, "authorDisplayName": p.AuthorDisplayNameSnapshot, "authorAvatarUrl": p.AuthorAvatarUrlSnapshot, "contentIdentity": p.ContentIdentity, "coverUrl": p.CoverUrl, "coverWidth": strconv.FormatInt(p.Width, 10), "coverHeight": strconv.FormatInt(p.Height, 10), "likeCount": strconv.FormatInt(count(p.LikeCount), 10)}}
+	d := rt.Document{ObjectType: "content.post", ObjectID: p.PostId, Title: p.Title, Body: p.Body, Summary: p.Summary, SourceDomain: "content", ContentType: string(p.ContentType), Visibility: p.Visibility, BadgeLabel: "内容", Tags: tags, Entities: entities, Popularity: float64(count(p.LikeCount) + count(p.CommentCount) + count(p.ShareCount)), Fields: map[string]string{"authorId": p.AuthorId, "authorName": p.AuthorDisplayNameSnapshot, "authorDisplayName": p.AuthorDisplayNameSnapshot, "authorAvatarUrl": p.AuthorAvatarUrlSnapshot, "coverUrl": p.CoverUrl, "coverWidth": strconv.FormatInt(p.Width, 10), "coverHeight": strconv.FormatInt(p.Height, 10), "likeCount": strconv.FormatInt(count(p.LikeCount), 10)}}
 	if d.Summary == "" {
 		d.Summary = p.Body
 	}
@@ -289,12 +296,12 @@ func ContentPostDocument(p post.PostLifecycleProjectionPayload) rt.Document {
 					id = text(m.MediaAssetId)
 				}
 				d.Fields["coverAssetId"] = id
-				d.Fields["coverAccessMode"] = text(m.AccessMode)
+				d.Fields["coverAccessMode"] = enumText(m.AccessMode)
 				break
 			}
 			if m.Url == p.CoverUrl && p.CoverUrl != "" {
 				d.Fields["coverAssetId"] = text(m.MediaAssetId)
-				d.Fields["coverAccessMode"] = text(m.AccessMode)
+				d.Fields["coverAccessMode"] = enumText(m.AccessMode)
 			}
 		}
 	}

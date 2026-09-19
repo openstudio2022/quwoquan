@@ -12,6 +12,7 @@ import (
 	"quwoquan_service/runtime/commandmeta"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	"quwoquan_service/services/content-service/internal/content/post/infrastructure/testsupport"
+	semanticfixture "quwoquan_service/services/content-service/tests/support/semanticfixture"
 )
 
 func TestSubmitPostPublicationProjectsPublishedSemanticMentions(t *testing.T) {
@@ -23,7 +24,7 @@ func TestSubmitPostPublicationProjectsPublishedSemanticMentions(t *testing.T) {
 			testsupport.FixedPublicationSafetyGate{},
 		),
 	)
-	command := semanticPublicationCommand(
+	command := semanticPublicationCommand(t,
 		"semantic-mention-publication",
 		nil,
 		[]postmodel.PostSemanticMention{
@@ -60,7 +61,7 @@ func TestSubmitPostPublicationRejectsPublishedMentionWithInvalidTargetRef(t *tes
 			testsupport.FixedPublicationSafetyGate{},
 		),
 	)
-	command := semanticPublicationCommand(
+	command := semanticPublicationCommand(t,
 		"semantic-mention-invalid-target",
 		nil,
 		[]postmodel.PostSemanticMention{{
@@ -83,7 +84,7 @@ func TestSubmitPostPublicationRejectsClientSuppliedRefsDivergingFromMentions(t *
 			testsupport.FixedPublicationSafetyGate{},
 		),
 	)
-	command := semanticPublicationCommand(
+	command := semanticPublicationCommand(t,
 		"semantic-mention-diverging-refs",
 		[]string{"/entity/地点/景区/不存在的实体"},
 		[]postmodel.PostSemanticMention{{
@@ -106,13 +107,13 @@ func TestSubmitPostPublicationRequiresTransportIdempotencyContext(t *testing.T) 
 			testsupport.FixedPublicationSafetyGate{},
 		),
 	)
-	command := semanticPublicationCommand("semantic-no-transport-key", nil, nil)
+	command := semanticPublicationCommand(t, "semantic-no-transport-key", nil, nil)
 	if _, err := service.SubmitPostPublication(context.Background(), command); err == nil {
 		t.Fatal("SubmitPostPublication must reject a missing transport idempotency key")
 	}
 }
 
-func semanticPublicationCommand(
+func semanticPublicationCommand(t *testing.T,
 	intentID string,
 	entityRefs []string,
 	semanticMentions []postmodel.PostSemanticMention,
@@ -122,7 +123,10 @@ func semanticPublicationCommand(
 		LocalDraftID:    intentID + "-draft",
 		AuthorID:        "author_sichuan",
 		Content: postmodel.Post{
-			ContentType:      "micro",
+			ContentType:      "article",
+			ArticleMarkdown:  "九寨沟秋天的海子真的很美",
+			MarkdownDialect:  "qwq-rich-md",
+			SemanticDocument: semanticfixture.Envelope(t),
 			Body:             "九寨沟秋天的海子真的很美",
 			Visibility:       "public",
 			EntityRefs:       entityRefs,

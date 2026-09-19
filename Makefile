@@ -91,7 +91,7 @@
 .PHONY: write-canonical-coverage-baseline
 .PHONY: verify-metadata
 .PHONY: verify-append-only-fact-command-admission
-.PHONY: verify-contract-alert-overlay
+.PHONY: verify-contract-alert-overlay verify-contract-closure
 .PHONY: verify-metric-identity-homology
 .PHONY: verify-metric-threshold-homology
 .PHONY: verify-prometheus-scrape-homology
@@ -785,6 +785,9 @@ verify-append-only-fact-command-admission:
 	@python3 quwoquan_service/scripts/verify/structure/verify_append_only_fact_command_admission.py
 
 # 手写 PromQL 收敛：可派生规则必须迁入 codegen，剩余规则必须在 overlay manifest 登记不可派生理由。
+verify-contract-closure:
+	@python3 -B quwoquan_data/scripts/cli.py verify contract-closure
+
 verify-contract-alert-overlay:
 	@python3 quwoquan_ops/gate/verify_contract_alert_overlay.py
 
@@ -1312,9 +1315,8 @@ feature-context:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py context --target "$(TARGET)" --format "$(if $(FORMAT),$(FORMAT),manifest)"
 
 feature-candidate-evidence:
-	@test -n "$(OWNER_IDENTITY)" || { echo "IDENTITY.MIGRATION_REQUIRED: 请设置 OWNER_IDENTITY=<content-addressed-ref>"; exit 2; }
 	@test -n "$(CHANGED_PATHS)" || { echo "CANDIDATE.EMPTY_CHANGED_PATHS: 请设置 CHANGED_PATHS='path1 path2'"; exit 2; }
-	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py candidate-evidence --owner-identity "$(OWNER_IDENTITY)" $(foreach path,$(CHANGED_PATHS),--changed-path "$(path)")
+	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py candidate-evidence $(foreach path,$(CHANGED_PATHS),--changed-path "$(path)")
 
 feature-tree-overview:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py overview
@@ -1866,7 +1868,7 @@ evidence-signing-bootstrap:
 # 验收在产出 Data handoff 的 lane 工作树完成，release 不携带类别或命名就绪轨道。
 # 必填：RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION（两份不同的 immutable Data release attestation）、
 # RELEASE_HANDOFF_REF（candidate release 的 authoritative handoff-ref-v1）；私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT。
-# 可选：BASELINE=<sha>、BETA=1、MERGED_LANES="lane/a lane/b"、CANDIDATE、OWNER_IDENTITY、
+# 可选：BASELINE=<sha>、BETA=1、MERGED_LANES="lane/a lane/b"、CANDIDATE、
 # READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
 # App 影响面必填 ANDROID_DEVICE_ID / IOS_DEVICE_ID；CANDIDATE_REF=store-ref=sha256:digest 复用预先冻结候选，不再申请 claim。
 # REUSE=1 仅复用同 commit/tree/parent/ImpactPlan/profile 且签名与引用有效的事实，不改变 Beta opt-in。
@@ -1890,7 +1892,6 @@ accept:
 		--release-handoff-ref "$(RELEASE_HANDOFF_REF)" \
 		--readiness-level "$${READINESS_LEVEL:-scope}" \
 		--profile "$${PROFILE:-integration}" \
-		$$( [ -n "$(OWNER_IDENTITY)" ] && printf -- '--owner-identity %s' "$(OWNER_IDENTITY)" ) \
 		$$( [ "$${REUSE:-0}" = "1" ] && printf -- '--reuse' ) \
 		$(INTEGRATE_ARGS)
 

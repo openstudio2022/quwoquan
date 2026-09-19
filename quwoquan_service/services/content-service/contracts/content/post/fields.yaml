@@ -184,18 +184,6 @@ fields:
     ops_exposure: read
     recommend_feature: true
     role: authoritative_state
-  - name: contentIdentity
-    source: contentIdentity
-    type: enum
-    enum_ref: ContentIdentity
-    constraints:
-      - NULLABLE
-    classification: PUBLIC
-    log_policy: allow
-    api_exposure: read_write
-    ops_exposure: read
-    description: 内容身份层。moment=点滴，work=作品；线上写入可由所属 command 显式派生，但 canonical immutable release importer 必须收到 manifest 明示值，禁止缺失默认
-    role: authoritative_state
   - name: title
     source: title
     type: string
@@ -1325,10 +1313,6 @@ value_objects:
         type: string
         constraints:
           - NOT_NULL
-      - name: publicationAdmission
-        type: string
-        constraints:
-          - NOT_NULL
       - name: authorizationProofUrl
         type: string
         constraints:
@@ -1649,8 +1633,7 @@ types:
     fields:
       - {name: postId, type: string, constraints: [NOT_NULL]}
       - {name: authorId, type: string, constraints: [NOT_NULL]}
-      - {name: contentType, type: string, constraints: [NOT_NULL]}
-      - {name: contentIdentity, type: string, constraints: [NOT_NULL]}
+      - {name: contentType, type: enum, enum_ref: ContentType, constraints: [NOT_NULL], description: 对象身份轴，只允许 canonical ContentType 成员。退役成员（micro）不是本 payload 的合法取值；存量事件若仍携带闭集外取值，消费者必须落到自己管线的显式未知成员并停在该事实上，不得按最宽松成员放行。}
       - {name: status, type: string, constraints: [NOT_NULL]}
       - {name: visibility, type: string, constraints: [NOT_NULL]}
       - {name: moderationStatus, type: string, constraints: [NOT_NULL]}
@@ -1719,8 +1702,7 @@ types:
     fields:
       - {name: postId, type: string, constraints: [NOT_NULL]}
       - {name: authorId, type: string, constraints: [NOT_NULL]}
-      - {name: contentType, type: string, constraints: [NOT_NULL]}
-      - {name: contentIdentity, type: string, constraints: [NOT_NULL]}
+      - {name: contentType, type: enum, enum_ref: ContentType, constraints: [NOT_NULL], description: 对象身份轴，只允许 canonical ContentType 成员。退役成员（micro）不是本 payload 的合法取值；存量事件若仍携带闭集外取值，消费者必须落到自己管线的显式未知成员并停在该事实上，不得按最宽松成员放行。}
       - {name: status, type: string, constraints: [NOT_NULL]}
       - {name: deletedAt, type: timestamp, constraints: [NOT_NULL]}
       - {name: environment, type: string, constraints: [NULLABLE]}
@@ -1821,11 +1803,10 @@ types:
       - {name: activatedAt, type: timestamp, constraints: [NULLABLE]}
   ContentDiscoveryFeedQuery:
     fields:
-      - name: identity
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
+      - name: clientPresentationContract
+        type: ClientContentPresentationContract
+        constraints: [NULLABLE]
+        description: 正常客户端必须上送生成能力；仅整个字段缺席使用共享契约固定基线，非法声明拒绝。
       - name: type
         type: string
         constraints:
@@ -1875,19 +1856,22 @@ types:
         client_omit_empty: true
   ContentPostDetailQuery:
     fields:
+      - name: clientPresentationContract
+        type: ClientContentPresentationContract
+        constraints: [NULLABLE]
+        description: 用于详情目的面能力准入；不得把不支持内容投递为默认卡片。
       - name: postId
         type: string
         client_dart_type: String
   ContentAuthorPostsQuery:
     fields:
+      - name: clientPresentationContract
+        type: ClientContentPresentationContract
+        constraints: [NULLABLE]
+        description: 作者列表过滤与 cursor 绑定的生成能力集合；非法声明不得使用缺席基线。
       - name: personaId
         type: string
         client_dart_type: String
-      - name: identity
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
       - name: type
         type: string
         constraints:
@@ -2021,79 +2005,6 @@ types:
         enum_ref: AssistantUsePolicy
         constraints:
           - NULLABLE
-  PromotePostToWorkRequest:
-    fields:
-      - name: postId
-        type: string
-        constraints:
-          - NOT_BLANK
-        client_normalization: trim
-      - name: contentType
-        type: string
-        enum_ref: ContentType
-        constraints:
-          - NULLABLE
-      - name: title
-        type: string
-        constraints:
-          - NULLABLE
-      - name: summary
-        type: string
-        constraints:
-          - NULLABLE
-      - name: semanticMentions
-        type: '[]PostSemanticMention'
-        constraints:
-          - NULLABLE
-      - name: coverUrl
-        type: string
-        constraints:
-          - NULLABLE
-      - name: articleMarkdown
-        type: string
-        constraints:
-          - NULLABLE
-      - name: semanticDocument
-        type: semantic_document
-        go_type_ref: semantic_document.DocumentEnvelope
-        go_import: quwoquan_service/services/content-service/generated/content/post/semantic_document
-        constraints: [NULLABLE]
-      - name: markdownDialect
-        type: enum
-        enum_ref: SemanticDocumentMarkdownDialect
-        constraints:
-          - NULLABLE
-      - name: articleAssetManifest
-        type: PostArticleAssetManifestInput
-        constraints:
-          - NULLABLE
-      - name: articleRenderProfile
-        type: PostArticleRenderProfile
-        constraints:
-          - NULLABLE
-      - name: primaryHomepageId
-        type: string
-        constraints:
-          - NULLABLE
-      - name: primaryHomepageType
-        type: string
-        enum_ref: HomepageType
-        constraints:
-          - NULLABLE
-      - name: primaryHomepageSnapshot
-        type: PostHomepageSnapshot
-        constraints:
-          - NULLABLE
-      - name: visibility
-        type: string
-        enum_ref: Visibility
-        constraints:
-          - NULLABLE
-      - name: assistantUsePolicy
-        type: enum
-        enum_ref: AssistantUsePolicy
-        constraints:
-          - NULLABLE
   GenerateArticleSummaryRequest:
     fields:
       - name: title
@@ -2121,11 +2032,6 @@ types:
       - name: contentType
         type: enum
         enum_ref: ContentType
-      - name: contentIdentity
-        type: enum
-        enum_ref: ContentIdentity
-        constraints:
-          - NULLABLE
       - name: title
         type: string
         constraints:

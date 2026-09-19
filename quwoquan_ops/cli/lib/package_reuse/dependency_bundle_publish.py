@@ -9,7 +9,7 @@ from typing import Any
 from .dependency_bundle import (
     APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA,
     APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA,
-    APP_DEPENDENCY_COMPONENTS,
+    dependency_components_for_platforms,
 )
 from .pub_cache_capsule import _canonical_bytes, _digest_bytes
 
@@ -23,6 +23,10 @@ def publish_dependency_bundle_activation(
     attempt_id: str,
     source_identity: Mapping[str, str],
     components: Mapping[str, Mapping[str, Any]],
+    platforms: tuple[str, ...],
+    platform_inputs: Mapping[str, Mapping[str, str]],
+    non_promotable: bool,
+    active_path: Path | None = None,
     atomic_json: AtomicJsonWriter,
 ) -> tuple[dict[str, Any], dict[str, Any], Path, Path]:
     """Write PREPARED receipt first and active pointer last; never reverse them."""
@@ -35,7 +39,8 @@ def publish_dependency_bundle_activation(
         character not in "0123456789abcdef" for character in attempt_id
     ):
         raise ValueError("APP.DEPENDENCY.attempt_identity_invalid")
-    if set(components) != set(APP_DEPENDENCY_COMPONENTS):
+    expected_components = dependency_components_for_platforms(platforms)
+    if set(components) != set(expected_components):
         raise ValueError("APP.DEPENDENCY.component_set_incomplete")
     required_source_fields = {
         "flutterVersion",
@@ -49,9 +54,14 @@ def publish_dependency_bundle_activation(
     ):
         raise ValueError("APP.DEPENDENCY.source_identity_incomplete")
     component_payload = {
-        name: dict(components[name]) for name in APP_DEPENDENCY_COMPONENTS
+        name: dict(components[name]) for name in expected_components
     }
-    active_path = active_base / "active.json"
+    selected_active_path = active_path or active_base / (
+        f"active-{platforms[0]}.json" if len(platforms) == 1 else "active.json"
+    )
+    if selected_active_path.parent != active_base:
+        raise ValueError("APP.DEPENDENCY.active_pointer_path_unsafe")
+    active_path = selected_active_path
     receipt_path = (
         output
         / "env/repo/runs/app-dependency-sync"
@@ -62,6 +72,9 @@ def publish_dependency_bundle_activation(
         "schema": APP_DEPENDENCY_BUNDLE_RECEIPT_SCHEMA,
         "claim": "PREPARED_NOT_ACTIVE",
         "attemptId": attempt_id,
+        "platforms": list(platforms),
+        "platformInputs": {name: dict(platform_inputs[name]) for name in platforms},
+        "nonPromotable": non_promotable,
         "components": component_payload,
         "activationEvidence": {
             "requiredActiveRef": active_path.relative_to(output).as_posix(),
@@ -72,6 +85,9 @@ def publish_dependency_bundle_activation(
         "schema": APP_DEPENDENCY_BUNDLE_ACTIVE_SCHEMA,
         "attemptId": attempt_id,
         **dict(source_identity),
+        "platforms": list(platforms),
+        "platformInputs": {name: dict(platform_inputs[name]) for name in platforms},
+        "nonPromotable": non_promotable,
         "components": component_payload,
         "receiptRef": receipt_path.relative_to(output).as_posix(),
         "receiptDigest": _digest_bytes(_canonical_bytes(receipt)),

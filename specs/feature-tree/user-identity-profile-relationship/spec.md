@@ -138,18 +138,7 @@
 - 可观察结果：领域边界、上下游依赖、工程映射和服务治理清晰。
 - 禁止结果：不得绕过本领域公开 command/query/event 写入其拥有事实。
 
-## 7. 工程归属
-
-- App：`quwoquan_app/lib/service/user_service`、`quwoquan_app/lib/service/tag_service`
-- Contracts：`quwoquan_service/services/user-service/contracts`
-- Contracts（协作引用，不用于代码归属）：`quwoquan_service/services/tag-service/contracts`
-- Service：`quwoquan_service/services/user-service`、`quwoquan_service/services/tag-service`
-- 测试：
-  - `local_contract`：`quwoquan_service/services/user-service/tests`
-  - `api_integration`：`quwoquan_service/services/user-service/tests`
-  - `user_acceptance`：`quwoquan_ops/tests/acceptance/user_acceptance`、`quwoquan_app/test/user_acceptance/service/user_service/account/user_account`、`quwoquan_app/test/user_acceptance/journeys/profile`
-
-## 8. 开放事项
+## 7. 开放事项
 
 <a id="open-001"></a>
 ### OPEN-001 user identity profile relationship 领域边界验收

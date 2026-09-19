@@ -1,7 +1,18 @@
 // Code generated from the accepted ContractGraph. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: 706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31
 
 part of '../../../content/content_operation_contracts.g.dart';
+
+String _encodeGeneratedJSONQuery(Object? value, int maxBytes) {
+  if (value is! Map<String, Object?>) {
+    throw const FormatException('JSON query must be an object');
+  }
+  final encoded = jsonEncode(value);
+  if (maxBytes <= 0 || utf8.encode(encoded).length > maxBytes) {
+    throw const FormatException('JSON query exceeds byte limit');
+  }
+  return encoded;
+}
 
 String? _normalizeGeneratedOptionalText(String? value) {
   final normalized = value?.trim();
@@ -332,14 +343,14 @@ final class ContentAuthorPostsQuery {
   static const int maximumLimit = 100;
 
   ContentAuthorPostsQuery({
+    ClientContentPresentationContract? clientPresentationContract,
     required String personaId,
-    String? identity,
     String? type,
     String? visibility,
     String? cursor,
     int limit = 20,
-  }) : personaId = personaId,
-       identity = identity,
+  }) : clientPresentationContract = clientPresentationContract,
+       personaId = personaId,
        type = type,
        visibility = visibility,
        cursor = cursor,
@@ -352,8 +363,8 @@ final class ContentAuthorPostsQuery {
     }
   }
 
+  final ClientContentPresentationContract? clientPresentationContract;
   final String personaId;
-  final String? identity;
   final String? type;
   final String? visibility;
   final String? cursor;
@@ -364,18 +375,24 @@ final class ContentAuthorPostsQuery {
     String path = "ContentAuthorPostsQuery",
   ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{
+      "clientPresentationContract",
       "personaId",
-      "identity",
       "type",
       "visibility",
       "cursor",
       "limit",
     }, path);
     return ContentAuthorPostsQuery(
-      personaId: _generatedRequestString(map["personaId"], '$path.personaId'),
-      identity: map["identity"] == null
+      clientPresentationContract: map["clientPresentationContract"] == null
           ? null
-          : _generatedRequestString(map["identity"], '$path.identity'),
+          : ClientContentPresentationContract.fromWire(
+              _generatedRequestObject(
+                map["clientPresentationContract"],
+                '$path.clientPresentationContract',
+              ),
+              '$path.clientPresentationContract',
+            ),
+      personaId: _generatedRequestString(map["personaId"], '$path.personaId'),
       type: map["type"] == null
           ? null
           : _generatedRequestString(map["type"], '$path.type'),
@@ -392,8 +409,9 @@ final class ContentAuthorPostsQuery {
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
+    if (this.clientPresentationContract != null)
+      "clientPresentationContract": this.clientPresentationContract!.toWire(),
     "personaId": this.personaId,
-    if (this.identity != null) "identity": this.identity!,
     if (this.type != null) "type": this.type!,
     if (this.visibility != null) "visibility": this.visibility!,
     if (this.cursor != null) "cursor": this.cursor!,
@@ -696,7 +714,6 @@ final class ContentBehaviorEventWire {
           : switch (map["contentType"]) {
               "image" => ContentType.image,
               "video" => ContentType.video,
-              "micro" => ContentType.micro,
               "article" => ContentType.article,
               _ => throw FormatException(
                 '$path.contentType' + ' has an invalid enum value',
@@ -1019,7 +1036,7 @@ final class ContentDiscoveryFeedQuery {
   static const int maximumLimit = 20;
 
   ContentDiscoveryFeedQuery({
-    String? identity,
+    ClientContentPresentationContract? clientPresentationContract,
     String? type,
     String? sort,
     String? cursor,
@@ -1029,7 +1046,7 @@ final class ContentDiscoveryFeedQuery {
     String? feedRequestId,
     int limit = 20,
     Iterable<String> blockedKeywords = const <String>[],
-  }) : identity = identity,
+  }) : clientPresentationContract = clientPresentationContract,
        type = type,
        sort = sort,
        cursor = cursor,
@@ -1047,7 +1064,7 @@ final class ContentDiscoveryFeedQuery {
     }
   }
 
-  final String? identity;
+  final ClientContentPresentationContract? clientPresentationContract;
   final String? type;
   final String? sort;
   final String? cursor;
@@ -1063,7 +1080,7 @@ final class ContentDiscoveryFeedQuery {
     String path = "ContentDiscoveryFeedQuery",
   ]) {
     _generatedRequestRejectUnknownFields(map, const <String>{
-      "identity",
+      "clientPresentationContract",
       "type",
       "sort",
       "cursor",
@@ -1075,9 +1092,15 @@ final class ContentDiscoveryFeedQuery {
       "X-Blocked-Keywords",
     }, path);
     return ContentDiscoveryFeedQuery(
-      identity: map["identity"] == null
+      clientPresentationContract: map["clientPresentationContract"] == null
           ? null
-          : _generatedRequestString(map["identity"], '$path.identity'),
+          : ClientContentPresentationContract.fromWire(
+              _generatedRequestObject(
+                map["clientPresentationContract"],
+                '$path.clientPresentationContract',
+              ),
+              '$path.clientPresentationContract',
+            ),
       type: map["type"] == null
           ? null
           : _generatedRequestString(map["type"], '$path.type'),
@@ -1120,7 +1143,8 @@ final class ContentDiscoveryFeedQuery {
   }
 
   Map<String, Object?> toWire() => <String, Object?>{
-    if (this.identity != null) "identity": this.identity!,
+    if (this.clientPresentationContract != null)
+      "clientPresentationContract": this.clientPresentationContract!.toWire(),
     if (this.type != null) "type": this.type!,
     if (this.sort != null) "sort": this.sort!,
     if (this.cursor != null) "cursor": this.cursor!,
@@ -1288,21 +1312,42 @@ final class ContentMyReportsQuery {
 }
 
 final class ContentPostDetailQuery {
-  const ContentPostDetailQuery({required String postId}) : postId = postId;
+  const ContentPostDetailQuery({
+    ClientContentPresentationContract? clientPresentationContract,
+    required String postId,
+  }) : clientPresentationContract = clientPresentationContract,
+       postId = postId;
 
+  final ClientContentPresentationContract? clientPresentationContract;
   final String postId;
 
   factory ContentPostDetailQuery.fromWire(
     Map<String, Object?> map, [
     String path = "ContentPostDetailQuery",
   ]) {
-    _generatedRequestRejectUnknownFields(map, const <String>{"postId"}, path);
+    _generatedRequestRejectUnknownFields(map, const <String>{
+      "clientPresentationContract",
+      "postId",
+    }, path);
     return ContentPostDetailQuery(
+      clientPresentationContract: map["clientPresentationContract"] == null
+          ? null
+          : ClientContentPresentationContract.fromWire(
+              _generatedRequestObject(
+                map["clientPresentationContract"],
+                '$path.clientPresentationContract',
+              ),
+              '$path.clientPresentationContract',
+            ),
       postId: _generatedRequestString(map["postId"], '$path.postId'),
     );
   }
 
-  Map<String, Object?> toWire() => <String, Object?>{"postId": this.postId};
+  Map<String, Object?> toWire() => <String, Object?>{
+    if (this.clientPresentationContract != null)
+      "clientPresentationContract": this.clientPresentationContract!.toWire(),
+    "postId": this.postId,
+  };
 }
 
 final class ContentProfileInteractionPageQuery {
@@ -2990,7 +3035,6 @@ final class SubmitContentPostPublicationCommand {
     required String publishIntentId,
     required String localDraftId,
     required ContentType contentType,
-    ContentIdentity? contentIdentity,
     String? title,
     String? body,
     String? summary,
@@ -3026,7 +3070,6 @@ final class SubmitContentPostPublicationCommand {
   }) : publishIntentId = publishIntentId.trim(),
        localDraftId = localDraftId.trim(),
        contentType = contentType,
-       contentIdentity = contentIdentity,
        title = title,
        body = body,
        summary = summary,
@@ -3080,7 +3123,6 @@ final class SubmitContentPostPublicationCommand {
   final String publishIntentId;
   final String localDraftId;
   final ContentType contentType;
-  final ContentIdentity? contentIdentity;
   final String? title;
   final String? body;
   final String? summary;
@@ -3121,7 +3163,6 @@ final class SubmitContentPostPublicationCommand {
       "publishIntentId",
       "localDraftId",
       "contentType",
-      "contentIdentity",
       "title",
       "body",
       "summary",
@@ -3166,21 +3207,11 @@ final class SubmitContentPostPublicationCommand {
       contentType: switch (map["contentType"]) {
         "image" => ContentType.image,
         "video" => ContentType.video,
-        "micro" => ContentType.micro,
         "article" => ContentType.article,
         _ => throw FormatException(
           '$path.contentType' + ' has an invalid enum value',
         ),
       },
-      contentIdentity: map["contentIdentity"] == null
-          ? null
-          : switch (map["contentIdentity"]) {
-              "moment" => ContentIdentity.moment,
-              "work" => ContentIdentity.work,
-              _ => throw FormatException(
-                '$path.contentIdentity' + ' has an invalid enum value',
-              ),
-            },
       title: map["title"] == null
           ? null
           : _generatedRequestString(map["title"], '$path.title'),
@@ -3408,8 +3439,6 @@ final class SubmitContentPostPublicationCommand {
     "publishIntentId": this.publishIntentId,
     "localDraftId": this.localDraftId,
     "contentType": this.contentType.wireName,
-    if (this.contentIdentity != null)
-      "contentIdentity": this.contentIdentity!.wireName,
     if (this.title != null) "title": this.title!,
     if (this.body != null) "body": this.body!,
     if (this.summary != null) "summary": this.summary!,
@@ -3872,7 +3901,6 @@ CloudOperationRequestPayload encodeContentPostGetFeedGeneratedRequest(
 ) {
   return CloudOperationRequestPayload(
     queryParameters: <String, String>{
-      if (request.identity != null) "identity": request.identity!,
       if (request.type != null) "type": request.type!,
       if (request.sort != null) "sort": request.sort!,
       if (request.cursor != null) "cursor": request.cursor!,
@@ -3881,6 +3909,11 @@ CloudOperationRequestPayload encodeContentPostGetFeedGeneratedRequest(
       if (request.sessionId != null) "sessionId": request.sessionId!,
       if (request.feedRequestId != null)
         "feedRequestId": request.feedRequestId!,
+      if (request.clientPresentationContract != null)
+        "clientPresentationContract": _encodeGeneratedJSONQuery(
+          request.clientPresentationContract!.toWire(),
+          8192,
+        ),
       "limit": (request.limit).toString(),
     },
     headers: <String, String>{
@@ -3921,6 +3954,13 @@ CloudOperationRequestPayload encodeContentPostGetPostGeneratedRequest(
 ) {
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{"postId": request.postId},
+    queryParameters: <String, String>{
+      if (request.clientPresentationContract != null)
+        "clientPresentationContract": _encodeGeneratedJSONQuery(
+          request.clientPresentationContract!.toWire(),
+          8192,
+        ),
+    },
   );
 }
 
@@ -3959,7 +3999,11 @@ CloudOperationRequestPayload encodeContentPostListUserPostsGeneratedRequest(
   return CloudOperationRequestPayload(
     pathParameters: <String, String>{"personaId": request.personaId},
     queryParameters: <String, String>{
-      if (request.identity != null) "identity": request.identity!,
+      if (request.clientPresentationContract != null)
+        "clientPresentationContract": _encodeGeneratedJSONQuery(
+          request.clientPresentationContract!.toWire(),
+          8192,
+        ),
       if (request.type != null) "type": request.type!,
       if (request.visibility != null) "visibility": request.visibility!,
       if (request.cursor != null) "cursor": request.cursor!,
@@ -3977,8 +4021,6 @@ encodeContentPostSubmitPostPublicationGeneratedRequest(
       "publishIntentId": request.publishIntentId,
       "localDraftId": request.localDraftId,
       "contentType": request.contentType.wireName,
-      if (request.contentIdentity != null)
-        "contentIdentity": request.contentIdentity!.wireName,
       if (request.title != null) "title": request.title!,
       if (request.body != null) "body": request.body!,
       if (request.summary != null) "summary": request.summary!,

@@ -20,7 +20,7 @@ void main() {
         'settings': const <String, dynamic>{},
       });
 
-      expect(draft.identity, CreateContentIdentity.moment);
+      expect(draft.flowKind, CreateDraftFlowKind.article);
       expect(draft.previewText, isEmpty);
       expect(draft.toStorageMap()['type'], 'text');
       expect(draft.state.imagePaths, isEmpty);
@@ -38,13 +38,14 @@ void main() {
         'body': '',
         'articleMarkdown':
             '---\n'
+            'markdownDialect: qwq-rich-md\n'
             'title: 块编辑器\n'
             '---\n\n'
             '# 块编辑器\n\n'
             '第一段\n\n'
             '1. 第二条\n\n'
             ':::figure id="i1" layout="fullWidth"\n'
-            'inline.png\n'
+            'asset://i1\n'
             ':::\n',
         'articleAssetManifest': <String, dynamic>{
           'assets': <Map<String, dynamic>>[
@@ -56,7 +57,8 @@ void main() {
       });
 
       expect(draft.state.body, contains('第一段'));
-      expect(draft.state.imagePaths, <String>['asset://inline.png']);
+      expect(draft.flowKind, CreateDraftFlowKind.article);
+      expect(draft.state.imagePaths, <String>['inline.png']);
 
       final storage = draft.toStorageMap();
       expect(storage['articleMarkdown'], contains('第一段'));
@@ -83,7 +85,7 @@ void main() {
       expect(imageNode.type, ArticleDocumentNodeType.figure);
     });
 
-    test('扁平存储下图片类草稿解析为作品身份', () {
+    test('图片类草稿保持独立配文与图片流程，不派生作品身份', () {
       final draft = CreateDraft.fromStorageMap({
         'id': 'photo_draft',
         'type': 'media',
@@ -96,7 +98,9 @@ void main() {
         'settings': const <String, dynamic>{},
       });
 
-      expect(draft.identity, CreateContentIdentity.work);
+      expect(draft.flowKind, CreateDraftFlowKind.image);
+      expect(draft.state.imagePaths, <String>['a.jpg']);
+      expect(draft.state.articleDocument.body, isEmpty);
       expect(draft.previewText, '图片说明');
       expect(draft.state.editorKind, CreateEditorKind.media);
     });

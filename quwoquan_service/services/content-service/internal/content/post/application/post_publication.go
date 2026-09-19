@@ -84,10 +84,6 @@ func (s *PostService) SubmitPostPublication(
 	post.LocalDraftId = command.LocalDraftID
 	post.AuthorId = command.AuthorID
 	post.ContentType = strings.TrimSpace(post.ContentType)
-	post.ContentIdentity = normalizeContentIdentity(
-		post.ContentType,
-		strings.TrimSpace(post.ContentIdentity),
-	)
 	post.Visibility = normalizeVisibility(post.Visibility)
 	post.AssistantUsePolicy = normalizeAssistantUsePolicy(post.AssistantUsePolicy)
 	post.SourceType = defaultString(strings.TrimSpace(post.SourceType), "original")

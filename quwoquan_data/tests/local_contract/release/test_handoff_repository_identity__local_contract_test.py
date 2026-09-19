@@ -32,7 +32,7 @@ def _release(root: Path, revision: str):
     from local_contract.release.test_producer_release_detachment__contract__local_contract_test import _sealed_handoff_fixture
     from core.release_layout import objects_merkle, payload_digest
     logical_ref = "entities/travel/test/home"
-    sealed, row, _, _, _ = _sealed_handoff_fixture(root, logical_ref=logical_ref, review_ref="entities/地点/景区/original")
+    sealed, row, _, _, _ = _sealed_handoff_fixture(root, logical_ref=logical_ref, review_ref="entities/travel/test/entity-eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
     counts = {"homepage": 1, "article": 0, "image": 0, "video": 0, "total": 1}
     targets = {key: value for key, value in counts.items() if key != "total"}
     cohort = {"schema": "quwoquan_data.release_cohort", "objectRefs": [logical_ref],

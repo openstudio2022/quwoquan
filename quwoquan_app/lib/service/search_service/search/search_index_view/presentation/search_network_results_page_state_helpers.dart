@@ -393,7 +393,7 @@ extension _SearchNetworkResultsPageStateHelpers
       );
     }
     for (final item in _connectedContentItems) {
-      final isVideo = item.contentType == 'video';
+      final isVideo = item.contentType == ContentType.video;
       final card = _NetworkResultCardModel.fromSearchItem(item);
       models.add(
         _IntersectionCardModel(

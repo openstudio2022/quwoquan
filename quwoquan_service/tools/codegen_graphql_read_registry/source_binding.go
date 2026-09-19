@@ -87,6 +87,25 @@ func deriveOperationBinding(
 	}, nil
 }
 
+func loadOwnerPersistedDocument(
+	source *contractcodegen.Source,
+	metadata metadataEntry,
+	binding operationBinding,
+) ([]byte, error) {
+	documentBase := filepath.Base(filepath.FromSlash(metadata.Document))
+	if filepath.Ext(documentBase) != ".graphql" {
+		return nil, errors.New("persisted query document must use .graphql")
+	}
+	documentPath := filepath.ToSlash(filepath.Join(
+		binding.ownerSourceDir, "persisted_queries", documentBase,
+	))
+	document, err := source.RawFile(documentPath)
+	if err != nil {
+		return nil, fmt.Errorf("load object-owned persisted document %s: %w", documentPath, err)
+	}
+	return document, nil
+}
+
 func validateOwnerPersistedQuery(
 	source *contractcodegen.Source,
 	metadata metadataEntry,

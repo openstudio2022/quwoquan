@@ -151,8 +151,6 @@ def store(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     # 查找排序/政策 fixture 省略 candidate 自摘要；owner/claim 完整性由独立真实 candidate 用例覆盖。
     def candidate_identity(**kwargs):
         body = json.loads((tmp_path / kwargs["exact"].rsplit("=", 1)[0]).read_bytes())
-        if kwargs["owner_identity"] and body.get("ownerIdentityRef") != kwargs["owner_identity"]:
-            raise integration_run.IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "owner drift")
         return {}, body
     monkeypatch.setattr(integration_run, "_existing_candidate", candidate_identity)
     monkeypatch.setattr(integration_run, "OUTPUT_ROOT", tmp_path)
@@ -226,36 +224,6 @@ def test_newest_matching_candidate_wins(store: Path) -> None:
 def test_publishable_acceptance_defaults_to_scope() -> None:
     assert integration_run._parser().parse_args([]).readiness_level == "scope"
     assert 'READINESS_LEVEL:-scope' in (ROOT / "Makefile").read_text(encoding="utf-8")
-
-
-def test_auto_reuse_rejects_caller_owner_drift(store: Path) -> None:
-    candidate_id = "sha256:" + "a" * 64
-    _candidate(store, candidate_id=candidate_id, created_at="2026-01-01T00:00:00Z", ownerIdentityRef="owner-a")
-    _acceptance(store, candidate_id=candidate_id, environment="alpha")
-    assert _lookup(store, owner_identity="owner-b") is None
-
-
-def test_real_candidate_owner_and_claim_validation_is_shared(tmp_path, monkeypatch):
-    from quwoquan_ops.ci.scoped_candidate.core import exact_digest
-    claim = {"paths": ["x.txt"], "expectedParent": PARENT, "ownerIdentityRef": "owner-a"}
-    claim_path = tmp_path / "claim.json"
-    claim_path.write_bytes(integration_run._canonical_bytes(claim))
-    body = {"schema": integration_run._CANDIDATE_SCHEMA, "commit": COMMIT, "tree": TREE,
-            "expectedParent": PARENT, "impactPlanDigest": IMPACT, "ownerIdentityRef": "owner-a",
-            "claimRef": "claim.json", "claimDigest": exact_digest(claim_path), "paths": ["x.txt"]}
-    body["candidateId"] = exact_digest(body)
-    candidate = tmp_path / "candidate.json"
-    candidate.write_bytes(integration_run._canonical_bytes(body))
-    identity = {"commit": COMMIT, "tree": TREE, "parent": PARENT}
-    raw = candidate.read_bytes()
-    args = dict(store=tmp_path, path=candidate, raw=raw, identity=identity, impact_plan_digest=IMPACT)
-    assert integration_run._candidate_matches_caller(**args, owner_identity="owner-a")
-    assert not integration_run._candidate_matches_caller(**args, owner_identity="owner-b")
-    with pytest.raises(integration_run.IntegrationRunError, match="owner drifted"):
-        integration_run._existing_candidate(exact=f"candidate.json={exact_digest(candidate)}", identity=identity,
-                                            impact_plan_digest=IMPACT, owner_identity="owner-b", store=tmp_path)
-    claim_path.write_bytes(integration_run._canonical_bytes({**claim, "ownerIdentityRef": "owner-b"}))
-    assert not integration_run._candidate_matches_caller(**args, owner_identity="owner-a")
 
 
 @pytest.mark.parametrize("level,review,evidence", [("fast", "", []), ("scope", "", []), ("scope", "missing.json", [])])

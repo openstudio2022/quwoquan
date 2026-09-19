@@ -84,7 +84,6 @@ void main() {
   test('视频书 feed 返回可播放 canonical video ViewData', () async {
     final page = await harness.feed.listDiscoveryFeedPage(
       category: 'video',
-      identity: 'work',
       type: 'video',
       limit: 20,
     );
@@ -105,8 +104,7 @@ void main() {
     final command = SubmitContentPostPublicationCommand(
       publishIntentId: publishIntentId,
       localDraftId: 'draft-$publishIntentId',
-      contentType: ContentType.micro,
-      contentIdentity: ContentIdentity.moment,
+      contentType: ContentType.article,
       body: 'API contract micro $sequence',
       visibility: Visibility.public,
     );
@@ -129,8 +127,7 @@ void main() {
 
     final posts = await harness.posts.listUserPosts(
       userId: personaId,
-      identity: 'moment',
-      type: 'micro',
+      type: 'article',
       visibility: 'public',
       limit: 20,
     );
@@ -239,7 +236,6 @@ void main() {
             publishIntentId: publishIntentId,
             localDraftId: 'draft-$publishIntentId',
             contentType: ContentType.image,
-            contentIdentity: ContentIdentity.work,
             mediaAssetIds: const <String>['fixture_media_not_ready'],
             visibility: Visibility.public,
           ),

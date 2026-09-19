@@ -16,9 +16,12 @@ from quwoquan_ops.cli.commands.package_app_artifact_identity import (
     AppArtifactBuildError,
 )
 from quwoquan_ops.cli.lib.app_launch_manifest_contract import (
+    build_runtime_config_trust_envelope,
     runtime_config_trust_envelope_digest,
     validate_runtime_config_trust_envelope,
 )
+from quwoquan_ops.cli.lib.app_runtime_config_signing import decode_keyring
+from quwoquan_ops.cli.lib.local_app_runtime_config_keys import prepare_local_app_runtime_config_signing
 
 
 def make_writable(root: Path) -> None:
@@ -47,41 +50,6 @@ def _decode_secret(value: str, *, label: str) -> bytes:
         ) from error
 
 
-def _validated_google_services_bytes(
-    *,
-    raw: str,
-    expected_application_id: str,
-    label: str,
-) -> bytes:
-    try:
-        payload = json.loads(raw)
-    except json.JSONDecodeError as error:
-        raise AppArtifactBuildError(
-            f"APP.PACKAGE.protected_input_invalid: {label} is not JSON"
-        ) from error
-    clients = payload.get("client") if isinstance(payload, dict) else None
-    if not isinstance(clients, list):
-        raise AppArtifactBuildError(
-            f"APP.PACKAGE.protected_input_invalid: {label}.client is missing"
-        )
-    package_names = {
-        str(android_info.get("package_name") or "").strip()
-        for client in clients
-        if isinstance(client, dict)
-        for client_info in [client.get("client_info")]
-        if isinstance(client_info, dict)
-        for android_info in [client_info.get("android_client_info")]
-        if isinstance(android_info, dict)
-    }
-    if package_names != {expected_application_id}:
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.provider_identity_mismatch: "
-            f"{label} package_name must be exactly {expected_application_id}"
-        )
-    return (
-        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-    ).encode("utf-8")
-
 
 def materialize_runtime_config_inputs(
     *,
@@ -89,6 +57,7 @@ def materialize_runtime_config_inputs(
     build_profile: str,
     platform: str,
     command_env: dict[str, str],
+    local_alpha_android: bool = False,
 ) -> str:
     package_path_value = os.environ.get(
         "QWQ_APP_RUNTIME_CONFIG_PACKAGE_PATH", ""
@@ -99,11 +68,21 @@ def materialize_runtime_config_inputs(
             "activated after installation and cannot enter AppArtifact"
         )
     trust_path_value = os.environ.get("QWQ_APP_RUNTIME_CONFIG_TRUST_PATH", "").strip()
-    if not trust_path_value:
-        raise AppArtifactBuildError(
-            "APP.PACKAGE.runtime_config_trust_missing: build-profile trust envelope is required"
-        )
-    trust_path = Path(trust_path_value).expanduser()
+    if not trust_path_value and local_alpha_android:
+        if build_profile != "nonprod" or platform != "android":
+            raise AppArtifactBuildError("APP.PACKAGE.local_runtime_config_trust_scope_invalid")
+        try:
+            signing = prepare_local_app_runtime_config_signing(Path(__file__).resolve().parents[3])
+            keyring = decode_keyring(signing.trusted_public_keys_path.read_bytes())
+            envelope = build_runtime_config_trust_envelope("nonprod", keyring)
+        except (OSError, TypeError, UnicodeError, ValueError) as error:
+            raise AppArtifactBuildError(f"APP.PACKAGE.local_runtime_config_trust_unavailable: {error}") from error
+        trust_path = app_dir.parent / ".qwq-private" / "runtime-config-trust.json"
+        _write_private(trust_path, (json.dumps(envelope, ensure_ascii=False, separators=(",", ":"), sort_keys=True) + "\n").encode("utf-8"))
+    else:
+        if not trust_path_value:
+            raise AppArtifactBuildError("APP.PACKAGE.runtime_config_trust_missing: formal build-profile trust envelope is required")
+        trust_path = Path(trust_path_value).expanduser()
     if (
         not trust_path.is_absolute()
         or trust_path.is_symlink()
@@ -144,10 +123,12 @@ def materialize_runtime_config_inputs(
         )
     trust_digest = runtime_config_trust_envelope_digest(trust)
     if platform == "android":
-        runtime_root = app_dir / "android/app/src/main/assets/qwq_runtime"
+        asset_root = app_dir.parent.parent / ".qwq-private" / "runtime-config-assets"
+        runtime_root = asset_root / "qwq_runtime"
         _write_private(
             runtime_root / "runtime-config-trust.json", trust_path.read_bytes()
         )
+        command_env["QWQ_ANDROID_RUNTIME_CONFIG_ASSET_ROOT"] = str(asset_root)
     elif platform == "ios":
         command_env["QWQ_IOS_RUNTIME_CONFIG_TRUST_PATH"] = str(trust_path)
     else:
@@ -167,22 +148,26 @@ def materialize_protected_inputs(
     application_id: str,
     command_env: dict[str, str],
     private_dir: Path,
+    local_alpha_android: bool = False,
 ) -> None:
     if platform == "android" and build_mode == "release":
-        firebase_key = f"QWQ_ANDROID_{build_profile.upper()}_GOOGLE_SERVICES_JSON"
-        firebase_json = os.environ.get(firebase_key, "").strip()
-        if not firebase_json:
-            raise AppArtifactBuildError(
-                f"APP.PACKAGE.protected_input_missing: {firebase_key}"
+        if local_alpha_android:
+            if build_profile != "nonprod" or artifact_format != "apk":
+                raise AppArtifactBuildError("APP.PACKAGE.local_android_signing_scope_invalid")
+            debug_keystore = Path.home() / ".android" / "debug.keystore"
+            if debug_keystore.is_symlink() or not debug_keystore.is_file():
+                raise AppArtifactBuildError(
+                    "APP.PACKAGE.local_android_signing_missing: canonical debug keystore"
+                )
+            command_env.update(
+                {
+                    "QWQ_ANDROID_RELEASE_KEYSTORE_PATH": str(debug_keystore),
+                    "QWQ_ANDROID_RELEASE_STORE_PASSWORD": "android",
+                    "QWQ_ANDROID_RELEASE_KEY_ALIAS": "androiddebugkey",
+                    "QWQ_ANDROID_RELEASE_KEY_PASSWORD": "android",
+                }
             )
-        _write_private(
-            app_dir / "android/app/google-services.json",
-            _validated_google_services_bytes(
-                raw=firebase_json,
-                expected_application_id=application_id,
-                label=firebase_key,
-            ),
-        )
+            return
         keystore_b64 = os.environ.get("QWQ_ANDROID_RELEASE_KEYSTORE_B64", "").strip()
         required = {
             "QWQ_ANDROID_RELEASE_KEYSTORE_B64": keystore_b64,

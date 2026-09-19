@@ -254,7 +254,6 @@ def start_trace(
     selected_skill: str,
     capability_status: str,
     skill_body_digest: str | None = None,
-    owner_identity_ref: str | None = None,
     actual_host_sample_ref: str | None = None,
     explicit_command_evidence_ref: str | None = None,
     started_at: str | None = None,
@@ -280,7 +279,6 @@ def start_trace(
             "host": host,
             "selected_skill": selected_skill,
             "skill_body_digest": digest,
-            "owner_identity_ref": owner_identity_ref,
             "capability_status": capability_status,
             "actual_host_sample_ref": actual_host_sample_ref,
             "explicit_command_evidence_ref": explicit_command_evidence_ref,
@@ -437,7 +435,6 @@ def main(argv: list[str] | None = None) -> int:
     start.add_argument("--host", choices=sorted(HOSTS), required=True)
     start.add_argument("--selected-skill", required=True)
     start.add_argument("--skill-body-digest")
-    start.add_argument("--owner-identity-ref")
     start.add_argument("--capability-status", choices=sorted(CAPABILITY_STATUSES), required=True)
     start.add_argument("--actual-host-sample-ref")
     start.add_argument("--explicit-command-evidence-ref")
@@ -464,7 +461,6 @@ def main(argv: list[str] | None = None) -> int:
             host=args.host,
             selected_skill=args.selected_skill,
             skill_body_digest=args.skill_body_digest,
-            owner_identity_ref=args.owner_identity_ref,
             capability_status=args.capability_status,
             actual_host_sample_ref=args.actual_host_sample_ref,
             explicit_command_evidence_ref=args.explicit_command_evidence_ref,

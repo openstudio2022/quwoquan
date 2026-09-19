@@ -2,7 +2,6 @@ query ContentPostDetailBase($postId: ID!, $modificationsFirst: Int! = 4) {
   contentPostDetailBase(postId: $postId) {
     postId
     contentType
-    contentIdentity
     assistantUsePolicy
     authorId
     authorDisplayName
@@ -24,7 +23,6 @@ query ContentPostDetailBase($postId: ID!, $modificationsFirst: Int! = 4) {
       attributionText
       rightsBasis
       commercialAuthorizationStatus
-      publicationAdmission
       authorizationProofUrl
       termsUrl
       derivedModifications(first: $modificationsFirst)

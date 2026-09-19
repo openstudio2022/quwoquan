@@ -1,20 +1,19 @@
-# L2 Design：双轨发现体验 (`dual-rail-discovery-redesign`)
+# L2 Design：统一发现与聚焦浏览 (`dual-rail-discovery-redesign`)
 
 > 对应规格：[L2 spec](./spec.md)
 
-> 设计触发原因：“让用户在“作品”沉浸轨与“点滴”社交轨之间按浏览意图切换，而不是先按图片、视频或文章格式选择入口”需要 `article-rich-content-blocks`、`moment-social-feed`、`works-immersive-viewer`、`works-unified-feed` 共享状态 owner、契约或质量边界。
+> 设计触发原因：“让统一内容流与媒体、文章聚焦面共享对象与互动事实，取消退役身份分轨而保留有效浏览交互”需要 `article-rich-content-blocks`、`works-immersive-viewer`、`works-unified-feed` 共享状态 owner、契约或质量边界。
 
 ## 1. 背景、目标与非目标
 
-- 设计目标：让用户在“作品”沉浸轨与“点滴”社交轨之间按浏览意图切换，而不是先按图片、视频或文章格式选择入口。
+- 设计目标：让统一内容流与媒体、文章聚焦面共享对象与互动事实，取消退役身份分轨而保留有效浏览交互。
 - 非目标：复制字段 schema、实现任务、测试排列组合或执行历史。
 
 ## 2. Story 协作与状态流
 
 - [`article-rich-content-blocks`](./article-rich-content-blocks/spec.md)：`blocks` 字段变更必须走 metadata → codegen；`.g.dart` 禁止手改。
-- [`moment-social-feed`](./moment-social-feed/spec.md)：约束：宫格内图片统一高度（`AspectRatio` 适配）；浏览器无 BackdropFilter 评论 Drawer。
-- [`works-immersive-viewer`](./works-immersive-viewer/spec.md)：metadata/codegen/router/UI/test 中无旧三入口残留。
-- [`works-unified-feed`](./works-unified-feed/spec.md)：端点必须先在 `service.yaml` 声明，`make verify` → `make codegen` 后方可编写 Repository。
+- [`works-immersive-viewer`](./works-immersive-viewer/spec.md)：共享浏览器壳承载不同聚焦面，保留翻页、阅读与评论交接，不使用 BackdropFilter 评论 Drawer。
+- [`works-unified-feed`](./works-unified-feed/spec.md)：统一混排流承接等高图片宫格、任意媒体定位打开与返回上下文。
 
 ## 3. 端云与数据流
 
@@ -25,20 +24,21 @@
 ## 4. 关键决策
 
 <a id="dec-001"></a>
-### DEC-001 以浏览气质分轨而非媒体格式分栏
-- 决策：以浏览气质分轨而非媒体格式分栏。
-- 理由：让用户在“作品”沉浸轨与“点滴”社交轨之间按浏览意图切换，而不是先按图片、视频或文章格式选择入口。
-- 被否决方案：由调用方、页面或脚本复制本层状态并绕过公开契约。
-- 约束与影响：实现只能细化对应规格与 canonical contract；冲突时先修正规格或契约。
-- 关联要求：`REQ-001`
-- 影响 Story：[`article-rich-content-blocks`](./article-rich-content-blocks/spec.md)、[`moment-social-feed`](./moment-social-feed/spec.md)、[`works-immersive-viewer`](./works-immersive-viewer/spec.md)、[`works-unified-feed`](./works-unified-feed/spec.md)
-- 关联验收：`SIT-001`
+### DEC-001 统一内容流按权威目的面进入聚焦浏览
+
+- 决策：复用 [`content-type-framework DEC-004/005`](../content-type-framework/design.md#dec-004) 的单字段投影和云物化目的面，以及 [`content-display-consistency DEC-002/003`](../content-display-consistency/design.md#dec-002) 的 Surface 与布局边界；本能力只拥有浏览会话交接，不创建第二份身份或布局表。
+- 理由：相同 Post 的互动和媒体事实不因列表或聚焦面变化而产生新身份；浏览器壳复用不等于媒体与文章目的面合并。
+- 被否决方案：保留作品/点滴双轨、从附件嗅探内容形态、用兼容目的面替换真实目的面、保留旧投影作兜底。
+- 约束与影响：等高宫格与所选媒体定位由统一内容流拥有；媒体位置、阅读、评论交接和返回由浏览器 Story 拥有。评论沿既有上压分屏，不使用毛玻璃 Drawer；原 pageflip 几何主线与有效交互不随旧轨删除。
+- 测试与恢复：真实列表到聚焦面的测试锁定所选对象/媒体、cursor、评论结果及返回位置；缺失投影或加载失败仅保留 canonical 恢复，不改跳另一 feed。接口或能力未就绪时保留 OPEN，禁止回滚到旧身份双读。
+- 关联要求：`REQ-001`、`REQ-002`
+- 影响 Story：[`article-rich-content-blocks`](./article-rich-content-blocks/spec.md)、[`works-immersive-viewer`](./works-immersive-viewer/spec.md)、[`works-unified-feed`](./works-unified-feed/spec.md)
+- 关联验收：`SIT-001`、[`统一流 GWT-002`](./works-unified-feed/spec.md#gwt-002)、[`浏览器 GWT-021`](./works-immersive-viewer/spec.md#gwt-021)
 
 <a id="dec-002"></a>
 ### DEC-002 pageflip 单一几何主线与作品浏览归属
 
 - 决策：文章与图片书共用一条 pageflip 几何主线；基础几何和文章翻页实现都归属到本能力的 `works-immersive-viewer` Story，不由全局规则、Review 角色或 harness adapter 复制功能事实。
-- 适用工程根：`quwoquan_app/lib/design_system/pageflip`、`quwoquan_app/lib/service/content_service/content/post/presentation/article_reader/pageflip`
 - 影响 Story：[`works-immersive-viewer`](./works-immersive-viewer/spec.md)
 - 关联要求：`REQ-003`、`REQ-009`、`REQ-011`、`REQ-016`、`REQ-017`、`REQ-018`、`REQ-019`、`REQ-020`、`REQ-021`
 - 几何不变量：单指手势先锁定水平方向，纵向意图交还父级。任意帧只允许一个 moving leaf、一条 seam/fold 和一条 free edge。commit 在应用 animation plan 最后一帧后才能同步 `completeAnimation` 与 page index；cancel 保持当前索引。
@@ -64,5 +64,5 @@
 ## 6. 质量与观测
 
 - 观测首屏、下一页、viewer 切换、媒体 ready、文章分页和互动同步延迟。
-- 作品轨保持低视觉疲劳和连续垂直翻页；点滴轨优先信息密度与就地互动。
+- 统一内容流保持信息密度与可预测打开行为，聚焦面保持低视觉疲劳与连续浏览；两者不再绑定退役内容身份。
 - 布局、色彩和字体使用 App token/asset，不在页面硬编码主题常量。

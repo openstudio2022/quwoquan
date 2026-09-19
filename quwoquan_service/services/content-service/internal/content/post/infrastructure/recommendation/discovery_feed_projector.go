@@ -56,7 +56,6 @@ func (p *DiscoveryFeedProjector) Project(
 	case postevent.PostPublished,
 		postevent.PostUpdated,
 		postevent.PostSettingsUpdated,
-		postevent.PostPromotedToWork,
 		postevent.PostImported:
 		return p.reconcile(ctx, postID, event.Payload)
 	default:

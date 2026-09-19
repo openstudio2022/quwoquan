@@ -132,9 +132,6 @@ func (r releaseHydrationFeedReader) ListPublishedFeedPosts(
 	if r.post.PostID == "" {
 		return postports.PostFeedSlice{}, nil
 	}
-	if request.Identity() != "" && request.Identity() != r.post.ContentIdentity {
-		return postports.PostFeedSlice{}, nil
-	}
 	if request.ContentType() != "" && request.ContentType() != r.post.ContentType {
 		return postports.PostFeedSlice{}, nil
 	}
@@ -244,9 +241,12 @@ func TestListFeedInitialRecommendWithoutActiveReleaseReturnsCanonicalEmpty(t *te
 	if unmarshalErr := json.Unmarshal(wire, &envelope); unmarshalErr != nil {
 		t.Fatalf("unmarshal no-release response: %v", unmarshalErr)
 	}
-	objectCards, present := envelope["objectCards"].([]any)
-	if !present || len(objectCards) != 0 {
-		t.Fatalf("no-release wire objectCards = %#v, want required empty list", envelope["objectCards"])
+	items, present := envelope["items"].([]any)
+	if !present || len(items) != 0 {
+		t.Fatalf("no-release wire items = %#v, want required empty list", envelope["items"])
+	}
+	if _, present := envelope["objectCards"]; present {
+		t.Fatalf("retired objectCards must not accompany canonical items: %s", wire)
 	}
 	// no_active_release 必须明确缺席内容激活身份（DEC-004 四态约束）。
 	if _, has := envelope["releaseId"]; has {
@@ -361,15 +361,15 @@ func TestListFeedRecommendAndPremiumContinuationReadActiveSupplyEveryPage(t *tes
 	posts := []postmodel.Post{
 		{
 			ID: "continuation-video-1", AuthorId: "continuation-author-1",
-			ContentType: "video", ContentIdentity: "work",
-			Status: "published", Visibility: "public",
+			ContentType: "video",
+			Status:      "published", Visibility: "public",
 			VideoUrl:   "https://media.example.test/continuation-1.mp4",
 			DurationMs: 5000, CreatedAt: now, PublishedAt: now,
 		},
 		{
 			ID: "continuation-video-2", AuthorId: "continuation-author-2",
-			ContentType: "video", ContentIdentity: "work",
-			Status: "published", Visibility: "public",
+			ContentType: "video",
+			Status:      "published", Visibility: "public",
 			VideoUrl:   "https://media.example.test/continuation-2.mp4",
 			DurationMs: 5000, CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute),
 		},
@@ -434,13 +434,13 @@ func TestListFeedFollowingContinuationReadsCanonicalSupplyEveryPage(t *testing.T
 	posts := []postmodel.Post{
 		{
 			ID: "following-continuation-1", AuthorId: "following-author-1",
-			ContentType: "image", ContentIdentity: "work",
-			Status: "published", Visibility: "public", CreatedAt: now, PublishedAt: now,
+			ContentType: "image",
+			Status:      "published", Visibility: "public", CreatedAt: now, PublishedAt: now,
 		},
 		{
 			ID: "following-continuation-2", AuthorId: "following-author-2",
-			ContentType: "image", ContentIdentity: "work",
-			Status: "published", Visibility: "public",
+			ContentType: "image",
+			Status:      "published", Visibility: "public",
 			CreatedAt: now.Add(-time.Minute), PublishedAt: now.Add(-time.Minute),
 		},
 	}
@@ -491,7 +491,7 @@ func TestListFeedInitialVideoBookHealthyEmptyIsCanonicalEmpty(t *testing.T) {
 
 	response, err := service.ListFeed(context.Background(), ListFeedRequest{
 		UserID: "u-video-empty", SessionID: "s-video-empty",
-		Identity: "work", Type: "video", Limit: 10,
+		Type: "video", Limit: 10,
 	})
 	if err != nil {
 		t.Fatalf("ListFeed: %v", err)
@@ -509,7 +509,7 @@ func TestListFeedInitialVideoBookRequiresPlayableActiveReleaseItem(t *testing.T)
 	now := time.Now().UTC()
 	post := postports.PostFeedItemSlice{
 		PostID: postports.NewPostID("video-active"), AuthorPersonaID: postports.NewPersonaID("author-active"),
-		ContentType: "video", ContentIdentity: "work", Visibility: "public",
+		ContentType: "video", Visibility: "public",
 		SourceOwner: "qwq_data", ReleaseID: "rel_local_contract", LifecycleStatus: "active",
 		ManifestDigest: terminalManifestDigest,
 		VideoURL:       "https://media.example.test/video-active.mp4", DurationMS: 5000, CreatedAt: now,
@@ -522,7 +522,7 @@ func TestListFeedInitialVideoBookRequiresPlayableActiveReleaseItem(t *testing.T)
 
 	response, err := service.ListFeed(context.Background(), ListFeedRequest{
 		UserID: "u-video-active", SessionID: "s-video-active",
-		Identity: "work", Type: "video", Limit: 10,
+		Type: "video", Limit: 10,
 	})
 	if err != nil {
 		t.Fatalf("active release video book: %v", err)
@@ -542,7 +542,7 @@ func TestListFeedVideoBookPaginationMayEndEmpty(t *testing.T) {
 
 	request := ListFeedRequest{
 		UserID: "u-video-page-end", SessionID: "s-video-page-end",
-		Identity: "work", Type: "video", Limit: 10,
+		Type: "video", Limit: 10,
 	}
 	request.Cursor = EncodePostReaderFeedCursorForRequest(
 		request,
@@ -572,7 +572,7 @@ func TestListFeedRejectsVideoBookCursorAfterActiveReleaseSwitch(t *testing.T) {
 	)
 	request := ListFeedRequest{
 		UserID: "u-video-release-switch", SessionID: "s-video-release-switch",
-		Identity: "work", Type: "video", Limit: 10,
+		Type: "video", Limit: 10,
 	}
 	request.Cursor = EncodePostReaderFeedCursorForRequest(
 		request,
@@ -603,7 +603,7 @@ func TestListFeedRejectsHydrationFromDifferentCanonicalRelease(t *testing.T) {
 	}
 	post := postports.PostFeedItemSlice{
 		PostID: postports.NewPostID(candidate.ContentID), AuthorPersonaID: postports.NewPersonaID(candidate.AuthorID),
-		ContentType: "video", ContentIdentity: "work", Visibility: "public", CreatedAt: now,
+		ContentType: "video", Visibility: "public", CreatedAt: now,
 		SourceOwner: "qwq_data", ReleaseID: "rel_stale",
 		ManifestDigest: terminalManifestDigest, LifecycleStatus: "active",
 	}
@@ -654,7 +654,7 @@ func TestListFeedRejectsHydrationFromDifferentManifestDigest(t *testing.T) {
 	post := postports.PostFeedItemSlice{
 		PostID:          postports.NewPostID(candidate.ContentID),
 		AuthorPersonaID: postports.NewPersonaID(candidate.AuthorID),
-		ContentType:     "video", ContentIdentity: "work", Visibility: "public", CreatedAt: now,
+		ContentType:     "video", Visibility: "public", CreatedAt: now,
 		SourceOwner: "qwq_data", ReleaseID: "rel_local_contract",
 		ManifestDigest:  "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 		LifecycleStatus: "active",
@@ -685,7 +685,7 @@ func TestListFeedInitialRecommendUGCOnlyIsCanonicalEmpty(t *testing.T) {
 	}
 	post := postports.PostFeedItemSlice{
 		PostID: postports.NewPostID(candidate.ContentID), AuthorPersonaID: postports.NewPersonaID(candidate.AuthorID),
-		ContentType: "image", ContentIdentity: "work", Visibility: "public", CreatedAt: now,
+		ContentType: "image", Visibility: "public", CreatedAt: now,
 	}
 	service := newTerminalFeedService(
 		newTerminalFeedEngineWithSource(

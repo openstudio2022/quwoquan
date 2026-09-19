@@ -383,7 +383,7 @@ def test_existing_candidate_uses_exact_claim_without_reacquire(tmp_path, monkeyp
     from quwoquan_ops.cli import integration_run as subject
     from quwoquan_ops.ci.scoped_candidate import exact_digest
     _, write = _receipt_matrix(tmp_path)
-    claim = {"paths": ["quwoquan_app/lib/main.dart"], "expectedParent": "0" * 40, "ownerIdentityRef": "owner-exact"}
+    claim = {"paths": ["quwoquan_app/lib/main.dart"], "expectedParent": "0" * 40, "contextRef": "owner-exact"}
     claim_ref = write("claims/claimed.json", claim)
     candidate = {"schema": subject._CANDIDATE_SCHEMA, **_CANDIDATE, **claim,
                  "claimRef": claim_ref["ref"], "claimDigest": claim_ref["digest"], "impactPlanDigest": _DIGEST}

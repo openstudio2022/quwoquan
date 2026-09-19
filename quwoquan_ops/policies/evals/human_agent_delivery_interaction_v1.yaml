@@ -52,7 +52,6 @@ readability_proxy:
   - GATE_BLOCK
   - typed blocker
   - fingerprint
-  - owner manifest
   - receipt
   - readback
   - exact-byte
@@ -114,7 +113,6 @@ role_interaction_evaluation:
       safe_actions_taken: [preserve_current_state]
       next_acceptance: 产品负责人确认范围后继续冻结验收。
       next_acceptance_role: product_owner
-      audit_details: {owner_manifest: .qwq_output/env/repo/runs/feature-tree/by-fingerprint/<digest>.json}
   - id: interaction-exception
     payload:
       event_type: exception_escalation

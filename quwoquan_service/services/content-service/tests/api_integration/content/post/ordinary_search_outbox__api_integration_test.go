@@ -19,7 +19,7 @@ func TestOrdinarySearchOwnerOutboxExport(t *testing.T) {
 	if target == "" {
 		t.Skip("explicit disposable export path required")
 	}
-	created := submitPublishedPostWithAuthor(t, "search-outbox-author", `{"contentType":"micro","contentIdentity":"moment","body":"洱海骑行搜索闭环"}`)
+	created := submitPublishedPostWithAuthor(t, "search-outbox-author", `{"contentType":"article","body":"洱海骑行搜索闭环"}`)
 	id := created["postId"].(string)
 	for _, visibility := range []string{"private", "public"} {
 		request := httptest.NewRequest(http.MethodPatch, "/content/posts/"+id+"/settings", strings.NewReader(`{"visibility":"`+visibility+`"}`))

@@ -14,7 +14,7 @@ import (
 	rterr "quwoquan_service/runtime/errors"
 	rtobs "quwoquan_service/runtime/observability"
 	rtrec "quwoquan_service/runtime/recommendation"
-	recpolicy "quwoquan_service/runtime/recpolicy"
+	transport "quwoquan_service/services/content-service/generated/content/feed_delivery_page"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	deliveryapp "quwoquan_service/services/content-service/internal/content/feed_delivery_page/application"
 	"quwoquan_service/services/content-service/internal/content/intersection_visit_state/application/intersection"
@@ -23,17 +23,16 @@ import (
 )
 
 type FeedService struct {
-	postReader       postports.PostFeedReader
-	intersections    FeedIntersectionProvider
-	objectCardPolicy func() recpolicy.ObjectCardConfig
-	filterObserver   FeedFilterObserver
-	viewerBlocks     FeedViewerBlockReader
-	viewerReactions  FeedViewerReactionReader
-	activeSupply     ActiveSupplyReader
-	cursorCodec      *FeedCursorCodec
-	deliveryPages    deliveryapp.Store
-	rankedWindows    deliveryapp.RankedRecommendationGateway
-	deliveryEvents   deliveryapp.FeedPageDeliveredPublisher
+	postReader      postports.PostFeedReader
+	intersections   FeedIntersectionProvider
+	filterObserver  FeedFilterObserver
+	viewerBlocks    FeedViewerBlockReader
+	viewerReactions FeedViewerReactionReader
+	activeSupply    ActiveSupplyReader
+	cursorCodec     *FeedCursorCodec
+	deliveryPages   deliveryapp.Store
+	rankedWindows   deliveryapp.RankedRecommendationGateway
+	deliveryEvents  deliveryapp.FeedPageDeliveredPublisher
 }
 
 func NewFeedService(reader postports.PostFeedReader, opts ...FeedServiceOption) *FeedService {
@@ -147,11 +146,10 @@ type ListFeedRequest struct {
 	UserID          string
 	ViewerPersonaID string
 	SessionID       string
-	Identity        string
 	Type            string
 	Sort            string
 	// ChannelID 首页频道路由标识（home_channels.feed_query.channel 真相源）。
-	// 频道推荐主链路与 identity/type 浏览流互斥：channelId 非空时 identity/type 被忽略，
+	// 频道推荐主链路与 type 浏览流互斥：channelId 非空时 type 被忽略，
 	// 请求必须进推荐引擎并按 channelId 归因，禁止落入 PostReader 时间线具名查询。
 	ChannelID   string
 	SubCategory string
@@ -160,9 +158,18 @@ type ListFeedRequest struct {
 	// FeedRequestID 客户端回显的归因 id：首刷为空，分页/继续加载回显服务端首刷下发的 id。
 	FeedRequestID   string
 	BlockedKeywords []string
+	// ClientPresentationContract 客户端本次声明的展示能力。零值表示整份缺席，
+	// 由 ListFeed 归一为生成的 MissingDeclaration 固定基线；非空声明必须自带
+	// 可由服务端重算的 canonical digest。
+	ClientPresentationContract transport.ClientContentPresentationContract
 }
 
 const rankedFeedSessionIDMaxBytes = 128
+
+// rankedRecommendationPageBudget 是单次请求内向同一窗口取页的上限。能力过滤
+// 掉的候选在预算内继续补足，预算用尽仍投不出一条时必须给出终态，不得静默返回
+// 无进展空页。
+const rankedRecommendationPageBudget = 4
 
 func validateRankedFeedSessionID(sessionID string) error {
 	sessionID = strings.TrimSpace(sessionID)
@@ -183,7 +190,6 @@ func validateRankedFeedSessionID(sessionID string) error {
 type FeedItemView struct {
 	PostID             string `json:"postId"`
 	ContentType        string `json:"contentType"`
-	ContentIdentity    string `json:"contentIdentity"`
 	AssistantUsePolicy string `json:"assistantUsePolicy,omitempty"`
 	AuthorID           string `json:"authorId"`
 	AuthorDisplayName  string `json:"authorDisplayName,omitempty"`
@@ -240,14 +246,11 @@ type ListFeedResponse struct {
 	Items []FeedItemView `json:"items"`
 	// Outcome distinguishes a successful content page from a successful empty
 	// page. Failures continue to use the canonical runtime-error envelope.
-	Outcome     FeedResponseOutcome `json:"outcome"`
-	EmptyReason FeedEmptyReason     `json:"emptyReason,omitempty"`
-	// ObjectCards 混合对象卡（B4 插卡模式）：anchorIndex 指示插入在
-	// items[anchorIndex] 之前；空即本页无对象卡（策略关闭 / 候选不足 / 匿名）。
-	ObjectCards         []ObjectCardView `json:"objectCards"`
-	NextCursor          string           `json:"nextCursor,omitempty"`
-	PreviousCursor      string           `json:"previousCursor,omitempty"`
-	PaginationExpiresAt string           `json:"paginationExpiresAt,omitempty"`
+	Outcome             FeedResponseOutcome `json:"outcome"`
+	EmptyReason         FeedEmptyReason     `json:"emptyReason,omitempty"`
+	NextCursor          string              `json:"nextCursor,omitempty"`
+	PreviousCursor      string              `json:"previousCursor,omitempty"`
+	PaginationExpiresAt string              `json:"paginationExpiresAt,omitempty"`
 	// FeedRequestID 服务端权威下发的归因 id（frq_ 前缀 ULID）；端侧回显 + 透传行为事件。
 	FeedRequestID string `json:"feedRequestId"`
 	// PolicyDigest 本次推荐结果唯一策略内容摘要；具名浏览查询为空。
@@ -297,14 +300,20 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 
 	limit := NormalizeFeedLimit(req.Limit)
 	req.UserID = identity.NormalizeAnonymousPersonaID(req.UserID)
+	// 有效能力声明必须在任何 cursor scope、窗口或交付页身份被计算之前定稿：
+	// 它是这三者的 scope 组成部分，不同能力不得复用同一个窗口或交付页。
+	req.ClientPresentationContract, err = effectiveClientPresentationContract(
+		req.ClientPresentationContract,
+	)
+	if err != nil {
+		return nil, err
+	}
 	views := make([]FeedItemView, 0, limit)
-	requestedIdentity := normalizeRequestedIdentity(req.Identity)
 	requestedType := normalizeRequestType(req.Type)
 	// 频道推荐主链路与浏览流互斥（B1 收口）：channelId 非空即为首页频道请求，
-	// identity/type 一律忽略，禁止据此落入 PostReader 时间线具名查询。
+	// type 一律忽略，禁止据此落入 PostReader 时间线具名查询。
 	channelRouted := strings.TrimSpace(req.ChannelID) != ""
 	if channelRouted {
-		requestedIdentity = ""
 		requestedType = ""
 	}
 	route := resolveFeedRoute(req)
@@ -314,7 +323,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		var cursorErr error
 		cursorState, cursorErr = s.cursorCodec.decode(
 			requestedCursor,
-			feedCursorScope(req, route, requestedIdentity, requestedType),
+			feedCursorScope(req, route, requestedType),
 		)
 		if cursorErr != nil {
 			return nil, contentgenerated.AppErrorFromInvalidArgument(ErrInvalidFeedCursor.Error())
@@ -337,7 +346,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		postReaderCursor = strings.TrimSpace(cursorState.Value)
 	}
 	usePostReaderQuery := !channelRouted &&
-		(postReaderCursor != "" || requestedType != "" || requestedIdentity != "")
+		(postReaderCursor != "" || requestedType != "")
 	if requestedCursor != "" && cursorState.Kind != feedCursorKindDeliveryPage &&
 		((usePostReaderQuery && cursorState.Kind != feedCursorKindPostReader) ||
 			(!usePostReaderQuery && cursorState.Kind != feedCursorKindRecommendation)) {
@@ -353,9 +362,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			return nil, contentgenerated.AppErrorFromInvalidArgument(sessionErr.Error())
 		}
 	}
-	releaseBoundVideoBook := usePostReaderQuery &&
-		requestedIdentity == "work" &&
-		requestedType == "video"
+	releaseBoundVideoBook := usePostReaderQuery && requestedType == "video"
 	initialRecommend := releaseBoundRecommend && requestedCursor == ""
 	initialVideoBook := releaseBoundVideoBook && requestedCursor == ""
 	switch {
@@ -509,12 +516,8 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 				return false
 			}
 		}
-		postIdentity := ResolvedContentIdentity(string(post.ContentType), string(post.ContentIdentity))
-		if requestedIdentity != "" && postIdentity != requestedIdentity {
-			return false
-		}
-		viewType := mapContentTypeToViewType(string(post.ContentType))
-		if requestedType != "" && requestedIdentity != "moment" && viewType != requestedType {
+		if requestedType != "" &&
+			!strings.EqualFold(strings.TrimSpace(string(post.ContentType)), requestedType) {
 			return false
 		}
 		seenPostIDs[postID] = struct{}{}
@@ -527,7 +530,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		views = append(views, FeedItemView{
 			PostID:                   postID,
 			ContentType:              string(post.ContentType),
-			ContentIdentity:          postIdentity,
 			AssistantUsePolicy:       post.AssistantUsePolicy,
 			AuthorID:                 authorID,
 			AuthorDisplayName:        post.AuthorDisplayName,
@@ -579,7 +581,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			ctx,
 			req,
 			route,
-			requestedIdentity,
 			requestedType,
 			cursorState,
 			appendPost,
@@ -607,7 +608,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			Items:               replayItems,
 			Outcome:             feedOutcomeForItemCount(len(replay.items)),
 			EmptyReason:         feedEmptyReasonForContinuation(len(replay.items)),
-			ObjectCards:         append([]ObjectCardView{}, replay.objectCards...),
 			NextCursor:          replay.nextCursor,
 			PreviousCursor:      replay.previousCursor,
 			PaginationExpiresAt: paginationExpiryWire(replay.paginationExpiresAt),
@@ -619,10 +619,15 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	}
 	hydrationRequested := 0
 	hydrationFound := 0
+	// unprojectableCandidates 统计「在声明能力之内、但当前扁平响应形状投不出」
+	// 的候选（混排信封归另一条收口）。它们必须被补足或被终态报告。
+	unprojectableCandidates := 0
+	rankedBudgetExhausted := false
 	var rankedDelivery *rankedRecommendationDelivery
 	if releaseBoundRecommend {
 		rankedDelivery = &rankedRecommendationDelivery{}
-		for attempt := 0; attempt < 4 && len(views) < limit; attempt++ {
+		attempt := 0
+		for ; attempt < rankedRecommendationPageBudget && len(views) < limit; attempt++ {
 			page, rankedErr := s.rankedRecommendationPage(
 				ctx,
 				req,
@@ -633,6 +638,12 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 				activeSupply,
 			)
 			if rankedErr != nil {
+				// 能力摘要不一致等 typed 结果已经是 canonical 用户终态，
+				// 不得再包装成依赖不可用。
+				var presentationError *rterr.AppError
+				if errors.As(rankedErr, &presentationError) {
+					return nil, presentationError
+				}
 				terminalStage = rtrec.FailureStageRankedWindowUnavailable
 				return nil, requiredDependencyFailure(terminalStage, rankedErr)
 			}
@@ -657,42 +668,62 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			policyDigest = page.PolicyDigest
 			experimentBucket = page.ExperimentBucket
 			nextRecommendationContinuation = rankedContinuation(page)
+			projected := make([]rankedProjectedCandidate, 0, len(page.Items))
 			recallIDs := make([]postports.PostID, 0, len(page.Items))
 			for _, item := range page.Items {
-				recallIDs = append(recallIDs, postports.NewPostID(item.ContentId))
-			}
-			hydrationRequested += len(recallIDs)
-			postsByID, readErr := s.postReader.FindPublishedFeedPosts(
-				ctx,
-				postports.NewPostFeedHydrationRequest(
-					recallIDs,
-					activeSupply.ActiveReleaseID,
-					activeSupply.ManifestDigest,
-				),
-			)
-			if readErr != nil {
-				return nil, storageReadFailure("hydrate recommended feed posts", readErr)
-			}
-			for _, item := range page.Items {
-				post, ok := postsByID[postports.NewPostID(item.ContentId)]
-				if !ok || (strings.TrimSpace(post.SourceOwner) == "qwq_data" &&
-					!feedDeliveryReleaseMatches(
-						&post,
-						activeSupply.ActiveReleaseID,
-						activeSupply.ManifestDigest,
-					)) {
+				postID, projectable, envelopeErr := rankedItemProjection(
+					item,
+					req.ClientPresentationContract,
+				)
+				if envelopeErr != nil {
+					terminalStage = rtrec.FailureStageRankedWindowUnavailable
+					return nil, requiredDependencyFailure(terminalStage, envelopeErr)
+				}
+				if !projectable {
+					unprojectableCandidates++
 					continue
 				}
-				hydrationFound++
-				recommendationItem := rankedFeedItem(item)
-				if appendPost(&post, &recommendationItem) {
-					rankedDelivery.delivered = append(
-						rankedDelivery.delivered,
-						deliveredRecommendationItem(item, views[len(views)-1]),
-					)
+				projected = append(projected, rankedProjectedCandidate{item: item, postID: postID})
+				recallIDs = append(recallIDs, postID)
+			}
+			hydrationRequested += len(recallIDs)
+			if len(recallIDs) > 0 {
+				postsByID, readErr := s.postReader.FindPublishedFeedPosts(
+					ctx,
+					postports.NewPostFeedHydrationRequest(
+						recallIDs,
+						activeSupply.ActiveReleaseID,
+						activeSupply.ManifestDigest,
+					),
+				)
+				if readErr != nil {
+					return nil, storageReadFailure("hydrate recommended feed posts", readErr)
 				}
-				if len(views) >= limit {
-					break
+				for _, candidate := range projected {
+					post, ok := postsByID[candidate.postID]
+					if !ok || (strings.TrimSpace(post.SourceOwner) == "qwq_data" &&
+						!feedDeliveryReleaseMatches(
+							&post,
+							activeSupply.ActiveReleaseID,
+							activeSupply.ManifestDigest,
+						)) {
+						continue
+					}
+					hydrationFound++
+					recommendationItem := rankedFeedItem(candidate.item, candidate.postID)
+					if appendPost(&post, &recommendationItem) {
+						rankedDelivery.delivered = append(
+							rankedDelivery.delivered,
+							deliveredRecommendationItem(
+								candidate.item,
+								candidate.postID,
+								views[len(views)-1],
+							),
+						)
+					}
+					if len(views) >= limit {
+						break
+					}
 				}
 			}
 			if nextRecommendationContinuation == nil {
@@ -700,6 +731,20 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			}
 			recommendationContinuation = nextRecommendationContinuation
 		}
+		// 预算耗尽与窗口耗尽是两个不同终态：前者窗口仍可继续，后者已经没有候选。
+		rankedBudgetExhausted = attempt >= rankedRecommendationPageBudget &&
+			nextRecommendationContinuation != nil
+	}
+	// 被能力过滤掉的候选已经在预算内补足过。预算用尽仍然一条都投不出时必须报错，
+	// 不得伪装成「没有可投内容」的空页——窗口里还有候选，客户端也无法据此停止。
+	if len(views) == 0 && unprojectableCandidates > 0 && rankedBudgetExhausted {
+		terminalStage = rtrec.FailureStageRankedWindowUnavailable
+		return nil, contentgenerated.AppErrorFromFeedCapacityUnavailable(fmt.Sprintf(
+			"presentation contract %s filtered %d ranked candidates and the %d-page top-up budget was exhausted before one item could be projected",
+			req.ClientPresentationContract.ContractDigest,
+			unprojectableCandidates,
+			rankedRecommendationPageBudget,
+		))
 	}
 	if !usePostReaderQuery && hydrationRequested > 0 && hydrationFound == 0 {
 		terminalStage = rtrec.FailureStageHydrationFullMiss
@@ -720,20 +765,15 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 	// 普通推荐请求不允许在召回不足时偷渡到第二读主线。
 	if len(views) < limit && route.Surface != "premium_stream" && usePostReaderQuery {
 		pageCursor := postReaderCursor
-		feedContentType := requestedType
 		readerLimit := limit * 2
 		if readerLimit > postports.MaxPostQueryPageSize {
 			readerLimit = postports.MaxPostQueryPageSize
-		}
-		if requestedIdentity == "moment" {
-			feedContentType = ""
 		}
 		for attempt := 0; attempt < 4 && len(views) < limit; attempt++ {
 			page, readErr := s.postReader.ListPublishedFeedPosts(
 				ctx,
 				postports.NewPostFeedReadRequest(
-					postports.ContentIdentity(requestedIdentity),
-					postports.ContentType(feedContentType),
+					postports.ContentType(requestedType),
 					postports.NewPostID(pageCursor),
 					readerLimit,
 					releaseBoundCursorValue(releaseBoundVideoBook, activeSupply.ActiveReleaseID),
@@ -772,19 +812,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			AttachFeedIntersections(views, reasons, req.UserID)
 		}
 	}
-	// 对象卡候选与理由只取自同一个 Recommendation 不可变窗口；Content
-	// 仅在 Post hydration 后计算本页 anchor 并与 FeedDeliveryPage 同时落盘。
-	objectCards := make([]ObjectCardView, 0)
-	if !usePostReaderQuery && route.Surface == "home" && rankedDelivery != nil {
-		objectCards, err = s.resolveObjectCards(
-			rankedDelivery.page.ObjectCards,
-			len(views),
-		)
-		if err != nil {
-			terminalStage = rtrec.FailureStageRankedWindowUnavailable
-			return nil, requiredDependencyFailure(terminalStage, err)
-		}
-	}
 	if len(views) == 0 {
 		terminalOutcome = rtrec.FeedTerminalEmpty
 		terminalStage = rtrec.FailureStageNone
@@ -793,7 +820,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		nextCursor = ""
 		nextRecommendationContinuation = nil
 	}
-	scope := feedCursorScope(req, route, requestedIdentity, requestedType)
+	scope := feedCursorScope(req, route, requestedType)
 	previousCursor, previousCursorExpiry, previousCursorErr :=
 		s.previousCursorFromInbound(scope, cursorState)
 	if previousCursorErr != nil {
@@ -850,7 +877,7 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			}
 			encodedCursor, cursorErr := s.cursorCodec.encode(
 				cursorEnvelope,
-				feedCursorScope(req, route, requestedIdentity, requestedType),
+				feedCursorScope(req, route, requestedType),
 			)
 			if cursorErr != nil {
 				return nil, contentgenerated.AppErrorFromInternalError(
@@ -870,7 +897,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 			depth:          cursorState.Depth,
 			previousPageID: strings.TrimSpace(cursorState.DeliveryPageID),
 			items:          views,
-			objectCards:    objectCards,
 			outboundCursor: nextCursor,
 			releaseID: releaseBoundCursorValue(
 				releaseBoundRecommend || releaseBoundVideoBook,
@@ -923,7 +949,6 @@ func (s *FeedService) ListFeed(ctx context.Context, req ListFeedRequest) (resp *
 		Items:               responseItems,
 		Outcome:             responseOutcome,
 		EmptyReason:         responseEmptyReason,
-		ObjectCards:         append([]ObjectCardView{}, objectCards...),
 		NextCursor:          nextCursor,
 		PreviousCursor:      previousCursor,
 		PaginationExpiresAt: paginationExpiryWire(paginationExpiresAt),

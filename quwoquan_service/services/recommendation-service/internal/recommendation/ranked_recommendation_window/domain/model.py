@@ -2,11 +2,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from generated.recommendation.ranked_recommendation_window.models.client_presentation_contract import (
+    validate_client_content_presentation_contract,
+)
 import math
 from typing import Any, Mapping
 
-
-from generated.recommendation.ranked_recommendation_window.models.request_response import ReleasePinnedQueryFence
+from generated.recommendation.ranked_recommendation_window.models.request_response import (
+    ClientContentPresentationContract,
+    ListItemHomepageRef,
+    ListItemPostRef,
+    ListItemPresentationEnvelope,
+    ReleasePinnedQueryFence,
+)
 
 
 def validate_content_fence(fence: ReleasePinnedQueryFence) -> ReleasePinnedQueryFence:
@@ -25,15 +33,80 @@ def validate_content_fence(fence: ReleasePinnedQueryFence) -> ReleasePinnedQuery
     return fence.model_copy(deep=True)
 
 
+def validate_presentation_contract(
+    contract: ClientContentPresentationContract,
+) -> ClientContentPresentationContract:
+    """由生成助手唯一拥有闭集、canonical 编码与摘要校验。"""
+    if not isinstance(contract, ClientContentPresentationContract):
+        raise ValueError("typed client presentation contract is required")
+    normalized = validate_client_content_presentation_contract(contract.model_dump(mode="json"))
+    return ClientContentPresentationContract.model_validate(normalized)
+
+
+def validate_envelope(envelope: ListItemPresentationEnvelope) -> ListItemPresentationEnvelope:
+    if not isinstance(envelope, ListItemPresentationEnvelope):
+        raise ValueError("typed presentation envelope is required")
+    envelope = ListItemPresentationEnvelope.model_validate(envelope.model_dump(mode="json"))
+    if envelope.objectKind == "post":
+        if envelope.post is None or envelope.homepage is not None or envelope.contentType is None:
+            raise ValueError("post envelope requires only a post reference and contentType")
+        identity = envelope.post.postId
+    elif envelope.objectKind == "entity_homepage":
+        if envelope.homepage is None or envelope.post is not None or envelope.contentType is not None:
+            raise ValueError("homepage envelope requires only a homepage reference")
+        identity = envelope.homepage.homepageId
+    else:
+        raise ValueError("unsupported presentation object kind")
+    if not identity.strip() or identity != identity.strip():
+        raise ValueError("presentation identity must be canonical")
+    return envelope
+
+
+def supports_presentation(
+    contract: ClientContentPresentationContract, envelope: ListItemPresentationEnvelope,
+) -> bool:
+    return (
+        envelope.objectKind in contract.listObjectKinds
+        and (envelope.contentType is None or envelope.contentType in contract.contentTypes)
+        and (envelope.presentationRecipe is None or envelope.presentationRecipe in contract.presentationRecipes)
+        and envelope.openSurface in contract.openSurfaces
+    )
+
+
+def post_envelope(post_id: str, content_type: str) -> ListItemPresentationEnvelope:
+    # 赋值属于推荐 writer；生成模型负责值域，不从媒体附件嗅探卡型。
+    if content_type == "article":
+        recipe, surface = "article_excerpt_card", "article_reader"
+    elif content_type == "image" or content_type == "video":
+        recipe, surface = "cover_media_card", "media_immersive"
+    else:
+        raise ValueError("candidate contentType has no presentation assignment")
+    return validate_envelope(ListItemPresentationEnvelope(
+        objectKind="post", contentType=content_type, presentationRecipe=recipe,
+        openSurface=surface, post=ListItemPostRef(postId=post_id),
+    ))
+
+
+def homepage_envelope(homepage_id: str) -> ListItemPresentationEnvelope:
+    return validate_envelope(ListItemPresentationEnvelope(
+        objectKind="entity_homepage", presentationRecipe="homepage_summary_card",
+        openSurface="homepage_detail", homepage=ListItemHomepageRef(homepageId=homepage_id),
+    ))
+
+
+def envelope_identity(envelope: ListItemPresentationEnvelope) -> tuple[str, str]:
+    reference = envelope.post.postId if envelope.post is not None else envelope.homepage.homepageId
+    return envelope.objectKind, reference
+
+
 WINDOW_TTL = timedelta(minutes=10)
 MAX_WINDOW_ITEMS = 300
-MAX_WINDOW_OBJECT_CARDS = 20
 
 
 @dataclass(frozen=True, slots=True)
 class RankedRecommendationItem:
     ordinal: int
-    content_id: str
+    envelope: ListItemPresentationEnvelope
     score: float
     feature_snapshot_digest: str
     item_feature_snapshot: Mapping[str, Any]
@@ -41,22 +114,10 @@ class RankedRecommendationItem:
 
 @dataclass(frozen=True, slots=True)
 class RankedCandidate:
-    content_id: str
+    envelope: ListItemPresentationEnvelope
     score: float
     feature_snapshot_digest: str
     item_feature_snapshot: Mapping[str, Any]
-
-
-@dataclass(frozen=True, slots=True)
-class RecommendationObjectCard:
-    object_kind: str
-    object_id: str
-    title: str
-    subtitle: str | None
-    cover_url: str | None
-    tag_refs: tuple[str, ...]
-    reason_key: str
-    recall_path: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -70,12 +131,12 @@ class RankingResult:
     ranking_snapshot_digest: str
     user_feature_snapshot: Mapping[str, Any]
     candidates: tuple[RankedCandidate, ...]
-    object_cards: tuple[RecommendationObjectCard, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
 class RankedRecommendationWindow:
     content_fence: ReleasePinnedQueryFence
+    client_presentation_contract: ClientContentPresentationContract
     window_id: str
     subject_id: str
     scenario: str
@@ -91,142 +152,62 @@ class RankedRecommendationWindow:
     items: tuple[RankedRecommendationItem, ...]
     created_at: datetime
     expires_at: datetime
-    object_cards: tuple[RecommendationObjectCard, ...] = ()
 
     @classmethod
     def create(
-        cls,
-        *,
-        window_id: str,
-        subject_id: str,
-        scenario: str,
-        request_digest: str,
-        ranking: RankingResult,
-        content_fence: ReleasePinnedQueryFence,
+        cls, *, window_id: str, subject_id: str, scenario: str, request_digest: str,
+        ranking: RankingResult, content_fence: ReleasePinnedQueryFence,
+        client_presentation_contract: ClientContentPresentationContract,
         now: datetime | None = None,
     ) -> "RankedRecommendationWindow":
         created_at = (now or datetime.now(timezone.utc)).astimezone(timezone.utc)
-        normalized_subject = subject_id.strip()
-        normalized_scenario = scenario.strip()
-        if not all(
-            value.strip()
-            for value in (
-                window_id,
-                normalized_subject,
-                normalized_scenario,
-                ranking.experiment_bucket,
-                request_digest,
-                ranking.model_bucket,
-                ranking.policy_digest,
-                ranking.ranking_snapshot_digest,
-            )
-        ):
-            raise ValueError(
-                "windowId, subjectId, scenario and ranking snapshot digests are required"
-            )
+        contract = validate_presentation_contract(client_presentation_contract)
+        normalized_subject, normalized_scenario = subject_id.strip(), scenario.strip()
+        if not all(value.strip() for value in (
+            window_id, normalized_subject, normalized_scenario, ranking.experiment_bucket,
+            request_digest, ranking.model_bucket, ranking.policy_digest, ranking.ranking_snapshot_digest,
+        )):
+            raise ValueError("windowId, subjectId, scenario and ranking snapshot digests are required")
         if ranking.feature_snapshot_at.tzinfo is None:
             raise ValueError("featureSnapshotAt must be timezone-aware")
         if ranking.feature_snapshot_at.astimezone(timezone.utc) > created_at:
             raise ValueError("featureSnapshotAt cannot be later than window creation")
-        normalized_bucket = ranking.model_bucket.strip()
-        normalized_experiment_bucket = ranking.experiment_bucket.strip()
-        if normalized_experiment_bucket not in {"model", "rule"}:
-            raise ValueError("experimentBucket must be model or rule")
-        if normalized_bucket not in {"model", "rule"}:
-            raise ValueError("modelBucket must be model or rule")
-        if normalized_bucket == "model" and (
-            not ranking.model_channel or not ranking.model_release_id
-        ):
+        bucket, experiment = ranking.model_bucket.strip(), ranking.experiment_bucket.strip()
+        if bucket not in {"model", "rule"} or experiment not in {"model", "rule"}:
+            raise ValueError("ranking buckets must be model or rule")
+        if bucket == "model" and (not ranking.model_channel or not ranking.model_release_id):
             raise ValueError("model ranking requires modelChannel and modelReleaseId")
-        if normalized_bucket == "rule" and (
-            ranking.model_channel is not None or ranking.model_release_id is not None
-        ):
+        if bucket == "rule" and (ranking.model_channel is not None or ranking.model_release_id is not None):
             raise ValueError("rule ranking cannot claim a model channel or release")
         if len(ranking.candidates) > MAX_WINDOW_ITEMS:
             raise ValueError("ranked window must contain at most 300 items")
-        if len(ranking.object_cards) > MAX_WINDOW_OBJECT_CARDS:
-            raise ValueError("ranked window must contain at most 20 object cards")
-        seen: set[str] = set()
+        seen: set[tuple[str, str]] = set()
         items: list[RankedRecommendationItem] = []
-        for ordinal, candidate in enumerate(ranking.candidates):
-            normalized_content_id = candidate.content_id.strip()
-            if (
-                not normalized_content_id
-                or normalized_content_id in seen
-                or not math.isfinite(float(candidate.score))
-                or not candidate.feature_snapshot_digest.strip()
-            ):
+        for candidate in ranking.candidates:
+            envelope = validate_envelope(candidate.envelope)
+            identity = envelope_identity(envelope)
+            if identity in seen or not math.isfinite(float(candidate.score)) or not candidate.feature_snapshot_digest.strip():
                 raise ValueError("ranked window candidate snapshot is invalid")
-            seen.add(normalized_content_id)
-            items.append(
-                RankedRecommendationItem(
-                    ordinal=ordinal,
-                    content_id=normalized_content_id,
-                    score=float(candidate.score),
-                    feature_snapshot_digest=candidate.feature_snapshot_digest.strip(),
-                    item_feature_snapshot=dict(candidate.item_feature_snapshot),
-                )
-            )
+            seen.add(identity)
+            if not supports_presentation(contract, envelope):
+                continue
+            items.append(RankedRecommendationItem(
+                ordinal=len(items), envelope=envelope, score=float(candidate.score),
+                feature_snapshot_digest=candidate.feature_snapshot_digest.strip(),
+                item_feature_snapshot=dict(candidate.item_feature_snapshot),
+            ))
         return cls(
-            content_fence=validate_content_fence(content_fence),
-            window_id=window_id.strip(),
-            subject_id=normalized_subject,
-            scenario=normalized_scenario,
-            experiment_bucket=normalized_experiment_bucket,
-            model_bucket=normalized_bucket,
+            content_fence=validate_content_fence(content_fence), client_presentation_contract=contract,
+            window_id=window_id.strip(), subject_id=normalized_subject, scenario=normalized_scenario,
+            experiment_bucket=experiment, model_bucket=bucket,
             model_channel=ranking.model_channel.strip() if ranking.model_channel else None,
-            model_release_id=(
-                ranking.model_release_id.strip() if ranking.model_release_id else None
-            ),
-            policy_digest=ranking.policy_digest.strip(),
-            request_digest=request_digest.strip(),
+            model_release_id=ranking.model_release_id.strip() if ranking.model_release_id else None,
+            policy_digest=ranking.policy_digest.strip(), request_digest=request_digest.strip(),
             ranking_snapshot_digest=ranking.ranking_snapshot_digest.strip(),
             feature_snapshot_at=ranking.feature_snapshot_at.astimezone(timezone.utc),
-            user_feature_snapshot=dict(ranking.user_feature_snapshot),
-            items=tuple(items),
-            created_at=created_at,
-            expires_at=created_at + WINDOW_TTL,
-            object_cards=cls._validate_object_cards(ranking.object_cards),
+            user_feature_snapshot=dict(ranking.user_feature_snapshot), items=tuple(items),
+            created_at=created_at, expires_at=created_at + WINDOW_TTL,
         )
-
-    @staticmethod
-    def _validate_object_cards(
-        cards: tuple[RecommendationObjectCard, ...],
-    ) -> tuple[RecommendationObjectCard, ...]:
-        normalized: list[RecommendationObjectCard] = []
-        seen: set[tuple[str, str]] = set()
-        for card in cards:
-            object_kind = card.object_kind.strip()
-            object_id = card.object_id.strip()
-            title = card.title.strip()
-            reason_key = card.reason_key.strip()
-            recall_path = card.recall_path.strip()
-            identity = (object_kind, object_id)
-            if (
-                object_kind not in {"entity_homepage", "gathering"}
-                or not object_id
-                or identity in seen
-                or not title
-                or not reason_key
-                or not recall_path
-                or any(not tag.strip() for tag in card.tag_refs)
-                or len(set(card.tag_refs)) != len(card.tag_refs)
-            ):
-                raise ValueError("ranked window object card snapshot is invalid")
-            seen.add(identity)
-            normalized.append(
-                RecommendationObjectCard(
-                    object_kind=object_kind,
-                    object_id=object_id,
-                    title=title,
-                    subtitle=(card.subtitle.strip() if card.subtitle else None),
-                    cover_url=(card.cover_url.strip() if card.cover_url else None),
-                    tag_refs=tuple(tag.strip() for tag in card.tag_refs),
-                    reason_key=reason_key,
-                    recall_path=recall_path,
-                )
-            )
-        return tuple(normalized)
 
     def page(self, *, from_ordinal: int, limit: int) -> tuple[tuple[RankedRecommendationItem, ...], int | None]:
         if from_ordinal < 0 or limit <= 0 or limit > 100:

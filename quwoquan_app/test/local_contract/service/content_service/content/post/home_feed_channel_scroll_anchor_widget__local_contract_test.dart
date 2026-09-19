@@ -23,20 +23,22 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
         CloudOperationCancellationSignal,
         ContentBehaviorFactAppender,
         ContentPostProjection,
-        FeedObjectCard,
-        ReportContentBehaviorsCommand;
+        ReportContentBehaviorsCommand,
+        ContentType;
 
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
 import 'package:http/testing.dart';
 import 'package:quwoquan_app/runtime/transport/http/cloud_http_client.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_feed_object_card.dart';
+import '../../../../../support/service/content_service/content/feed_delivery_page/content_feed_object_card_test_builder.dart';
 
 ContentPostViewData _post(String channel, int index, {int bodyRepeats = 1}) {
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: '${channel}_anchor_post_$index',
-      contentType: 'micro',
-      contentIdentity: 'moment',
+      contentType: ContentType.article,
       authorId: '${channel}_author_$index',
       authorDisplayName: 'Anchor Author $index',
       authorAvatarUrl: '',
@@ -66,12 +68,12 @@ class _TwoChannelFeedMapNotifier extends DiscoveryFeedMapNotifier {
   _TwoChannelFeedMapNotifier(
     this.recommend,
     this.campus, [
-    this._recommendObjectCards = const <FeedObjectCard>[],
+    this._recommendObjectCards = const <ContentFeedObjectCard>[],
   ]);
 
   final List<ContentPostViewData> recommend;
   final List<ContentPostViewData> campus;
-  List<FeedObjectCard> _recommendObjectCards;
+  List<ContentFeedObjectCard> _recommendObjectCards;
 
   @override
   Map<String, AsyncValue<DiscoveryFeedState>> build() {
@@ -97,7 +99,7 @@ class _TwoChannelFeedMapNotifier extends DiscoveryFeedMapNotifier {
 
   void replaceRecommend(
     List<ContentPostViewData> items, {
-    List<FeedObjectCard>? objectCards,
+    List<ContentFeedObjectCard>? objectCards,
   }) {
     if (objectCards != null) {
       _recommendObjectCards = objectCards;
@@ -115,8 +117,9 @@ class _TwoChannelFeedMapNotifier extends DiscoveryFeedMapNotifier {
 /// 内层传输故意直接抛错，把「意外发起真实下载」变成显式测试失败。
 CloudHttpClient _unreachableDataPlaneClient() => CloudHttpClient(
   client: MockClient(
-    (request) async =>
-        throw StateError('MediaDownloadCache double must not perform network IO'),
+    (request) async => throw StateError(
+      'MediaDownloadCache double must not perform network IO',
+    ),
   ),
 );
 
@@ -169,8 +172,7 @@ final class _WidgetPagedDiscoveryFeedQuery
       ),
       nextCursor: 'cursor_${pageIndex + 1}',
       feedRequestId: 'frq_widget_resident_$pageIndex',
-      policyDigest:
-          'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      policyDigest: 'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     );
   }
 }
@@ -254,7 +256,6 @@ void main() {
                 child: HomeMultiFormFeed(
                   isDark: false,
                   channelId: 'recommend',
-                  template: 'single_column_multiform',
                   onUserTap: _noopUserTap,
                 ),
               ),
@@ -360,9 +361,12 @@ void main() {
                       key: ValueKey<String>('test-feed-$channelId'),
                       isDark: false,
                       channelId: channelId,
-                      template: 'single_column_multiform',
-                      onUserTap:
-                          (_, {avatarUrl, backgroundUrl, displayName}) {},
+                      onUserTap: (
+                        _, {
+                        avatarUrl,
+                        backgroundUrl,
+                        displayName,
+                      }) {},
                     );
                   },
                 ),
@@ -467,19 +471,13 @@ void main() {
         12,
         (index) => _post('object_anchor_campus', index),
       );
-      final objectCard = FeedObjectCard(
-        objectKind: 'homepage',
-        objectId: 'volatile-object-card',
-        title: 'Volatile object card',
-        tagRefs: const <String>[],
-        anchorIndex: 8,
-      );
+      final objectCard = buildContentFeedObjectCard(homepageId: 'volatile-object-card', title: 'Volatile object card', anchorIndex: 8);
       final activeChannel = ValueNotifier<String>('recommend');
       final anchorStore = HomeFeedScrollAnchorStore(maxChannels: 2);
       final feedNotifier = _TwoChannelFeedMapNotifier(
         recommend,
         campus,
-        <FeedObjectCard>[objectCard],
+        <ContentFeedObjectCard>[objectCard],
       );
       addTearDown(activeChannel.dispose);
 
@@ -508,7 +506,6 @@ void main() {
                     key: ValueKey<String>('object-anchor-feed-$channelId'),
                     isDark: false,
                     channelId: channelId,
-                    template: 'single_column_multiform',
                     onUserTap: (_, {avatarUrl, backgroundUrl, displayName}) {},
                   ),
                 ),
@@ -553,7 +550,7 @@ void main() {
 
       feedNotifier.replaceRecommend(
         recommend,
-        objectCards: const <FeedObjectCard>[],
+        objectCards: const <ContentFeedObjectCard>[],
       );
       await tester.pump();
       activeChannel.value = 'recommend';

@@ -14,14 +14,14 @@ metadata:
 
 ## 执行
 
-1. PRE 从用户目标、plan/diff 与已知路径确定 exact target；读取最近子树 `AGENTS.md`，运行 `make feature-context TARGET=<exact-path>` 并保存 immutable exact ref（写入前必须持有），再加载冻结 REQ、验收、contracts 与现有 DEC。
+1. PRE 从用户目标、plan/diff 与已知路径确定 exact target；读取最近子树 `AGENTS.md`，运行 `make feature-context TARGET=<exact-path>` 并保存 immutable exact ref（写入不依赖），再加载冻结 REQ、验收、contracts 与现有 DEC。
 2. 只在达到设计门槛的 L2/L1 `design.md` 记录 DEC，包含决策、理由、被否决方案、约束/影响、关联要求/验收和影响 Story。
 3. 明确 owner、command/query/event、一致性与幂等、typed 失败、恢复、回滚、SLI/SLO、告警和测试 seam；功能事实与 wire 事实保留在各自 owner。
-4. 运行 `make verify-feature-tree`；POST 复用 PRE owner identity ref，生成 current candidate evidence predecessor，报告命名 evidence 结果，默认零 Reviewer。
+4. 运行 `make verify-feature-tree`；POST 复用 PRE context manifest ref，生成 current candidate evidence predecessor，报告命名 evidence 结果，默认零 Reviewer。
 
 ## 完成证据
 
-DEC 能指回冻结验收，每个决策都有可执行测试 seam、失败恢复、回滚与观测结果；immutable ref 与门禁绑定当前工作树，未评审时如实标注。
+DEC 能指回冻结验收，每个决策都有可执行测试 seam、失败恢复、回滚与观测结果；context snapshot 与门禁绑定当前工作树，未评审时如实标注。
 
 ## 失败与停止
 
@@ -29,4 +29,4 @@ spec 未冻结、target/owner 冲突、contract 未定义、无法恢复/回滚�
 
 ## 条件性交接
 
-设计冻结后向 dev 传递 exact target、immutable ref、DEC 与验收。持久交接语义见 continue Skill。
+设计冻结后向 dev 传递 exact target、context snapshot、DEC 与验收。持久交接语义见 continue Skill。

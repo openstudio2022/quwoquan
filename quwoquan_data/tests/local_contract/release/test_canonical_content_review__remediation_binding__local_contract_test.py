@@ -31,7 +31,7 @@ def _review(root: Path, *, origin: str = "immutable_remediation_artifact") -> di
     semantic = candidate / "semantic.document.json"; semantic.write_text("{}\n")
     return {
         "schema": "quwoquan_data.content_review", "stage": "5.review", "executionId": "remediation-a3",
-        "objectRef": "entities/地点/中国/北京市/西城区/宗教场所/p0001/历代帝王庙/2",
+        "objectRef": "entities/travel/beijing/entity-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "objectIdentity": {"entityId": "entity-temple-of-emperors", "entityRef": "/entity/travel/beijing/temple-of-emperors"},
         "decision": "rejected", "author": AUTHOR, "reviewer": REVIEWER,
         "candidateBindings": {"origin": origin, "page": _binding(page, root),

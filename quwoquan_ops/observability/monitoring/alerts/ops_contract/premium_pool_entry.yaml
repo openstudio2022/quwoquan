@@ -10,7 +10,7 @@ groups:
           service: "product-ops-service"
           operation: "ops.premium_pool_entry.ListPremiumPoolEntries"
           contract_metric: "ops_premium_pool_entry_query"
-          commercial_status: "ready"
+          commercial_status: "blocked"
           slo_latency_p95_ms: "800"
           slo_availability_percent: "99.9"
       - record: quwoquan_ops_contract_operation_duration_seconds_bucket
@@ -20,7 +20,7 @@ groups:
           service: "product-ops-service"
           operation: "ops.premium_pool_entry.ListPremiumPoolEntries"
           contract_metric: "ops_premium_pool_entry_query"
-          commercial_status: "ready"
+          commercial_status: "blocked"
           slo_latency_p95_ms: "800"
           slo_availability_percent: "99.9"
       - record: quwoquan_ops_contract_operation_requests_total
@@ -30,7 +30,7 @@ groups:
           service: "product-ops-service"
           operation: "ops.premium_pool_entry.RollbackPremiumPoolEntry"
           contract_metric: "ops_premium_pool_entry_command"
-          commercial_status: "ready"
+          commercial_status: "blocked"
           slo_latency_p95_ms: "1000"
           slo_availability_percent: "99.9"
       - record: quwoquan_ops_contract_operation_duration_seconds_bucket
@@ -40,7 +40,7 @@ groups:
           service: "product-ops-service"
           operation: "ops.premium_pool_entry.RollbackPremiumPoolEntry"
           contract_metric: "ops_premium_pool_entry_command"
-          commercial_status: "ready"
+          commercial_status: "blocked"
           slo_latency_p95_ms: "1000"
           slo_availability_percent: "99.9"
       - record: quwoquan_ops_contract_operation_requests_total
@@ -50,7 +50,7 @@ groups:
           service: "product-ops-service"
           operation: "ops.premium_pool_entry.TakedownPremiumPoolEntry"
           contract_metric: "ops_premium_pool_entry_command"
-          commercial_status: "ready"
+          commercial_status: "blocked"
           slo_latency_p95_ms: "1000"
           slo_availability_percent: "99.9"
       - record: quwoquan_ops_contract_operation_duration_seconds_bucket
@@ -60,7 +60,7 @@ groups:
           service: "product-ops-service"
           operation: "ops.premium_pool_entry.TakedownPremiumPoolEntry"
           contract_metric: "ops_premium_pool_entry_command"
-          commercial_status: "ready"
+          commercial_status: "blocked"
           slo_latency_p95_ms: "1000"
           slo_availability_percent: "99.9"
       - record: quwoquan_ops_contract_operation_requests_total
@@ -70,7 +70,7 @@ groups:
           service: "product-ops-service"
           operation: "ops.premium_pool_entry.UpsertPremiumPoolEntry"
           contract_metric: "ops_premium_pool_entry_command"
-          commercial_status: "ready"
+          commercial_status: "blocked"
           slo_latency_p95_ms: "1000"
           slo_availability_percent: "99.9"
       - record: quwoquan_ops_contract_operation_duration_seconds_bucket
@@ -80,6 +80,6 @@ groups:
           service: "product-ops-service"
           operation: "ops.premium_pool_entry.UpsertPremiumPoolEntry"
           contract_metric: "ops_premium_pool_entry_command"
-          commercial_status: "ready"
+          commercial_status: "blocked"
           slo_latency_p95_ms: "1000"
           slo_availability_percent: "99.9"

@@ -14,7 +14,7 @@ type postPublicationPolicyYAML struct {
 	Schema     string `yaml:"schema"`
 	TextLimits struct {
 		TitleMaxRunes            int `yaml:"title_max_runes"`
-		MicroBodyMaxRunes        int `yaml:"micro_body_max_runes"`
+		ArticleBodyMaxRunes      int `yaml:"article_body_max_runes"`
 		ArticleMarkdownMaxRunes  int `yaml:"article_markdown_max_runes"`
 		SummaryMaxRunes          int `yaml:"summary_max_runes"`
 		SemanticMentionsMaxItems int `yaml:"semantic_mentions_max_items"`
@@ -24,7 +24,6 @@ type postPublicationPolicyYAML struct {
 		ArticleParagraphMinCount int  `yaml:"article_paragraph_min_count"`
 		ArticleWhenTitlePresent  bool `yaml:"article_when_title_present"`
 		ArticleWhenMediaPresent  bool `yaml:"article_when_media_present"`
-		UserConfirmationRequired bool `yaml:"user_confirmation_required"`
 	} `yaml:"format_recommendation"`
 	RateLimit struct {
 		PersonaWindowSeconds   int    `yaml:"persona_window_seconds"`
@@ -51,7 +50,7 @@ func generatePostPublicationPolicy(
 	}
 	if policy.Schema != "content_post_publication_policy" ||
 		policy.TextLimits.TitleMaxRunes <= 0 ||
-		policy.TextLimits.MicroBodyMaxRunes <= 0 ||
+		policy.TextLimits.ArticleBodyMaxRunes <= 0 ||
 		policy.TextLimits.ArticleMarkdownMaxRunes <= 0 ||
 		policy.TextLimits.SummaryMaxRunes <= 0 ||
 		policy.TextLimits.SemanticMentionsMaxItems <= 0 ||
@@ -69,7 +68,7 @@ func generatePostPublicationPolicy(
 	buf.WriteString("package generated\n\n")
 	buf.WriteString("const (\n")
 	fmt.Fprintf(&buf, "\tPostPublicationTitleMaxRunes = %d\n", policy.TextLimits.TitleMaxRunes)
-	fmt.Fprintf(&buf, "\tPostPublicationMicroBodyMaxRunes = %d\n", policy.TextLimits.MicroBodyMaxRunes)
+	fmt.Fprintf(&buf, "\tPostPublicationArticleBodyMaxRunes = %d\n", policy.TextLimits.ArticleBodyMaxRunes)
 	fmt.Fprintf(&buf, "\tPostPublicationArticleMarkdownMaxRunes = %d\n", policy.TextLimits.ArticleMarkdownMaxRunes)
 	fmt.Fprintf(&buf, "\tPostPublicationSummaryMaxRunes = %d\n", policy.TextLimits.SummaryMaxRunes)
 	fmt.Fprintf(&buf, "\tPostPublicationSemanticMentionsMaxItems = %d\n", policy.TextLimits.SemanticMentionsMaxItems)

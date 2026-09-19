@@ -820,8 +820,12 @@ func renderAssistantOperationOwnerLibrary(
 			output,
 		)
 	}
+	jsonImport := ""
+	if requestDomainUsesJSONQuery("assistant") {
+		jsonImport = "import 'dart:convert';\n"
+	}
 	return "// Code generated from canonical Assistant contracts. DO NOT EDIT.\n" +
-		"library;\n\n" +
+		"library;\n\n" + jsonImport +
 		"import '../operation_request_payload.dart';\n" +
 		objectImports.String() + "\n" +
 		"export '../generated/assistant/assistant_api_responses.g.dart';\n" +

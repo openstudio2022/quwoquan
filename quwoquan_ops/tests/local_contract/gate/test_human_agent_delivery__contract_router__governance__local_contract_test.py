@@ -415,7 +415,7 @@ def test_exception_and_completion_event_specific_fields_are_required() -> None:
 
 
 @pytest.mark.parametrize("term", [
-    "digest", "CAS", "GATE_BLOCK", "typed blocker", "fingerprint", "owner manifest",
+    "digest", "CAS", "GATE_BLOCK", "typed blocker", "fingerprint", "context manifest",
     "receipt", "readback", "exact-byte", "SHA256:abc", "/Users/name/private/file",
     "pytest -q", "Cursor",
 ])

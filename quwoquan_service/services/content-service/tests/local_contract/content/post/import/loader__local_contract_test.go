@@ -20,9 +20,9 @@ func writeFile(t *testing.T, path, content string) {
 	if strings.Contains(filepath.ToSlash(path), "/posts/") &&
 		strings.HasSuffix(path, "manifest.json") &&
 		strings.Contains(content, `"contentType"`) {
-		// Canonical release fixtures always carry admitted content identity and
-		// pool fields. Negative tests write bytes directly and bypass this helper.
-		prefix := `{"contentId":"fixture-` + fmt.Sprintf("%x", len(path)) + `","version":1,"sourceType":"data","admission":{"processResult":"completed","qualityResult":"passed","rightsResult":"passed","rightsAuthorityRef":"content_review.json","rightsAuthorityDigest":"sha256:` + strings.Repeat("b", 64) + `","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:` + strings.Repeat("a", 64) + `"},"status":"active","contentIdentity":"work",`
+		// 正向 release fixture 只补齐 canonical pool 准入字段。
+		// 负例直接写入原始字节，不经过此 helper。
+		prefix := `{"contentId":"fixture-` + fmt.Sprintf("%x", len(path)) + `","version":1,"sourceType":"data","admission":{"processResult":"completed","qualityResult":"passed","rightsResult":"passed","rightsAuthorityRef":"content_review.json","rightsAuthorityDigest":"sha256:` + strings.Repeat("b", 64) + `","evidenceRef":"audit/attestation.json","evidenceDigest":"sha256:` + strings.Repeat("a", 64) + `"},"status":"active",`
 		content = strings.Replace(content, "{", prefix, 1)
 		content = semanticfixture.AddToManifestJSON(t, content)
 	}
@@ -74,7 +74,6 @@ func TestLoadPostsRejectsMissingCanonicalPoolAdmission(t *testing.T) {
 	}
 	if err := os.WriteFile(path, []byte(`{
 		"contentType":"article",
-		"contentIdentity":"work",
 		"authorId":"builtin_author",
 		"publishTitle":"缺少准入",
 		"publishedAt":"2026-07-30T00:00:00Z"
@@ -86,7 +85,7 @@ func TestLoadPostsRejectsMissingCanonicalPoolAdmission(t *testing.T) {
 	}
 }
 
-func TestLoadPostsRejectsMissingContentIdentity(t *testing.T) {
+func TestLoadPostsAcceptsCanonicalContentTypeWithoutRetiredIdentity(t *testing.T) {
 	root := t.TempDir()
 	path := filepath.Join(root, "posts/article/攻略/缺少身份/1/manifest.json")
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
@@ -109,9 +108,24 @@ func TestLoadPostsRejectsMissingContentIdentity(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := LoadPosts(root, nil)
-	if err == nil || !strings.Contains(err.Error(), "contentIdentity is required") {
-		t.Fatalf("expected missing contentIdentity rejection, got %v", err)
+	posts, err := LoadPosts(root, nil)
+	if err != nil {
+		t.Fatalf("canonical contentType must not require retired contentIdentity: %v", err)
+	}
+	if len(posts) != 1 || posts[0].ContentType != "article" || posts[0].ContentID != "missing-identity" {
+		t.Fatalf("canonical article projection drifted: %+v", posts)
+	}
+}
+
+func TestLoadPostsRejectsRetiredContentType(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "posts/micro/文字/退役类型/1/manifest.json"), `{
+		"contentType":"micro",
+		"body":"退役类型不得由导入器推断为 article",
+		"publishedAt":"2026-07-30T00:00:00Z"
+	}`)
+	if _, err := LoadPosts(root, nil); err == nil || !strings.Contains(err.Error(), `unsupported contentType "micro"`) {
+		t.Fatalf("retired contentType must fail closed: %v", err)
 	}
 }
 
@@ -227,6 +241,7 @@ func TestLoadVideoPreservesSourceAttribution(t *testing.T) {
 			"publishAngle":"体验",
 			"publishSeq":1,
 			"publishedAt":"2026-07-28T05:39:06Z",
+			"videoBindings":[{"assetId":"video-1","role":"shortVideo"}],
 			"assets":[
 				{
 					"assetId":"video-1",
@@ -706,6 +721,7 @@ func TestLoadManifestOnlyVideoPostAndCoverContract(t *testing.T) {
 		"createdAt":"2026-06-20T02:00:00Z",
 		"updatedAt":"2026-06-20T02:00:00Z",
 		"publishedAt":"2026-06-20T02:00:00Z",
+		"videoBindings":[{"assetId":"clip","role":"shortVideo"}],
 		"assets":[{
 			"assetId":"clip",
 			"kind":"video",

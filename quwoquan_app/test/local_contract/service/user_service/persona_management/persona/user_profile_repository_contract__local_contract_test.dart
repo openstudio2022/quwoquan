@@ -101,20 +101,6 @@ void main() {
       expect(card.qrPayload, isNotEmpty);
       expect(card.publicProfileUrl, isNotEmpty);
     });
-
-    test('二维码解析返回 accepted 目标，空 token fail-fast', () async {
-      final resolved = await query.resolveProfileQrToken(
-        token: 'opaque-token',
-        handle: _fixtureProfileUserId,
-      );
-
-      expect(resolved.personaId, _fixtureProfileUserId);
-      expect(resolved.scanStatus, 'accepted');
-      await expectLater(
-        query.resolveProfileQrToken(token: ''),
-        throwsArgumentError,
-      );
-    });
   });
 
   group('ProfileCommandWriter alpha parity', () {
@@ -281,15 +267,14 @@ final class _TestPersonaRelationshipFacets
     implements PersonaRelationshipQuery, PersonaRelationshipCommandWriter {
   bool _following = false;
 
-  ProfileSocialRelationRowViewData get _row =>
-      ProfileSocialRelationRowViewData(
-        personaId: _fixtureProfileUserId,
-        userHandle: 'fixture_photo',
-        displayName: 'Fixture Photo',
-        avatarUrl: 'media/avatar/s/mock/user/fixture_user_photo/v1/avatar.png',
-        profileVisibility: 'public',
-        relationState: 'following',
-      );
+  ProfileSocialRelationRowViewData get _row => ProfileSocialRelationRowViewData(
+    personaId: _fixtureProfileUserId,
+    userHandle: 'fixture_photo',
+    displayName: 'Fixture Photo',
+    avatarUrl: 'media/avatar/s/mock/user/fixture_user_photo/v1/avatar.png',
+    profileVisibility: 'public',
+    relationState: 'following',
+  );
 
   @override
   Future<void> follow(

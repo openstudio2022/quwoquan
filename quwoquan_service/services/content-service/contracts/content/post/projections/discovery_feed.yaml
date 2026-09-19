@@ -31,9 +31,7 @@ fields:
   max_utf8_bytes: 256
 - name: contentType
   type: enum
-- description: 内容身份层。moment/work，用于跨面统一过滤
-  name: contentIdentity
-  type: enum
+  enum_ref: ContentType
 - name: authorId
   type: string
 - description: 系统/平台创作者画像 ID

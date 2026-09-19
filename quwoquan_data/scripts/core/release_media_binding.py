@@ -31,7 +31,8 @@ def _consumer_documents(objects_root: Path) -> list[Path]:
             relative = path.relative_to(objects_root)
             if any(part in {"sources", "records"} for part in relative.parts):
                 continue
-            if any(part.is_symlink() for part in (path, *path.parents)):
+            bounded = (path, *path.parents[:len(relative.parts)])
+            if any(part.is_symlink() for part in bounded):
                 raise ValueError(f"release consumer manifest symlink: {path}")
             paths.append(path)
     return paths

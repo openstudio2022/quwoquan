@@ -7,6 +7,8 @@ import os
 import re
 from collections import Counter, defaultdict
 from pathlib import Path
+
+from core.schema import assert_valid
 from typing import Any, Iterable
 from urllib.parse import unquote, urlsplit, urlunsplit
 
@@ -457,6 +459,7 @@ def _summary(document: dict) -> dict:
 
 def audit_and_write(*, publish_root: Path, output_root: Path, max_objects: int, max_file_bytes: int) -> dict:
     document = scan_pool(publish_root=publish_root, max_objects=max_objects, max_file_bytes=max_file_bytes)
+    assert_valid(document, "governance", "content_fidelity_audit", label="content fidelity audit")
     output = output_root.expanduser().resolve(); output.mkdir(parents=True, exist_ok=True)
     stem = document["baselineDigest"].removeprefix("sha256:")
     path = output / f"{stem}.json"

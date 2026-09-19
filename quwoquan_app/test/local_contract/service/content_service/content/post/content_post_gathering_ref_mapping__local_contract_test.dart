@@ -3,7 +3,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show AssistantUsePolicy, ContentPostProjection;
+    show AssistantUsePolicy, ContentPostProjection, ContentType;
 
 // feed 卡溯源标的物理载体契约：wire `ContentPostProjection.gatheringRef`
 // 必须无损进入端侧 view data；无关联内容保持 null，端不本地推断。
@@ -11,8 +11,7 @@ import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
 ContentPostProjection _wire({String? gatheringRef}) {
   return ContentPostProjection(
     postId: 'post-ref-1',
-    contentType: 'image',
-    contentIdentity: 'work',
+    contentType: ContentType.image,
     assistantUsePolicy: AssistantUsePolicy.inherit,
     authorId: 'author-1',
     authorDisplayName: '作者',

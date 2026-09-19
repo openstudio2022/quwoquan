@@ -348,6 +348,7 @@ def _build_from_capsule(
     product_version: str,
     artifact_build_number: str,
     attempt_dir: Path,
+    local_alpha_android: bool = False,
 ) -> dict[str, Any]:
     flutter_identity = _resolve_flutter_identity()
     flutter_executable = flutter_identity["executable"]
@@ -355,6 +356,7 @@ def _build_from_capsule(
     capsule = materialize_package_input_capsule(
         _CAPSULE_ROOTS,
         capsule_root=capsule_root,
+        platforms=(platform,) if platform in {"android", "ios"} else ("android", "ios"),
     )
     log_path = attempt_dir / "compile.log"
     temporary_workspace = tempfile.TemporaryDirectory(
@@ -432,6 +434,7 @@ def _build_from_capsule(
                     build_profile=build_profile,
                     platform=platform,
                     command_env=command_env,
+                    local_alpha_android=local_alpha_android,
                 )
             )
         _materialize_protected_inputs(
@@ -443,6 +446,7 @@ def _build_from_capsule(
             application_id=application_id,
             command_env=command_env,
             private_dir=private_dir,
+            local_alpha_android=local_alpha_android,
         )
         _run(
             [flutter_executable, "pub", "get", "--offline", "--enforce-lockfile"],
@@ -899,7 +903,7 @@ def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
     import quwoquan_ops.cli.stackctl as _stackctl
 
     try:
-        source_start = workspace_snapshot(deployment_roots=_CAPSULE_ROOTS)
+        source_start = workspace_snapshot(deployment_roots=_CAPSULE_ROOTS, platforms=(platform,) if platform in {"android", "ios"} else ("android", "ios"))
         source_git_sha, source_tree_digest = _git_identity()
         hosted_build_number = bool(
             os.environ.get("QWQ_ARTIFACT_BUILD_NUMBER", "").strip()
@@ -933,8 +937,9 @@ def command_package_app_artifact(args: argparse.Namespace) -> dict[str, Any]:
             product_version=display_version,
             artifact_build_number=build_number,
             attempt_dir=attempt_dir,
+            local_alpha_android=(build_product_id == "android-nonprod-apk"),
         )
-        source_end = workspace_snapshot(deployment_roots=_CAPSULE_ROOTS)
+        source_end = workspace_snapshot(deployment_roots=_CAPSULE_ROOTS, platforms=(platform,) if platform in {"android", "ios"} else ("android", "ios"))
         end_git_sha, end_tree_digest = _git_identity()
         if (
             source_start != source_end

@@ -105,10 +105,36 @@ home_channels:
   mood_copy_key: home_mood_car
   order: 6
   runtime_overridable: true
+# ContentUiSurface 的布局策略（DEC-003）。列数是「该 Surface 对当前窗口尺寸」的函数，
+# 既不是对象字段，也不是推荐字段：信封不携带 columns/wideLayout，云也不下发列数。
+# 每个 ContentUiSurface 成员必须恰好被某个服务的 ui_config 声明一次，缺成员或重复声明
+# 都让 codegen fail-closed；本文件只拥有 content 自己的三个面。
+# 数值只是把现网已有实现收口到单轨，不改变产品数值。
+surface_layout_policies:
+- surface: home_feed
+  layout_kind: responsive_grid
+  compact_columns: 1
+  chrome_family: feed_presentation_recipe
+  # 首页是唯一存在多种卡片家族的面，chrome 由云物化的 presentationRecipe 选择。
+  recipe_driven_chrome: true
+  responsive_grid:
+    expanded_breakpoint_dp: 600
+    min_columns: 2
+    max_columns: 4
+    ideal_column_width_dp: 220
+- surface: media_immersive
+  layout_kind: full_bleed_pager
+  compact_columns: 1
+  chrome_family: immersive_media_pager
+  recipe_driven_chrome: false
+- surface: article_reader
+  layout_kind: full_bleed_pager
+  compact_columns: 1
+  chrome_family: article_document_reader
+  recipe_driven_chrome: false
+# 只登记「该分类固定按某个 ContentType 过滤」的入口。recommended / following 是
+# 混排入口，不按内容类型过滤，因此不在表内：缺席即不下发 type 过滤，不是默认值。
 feed_request_type_by_category:
-  recommended: micro
-  following: micro
-  micro: micro
   images: image
   video: video
   article: article
@@ -132,14 +158,6 @@ discovery_tabs:
   mute_by_default: true
   preload_count: 2
   order: 1
-- id: moment
-  label_key: tab_moment
-  icon: chat_bubble_outline
-  content_type: micro
-  layout: list_with_optional_media
-  card_aspect_ratio: dynamic
-  preload_count: 8
-  order: 2
 - id: article
   label_key: tab_article
   icon: article_outlined
@@ -148,20 +166,6 @@ discovery_tabs:
   show_reading_time: true
   preload_count: 6
   order: 3
-discovery_rails:
-- id: moment
-  label_key: discovery_rail_moment
-  identity: moment
-  default: true
-  order: 0
-- id: work
-  label_key: discovery_rail_work
-  identity: work
-  default: false
-  order: 1
-# taxonomy 发布身份不在此登记：它是 tag-service 活跃发布的运行时事实，
-# 客户端回显加载目录时下发的 TagChild.releaseId，服务端原样转交 tag-service 判定。
-# 固化到本文件会让「发一个新 tag 发布」变成「重发 content-service + 重发端」。
 onboarding_interest_catalog:
   min_selection_count: 1
   max_selection_count: 12
@@ -190,19 +194,6 @@ onboarding_interest_catalog:
     min_selections: 0
     max_selections: 4
     order: 3
-creation_identity_filters:
-- id: all
-  label_key: creation_filter_all
-  identity: null
-  order: 0
-- id: moment
-  label_key: creation_filter_moment
-  identity: moment
-  order: 1
-- id: work
-  label_key: creation_filter_work
-  identity: work
-  order: 2
 work_format_filters:
 - id: all
   label_key: work_format_all
@@ -220,23 +211,6 @@ work_format_filters:
   label_key: work_format_article
   content_type: article
   order: 3
-share_template_profiles:
-- id: moment
-  title_key: share_template_moment_title
-  subtitle_key: share_template_moment_subtitle
-  layout: moment_card
-  cover_strategy: first_media_or_gradient
-  include_author: true
-  include_time_context: true
-  include_tags: false
-- id: work
-  title_key: share_template_work_title
-  subtitle_key: share_template_work_subtitle
-  layout: work_card
-  cover_strategy: cover_or_first_media
-  include_author: true
-  include_time_context: false
-  include_tags: true
 article_distribution_profiles:
 - id: follow_list_with_optional_cover
   surface: following_feed
@@ -379,17 +353,6 @@ card_config:
     - comment
     - share
     progress_bar: true
-  micro:
-    show_author_avatar: true
-    show_author_name: true
-    show_like_count: true
-    show_comment_count: true
-    action_bar_position: bottom
-    action_bar_items:
-    - like
-    - comment
-    - share
-    max_image_grid_count: 9
   article:
     show_author_avatar: true
     show_author_name: true
@@ -426,14 +389,6 @@ feature_flags:
   default: false
   runtime_overridable: true
   description: 统一创作编辑器壳层
-- flag: enable_identity_based_surfaces
-  default: false
-  runtime_overridable: true
-  description: 发现 / 主页 / 圈子切换到点滴 / 作品统一 IA
-- flag: enable_identity_share_template
-  default: false
-  runtime_overridable: true
-  description: 按点滴 / 作品生成差异化分享模板
 - flag: enable_article_distribution_profiles
   default: false
   runtime_overridable: true

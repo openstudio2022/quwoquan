@@ -296,15 +296,8 @@ var (
 		Help: "Realtime feed patch emission failures by type and stage (validate/marshal/publish). Should stay near zero.",
 	}, []string{"patch_type", "stage"})
 
-	// --- N1-2 新能力观测：二期能力（objectCards/edge/embedding/gate/shadow/
+	// --- N1-2 新能力观测：二期能力（edge/embedding/gate/shadow/
 	// per-source 召回/Redis 降级/policy reload）此前零指标，故障静默。 ---
-
-	// objectCardsTotal 混合对象卡装配结果：assembled（注入卡数）/ provider_error
-	// （召回失败，静默降级为无卡）。
-	objectCardsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
-		Name: "recommendation_object_cards_total",
-		Help: "Feed object card assembly outcomes (assembled cards / provider errors).",
-	}, []string{"outcome"})
 
 	// edgeMaterializerRunsTotal 关系边物化任务结果（success/failure，按 edge 类型）。
 	edgeMaterializerRunsTotal = promauto.NewCounterVec(prometheus.CounterOpts{
@@ -363,18 +356,6 @@ var (
 		Help: "Currently active recommendation policy content digest (value is always 1).",
 	}, []string{"digest"})
 )
-
-// RecordObjectCardsAssembled 记录一次 feed 响应注入的对象卡数量。
-func RecordObjectCardsAssembled(count int) {
-	if count > 0 {
-		objectCardsTotal.WithLabelValues("assembled").Add(float64(count))
-	}
-}
-
-// RecordObjectCardsProviderError 记录对象卡召回失败（静默降级为无卡，必须可观测）。
-func RecordObjectCardsProviderError() {
-	objectCardsTotal.WithLabelValues("provider_error").Inc()
-}
 
 // RecordEdgeMaterializerRun 记录一次关系边物化任务结果。
 func RecordEdgeMaterializerRun(edgeType string, err error) {

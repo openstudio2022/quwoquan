@@ -21,10 +21,10 @@ _SHA256_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 
 
 _IMPORT_REPORT_SCHEMAS = {
-    "quwoquan.content_import_report": "import_report",
-    "quwoquan.tag_import_report": "tag_import_report",
-    "quwoquan.user_creator_import_report": "creator_import_report",
-    "quwoquan_service.homepage_import_report": "homepage_import_report",
+    "quwoquan.content_import_report": ("release", "import_report"),
+    "quwoquan.tag_import_report": ("release", "tag_import_report"),
+    "quwoquan.user_creator_import_report": ("release", "creator_import_report"),
+    "quwoquan_service.homepage_import_report": ("release", "homepage_import_report"),
 }
 
 
@@ -41,12 +41,12 @@ ContentReleaseEvidence = OwnerReleaseEvidence
 
 
 _RELEASE_RECEIPT_SCHEMAS = {
-    "quwoquan.content_release_candidate_receipt": "content_release_candidate_receipt",
-    "quwoquan.content_release_active_receipt": "content_release_active_receipt",
-    "quwoquan.content_release_activation_receipt": "content_release_activation_receipt",
-    "quwoquan.tag_release_candidate_receipt": "tag_release_candidate_receipt",
-    "quwoquan.creator_release_candidate_receipt": "creator_release_candidate_receipt",
-    "quwoquan.homepage_release_candidate_receipt": "homepage_release_candidate_receipt",
+    "quwoquan.content_release_candidate_receipt": ("release", "content_release_candidate_receipt"),
+    "quwoquan.content_release_active_receipt": ("release", "content_release_active_receipt"),
+    "quwoquan.content_release_activation_receipt": ("release", "content_release_activation_receipt"),
+    "quwoquan.tag_release_candidate_receipt": ("release", "tag_release_candidate_receipt"),
+    "quwoquan.creator_release_candidate_receipt": ("release", "creator_release_candidate_receipt"),
+    "quwoquan.homepage_release_candidate_receipt": ("release", "homepage_release_candidate_receipt"),
 }
 
 _OWNER_RELEASE_CONTROL = {
@@ -114,13 +114,13 @@ def _validate_release_control_document(
     label: str = "<memory>",
 ) -> dict[str, Any]:
     document = dict(payload)
-    schema_name = _RELEASE_RECEIPT_SCHEMAS.get(schema)
-    if not schema_name or document.get("schema") != schema:
+    receipt_schema_target = _RELEASE_RECEIPT_SCHEMAS.get(schema)
+    if not receipt_schema_target or document.get("schema") != schema:
         raise RuntimeError(
             "Content release receipt schema 不一致："
             f"expected={schema} actual={document.get('schema')}"
         )
-    assert_valid(document, "release", schema_name, label=f"{schema_name}:{label}")
+    assert_valid(document, *receipt_schema_target, label=f"{receipt_schema_target[1]}:{label}")
     identity = document.get("identity")
     bound = identity if isinstance(identity, Mapping) else document
     if bound.get("environment") != environment or bound.get("sourceOwner") != "qwq_data":
@@ -609,14 +609,14 @@ def assert_import_report_contract(
         raise ValueError(f"import report 必须是对象：{source or '<memory>'}")
     payload = dict(report)
     schema = str(payload.get("schema") or "")
-    schema_name = _IMPORT_REPORT_SCHEMAS.get(schema)
-    if not schema_name:
+    import_schema_target = _IMPORT_REPORT_SCHEMAS.get(schema)
+    if not import_schema_target:
         raise SystemExit(
             f"[ship] 未登记 Schema import report：{schema or '<missing>'} "
             f"({source or '<memory>'})"
         )
     assert_valid(
-        payload, "release", schema_name, label=f"import_report:{source or '<memory>'}"
+        payload, *import_schema_target, label=f"import_report:{source or '<memory>'}"
     )
     if (
         expected_release_id is not None

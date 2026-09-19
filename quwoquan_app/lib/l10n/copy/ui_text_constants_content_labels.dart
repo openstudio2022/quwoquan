@@ -11,14 +11,10 @@ String _footprintTypeLabel(String type) =>
 
 String _contentLabelForKey(String labelKey) {
   switch (labelKey) {
-    case 'discovery_rail_moment':
-      return DiscoveryText.discoveryRailMoment;
     case 'discovery_rail_work':
       return DiscoveryText.discoveryRailWorks;
     case 'creation_filter_all':
       return DiscoveryText.creationFilterAll;
-    case 'creation_filter_moment':
-      return DiscoveryText.creationFilterMoment;
     case 'creation_filter_work':
       return DiscoveryText.creationFilterWork;
     case 'profile_tab_creations':
@@ -71,8 +67,6 @@ String _contentLabelForKey(String labelKey) {
       return ProfileText.lifestyleSubPrivate;
     case 'creation_sub_all':
       return ProfileText.creationSubAll;
-    case 'creation_sub_micro':
-      return ProfileText.creationSubMicro;
     case 'creation_sub_image':
       return ProfileText.creationSubImage;
     case 'creation_sub_video':
@@ -111,10 +105,6 @@ String _contentLabelForKey(String labelKey) {
       return DiscoveryText.articlePaperThemeInkGreen;
     case 'article_paper_theme_deep_brown':
       return DiscoveryText.articlePaperThemeDeepBrown;
-    case 'share_template_moment_title':
-      return MediaText.shareTemplateMomentTitle;
-    case 'share_template_moment_subtitle':
-      return MediaText.shareTemplateMomentSubtitle;
     case 'share_template_work_title':
       return MediaText.shareTemplateWorkTitle;
     case 'share_template_work_subtitle':
@@ -123,8 +113,6 @@ String _contentLabelForKey(String labelKey) {
       return DiscoveryText.discoveryTabPhoto;
     case 'tab_video':
       return DiscoveryText.discoveryTabVideo;
-    case 'tab_moment':
-      return DiscoveryText.discoveryTabMoment;
     case 'tab_article':
       return DiscoveryText.discoveryTabArticle;
     default:

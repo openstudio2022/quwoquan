@@ -1,12 +1,12 @@
 # quwoquan_data Agent Guide
 
-在 `quwoquan_data/` 工作时，除仓库根 `AGENTS.md` 外先阅读 `quwoquan_data/README.md`。
+同时遵守根规则并先读 `quwoquan_data/README.md`。
 
 ## Data 内容生产边界
 
-[content-production Skill](../.agents/skills/content-production/SKILL.md) 是 producer 唯一流程真相源。本文件只声明工程不变量；阶段输入与命令由 Skill `references/pipeline.md` 拥有，派发由 `references/dispatch.md` 拥有，预算、恢复、工作区布局与收官由 `references/session.md` 拥有，岗位与多账号分工由 `references/team.md` 拥有，载体模板与来源入口按当前 `CARRIER.md` / `sources.md` 渐进加载，不在 Data 复制步骤正文。
+[content-production Skill](../.agents/skills/content-production/SKILL.md) 是 producer 唯一流程真相源。本文件只声明工程不变量；阶段命令、派发、session、team 分别归 Skill 对应 references，载体按当前 `CARRIER.md`/`sources.md` 加载，不复制流程。
 
-- 宿主 AI（当前包括 Cursor 与本机执行的 Grok Bot）是唯一语义主体。机械代码不得决定来源、实体相关性、正文/caption/video script、review、verdict、评分、typed issue、approved、cohort、milestone、后继或恢复；不以脚本代替看媒体、创作和独立评审。Grok 与 Cursor 共用同一 Skill/CLI，不另建仓内调度器或第二套流程正文。
+- 宿主 AI（Cursor/Grok Bot）是唯一语义主体。机械代码不得决定来源、实体相关性、正文/caption/video script、review、verdict、评分、typed issue、approved、cohort、milestone、后继或恢复；不以脚本代替看媒体、创作和独立评审。Grok 与 Cursor 共用同一 Skill/CLI，不另建仓内调度器或第二套流程正文。
 - Data CLI 的 `task acquire` 是零网络 ingest：`quwoquan_data/scripts/content/source/**`、`content/execution/**` 与 `core/**` 不得有 HTTP/socket 出网点，由 local_contract 静态门锁定。`content/release/environment/public_api_client.py` 只验证自家服务，不是来源网络入口。
 - 来源侧机械能力归版本控制的 Skill `scripts/` 与点名载体模块；其中 `source/download/preview` 可按宿主显式输入出网，`build-inputs/lint` 只做本地构造与 advisory。未实现来源由宿主通用工具取得，不宣称自动化；不复制 Data probe/derive/CAS/seal，不包装 seal/publish。
 - Data 机械能力优先进入 `python3 quwoquan_data/scripts/cli.py <command>` 现有单阶段边界。禁止 stage-open、宿主 verifierFacts、resolver/projector/runner/controller/queue/registry/SDK、actor projection、stage-gate、execution-state reducer、自动恢复或第二轮次台账；不得用 shim/dual-read 留第二轨。
@@ -15,7 +15,7 @@
 
 ## 内容与证据
 
-- 实体类型只取 taxonomy `Entity/地点/*` 现有叶子。homepage 主源闭集及顺序以既有 source registry 为准（Wikipedia → 百度百科 → 头条百科），主源身份可用不等于在线取证或绕过访问限制获准；第三方文章只作 `factual_reference_only`；image/video 绑定真实作品来源。
+- 实体类型只取 taxonomy `Entity/地点/*` 现有叶子。homepage 主源闭集及顺序以既有 source registry 为准（Wikipedia → 百度百科 → 头条百科），主源身份可用不等于在线取证或绕过访问限制获准；第三方文章仅 `factual_reference_only`；媒体绑定真实来源。
 - 来源访问与权利原则只由 Skill `references/sourcing.md` 拥有：访问策略、版权保留、未知权利与需授权事实只记录，不因类别阻断入池；公众可见性归运营策略。禁止技术性规避登录墙、付费墙、验证码、DRM 或反爬挑战。
 - 硬事实为 HTTPS 来源、申报 sha1（有则）与本地字节一致、bytes/sha256 精确、必填权利字段在场、独立 author/reviewer、schema/ref 与 create-once 对象身份闭包，以及显式 cohort 达到里程碑计数。权利取值、真实派生修改、水印、热度与质量评分如实记录，不伪造事实或增设质量准入门；字段与枚举只以 `schema/content/` 单一说明为准。
 - 每对象只留一个 carrier 主产物（`page.md|draft.article.md|image_work.json|video_script.json`），标题/tagRefs/creatorProfileId 由产物自身声明。author seal 校验引用与 homepage 百科主源；每对象只保留一份 seal 生成的 `content_review.json`，不允许脚本生成语义判断。

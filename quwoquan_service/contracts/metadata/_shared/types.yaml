@@ -79,7 +79,6 @@ types:
       - {name: authorDisplayName, type: string, constraints: [NOT_BLANK]}
       - {name: authorAvatarUrl, type: string, constraints: [NULLABLE]}
       - {name: contentType, type: enum, enum_ref: ContentType, constraints: [NOT_NULL]}
-      - {name: contentIdentity, type: enum, enum_ref: ContentIdentity, constraints: [NOT_NULL]}
       - {name: status, type: enum, enum_ref: PostStatus, constraints: [NOT_NULL]}
       - {name: visibility, type: enum, enum_ref: Visibility, constraints: [NOT_NULL]}
       - {name: moderationStatus, type: enum, enum_ref: ModerationStatus, constraints: [NOT_NULL]}
@@ -193,6 +192,61 @@ types:
       - { name: dimension, type: string, constraints: [NULLABLE] }
       - { name: resolvedAt, type: timestamp, constraints: [NOT_NULL] }
 
+  ListItemPostRef:
+    description: objectKind=post 的对象引用；只带 canonical identity，不复制可变展示字段。
+    fields:
+      - { name: postId, type: string, constraints: [NOT_BLANK], max_utf8_bytes: 256 }
+
+  ListItemHomepageRef:
+    description: objectKind=entity_homepage 的对象引用；主页由 entity-service 拥有，不入库为 Post。
+    fields:
+      - { name: homepageId, type: string, constraints: [NOT_BLANK], max_utf8_bytes: 256 }
+
+  ListItemPresentationEnvelope:
+    description: >-
+      混排列表项的自描述展示信封。每个展示与跳转语义只占一个出站字段（DEC-004）：
+      objectKind 选投影，contentType 做筛选与媒体槽，presentationRecipe 选首页卡，
+      openSurface 决定跳转。端一次只读一个字段做一件事，禁止用取值交叉推出第三种语义。
+      信封没有 columns / wideLayout / surface：当前页面身份来自路由上的 ContentUiSurface，
+      列数只由该面的 SurfaceLayoutPolicy 对当前视口求值（DEC-003）。
+      openSurface 与 presentationRecipe 由云按契约赋值表物化，赋值表不下发到 App（DEC-005）。
+    fields:
+      - { name: objectKind, type: enum, enum_ref: ListObjectKind, constraints: [NOT_NULL] }
+      - { name: contentType, type: enum, enum_ref: ContentType, constraints: [NULLABLE], description: objectKind=post 时必须存在；entity_homepage 必须为 null，不得用它表达主页。 }
+      - { name: presentationRecipe, type: enum, enum_ref: FeedPresentationRecipe, constraints: [NULLABLE], description: 唯一 writer 是 recommendation 建窗且只服务 home_feed（DEC-007）；其它 Surface 必须为 null，hydration 不得改写或按媒体补全。 }
+      - { name: openSurface, type: enum, enum_ref: ContentUiSurface, constraints: [NOT_NULL], description: 点击去向的唯一出站字段。目的面不存在兼容替换（DEC-008）；不在客户端闭集内时整项不下发，不得改写成旧端认识的另一个面。 }
+      - { name: post, type: ListItemPostRef, constraints: [NULLABLE], description: objectKind=post 时恰好存在，其余必须为 null。 }
+      - { name: homepage, type: ListItemHomepageRef, constraints: [NULLABLE], description: objectKind=entity_homepage 时恰好存在，其余必须为 null。 }
+
+  ClientContentPresentationContract:
+    missing_declaration:
+      contentTypes: [image, video, article]
+      listObjectKinds: [post]
+      openSurfaces: [media_immersive, article_reader]
+      presentationRecipes: [cover_media_card, article_excerpt_card]
+    description: >-
+      客户端编译期能力闭集广告（DEC-006）。四个集合与 App 生成枚举同源，由 codegen 产出，
+      禁止手写数组，也不得由 X-Client-App-Build 维护第二张「版本→能力」表。
+      云在建窗与 hydrate 之前丢弃任一字段不在闭集内的候选再补足 page size：
+      「怎么不下发」是集合差，不是 build 黑名单。contractDigest 是四个有序闭集的 canonical
+      摘要并进入窗口 identity，不同代 App 不复用同一窗口；它不是协议版本号。
+      摘要输入仅含 contentTypes、listObjectKinds、openSurfaces、presentationRecipes 四键，
+      不含 contractDigest；按键名字典序排列，各数组按 canonical wire 值的 UTF-8 字节序排列，
+      编码为无空白 UTF-8 JSON，SHA-256 输出小写十六进制并加 sha256: 前缀。
+      集合不得含重复值、未知成员或空白别名；服务端验证集合后独立计算摘要并精确比较，
+      不信任调用方摘要，不把非法声明归为缺席。空集合合法且表示该维度不支持任何成员，
+      不以全集补齐；可选 recipe 缺席不要求 recipe 集合成员。
+      只有整个能力声明缺席时使用本类型 missing_declaration 声明的固定最小集合；
+      该结构化集合是唯一生成来源，不随闭集新增自动扩大。
+      正式 App 始终携带由其生成闭集形成的显式声明。请求传输采用有界 JSON 对象，
+      集合排序只影响摘要，不改变已交付列表序位；重复 query 参数、非对象或超限输入拒绝。
+    fields:
+      - { name: contentTypes, type: '[]enum', enum_ref: ContentType, constraints: [NOT_NULL], max_items: 32 }
+      - { name: listObjectKinds, type: '[]enum', enum_ref: ListObjectKind, constraints: [NOT_NULL], max_items: 32 }
+      - { name: presentationRecipes, type: '[]enum', enum_ref: FeedPresentationRecipe, constraints: [NOT_NULL], max_items: 32 }
+      - { name: openSurfaces, type: '[]enum', enum_ref: ContentUiSurface, constraints: [NOT_NULL], max_items: 32 }
+      - { name: contractDigest, type: string, format: canonical_sha256, constraints: [NOT_NULL] }
+
   GeoPoint:
     fields:
       - { name: latitude, type: float64 }
@@ -222,11 +276,23 @@ types:
 
 enums:
   TagHeatRecurrence: [once, annual]
-  ContentType: [image, video, micro, article]
+  # Post 权威内容类型。区分点不是有无媒体，而是是否进入长文编辑器、是否有独立正文：
+  # article 由长文编辑器产出且正文是主体，image/video 以媒体为主体、文字只能短配文。
+  # 实体主页不是一种 ContentType，它由 entity-service 拥有，只经 ListObjectKind 进入混排列表。
+  ContentType: [image, video, article]
+  # 混排列表信封的对象身份轴。只表达“这一项是什么对象”，不表达展示面或卡片家族。
+  ListObjectKind: [post, entity_homepage]
+  # 页面身份闭集（DEC-002）。聚焦面（media_immersive / article_reader / homepage_detail）
+  # 与 collection 面（home_feed / profile_works）对等，都是独立 Surface，
+  # 不是详情别名、不是内容类型，也不是 source: 'home_feed'|'profile' 字符串方言。
+  # 列数不属于本枚举：它由 SurfaceLayoutPolicy(surface, windowSizeClass) 求值（DEC-003）。
+  ContentUiSurface: [home_feed, profile_works, media_immersive, article_reader, homepage_detail]
+  # 首页卡片家族。唯一 writer 是 recommendation 建窗，且只服务 home_feed（DEC-007）；
+  # profile_works / media_immersive / article_reader 的 chrome 由该 Surface 自身声明，不经推荐下发。
+  FeedPresentationRecipe: [cover_media_card, article_excerpt_card, homepage_summary_card]
   IntersectionDimension: [identity, location, content, interest, relationship]
   ArticleTemplatePreset: [gentle, ritual, diffuse, journal, tech]
   ArticleFontPreset: [clean, classic, handwritten, rounded, mono]
-  ContentIdentity: [moment, work]
   PostStatus: [pending_review, published, rejected, deleted]
   Visibility: [public, private]
   AssistantUsePolicy: [inherit, exclude]
@@ -405,6 +471,14 @@ enums:
     - tag_overlap
     - geo_proximity
     - behavior_co_engagement
+
+# 退役枚举成员的唯一 canonical 声明点，与 enums 同属该 enum 的 owner。一条记录只
+# 表示「这个取值曾被持久化、现在已不在 enums 闭集内」，供一次性存量迁移作为 exact
+# 输入识别；它不是 wire 兼容通道，读写侧闭集仍然只有 enums 里的成员。
+# 每条记录在同一行绑定 enum 与退役取值，退役取值不得与该 enum 的合法闭集重叠、
+# 不得为空白，也不得指向未声明的 enum；整个 enum 已退役时不得在此登记成员。
+retired_enum_values:
+  - {enum: ContentType, retired_value: micro}
 
 classifications:
   PUBLIC: 公开数据

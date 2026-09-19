@@ -95,7 +95,7 @@ void main() {
         command: SubmitContentPostPublicationCommand(
           publishIntentId: 'intent-should-be-ignored',
           localDraftId: 'draft-1',
-          contentType: ContentType.micro,
+          contentType: ContentType.article,
           body: 'changed after first click',
         ),
         authorPersonaId: 'persona-publication',
@@ -874,7 +874,7 @@ Future<void> _recordCompletedMedia({
 }
 
 SubmitContentPostPublicationCommand _command({
-  ContentType contentType = ContentType.micro,
+  ContentType contentType = ContentType.article,
 }) {
   return SubmitContentPostPublicationCommand(
     publishIntentId: 'intent-1',

@@ -19,7 +19,6 @@ class PublishSettings {
     this.homepage,
     this.gatheringRef = '',
     this.gatheringTitle = '',
-    this.textContentType = '',
     this.summary = '',
     this.tagRefs = const <String>[],
     this.tagLabels = const <String>[],
@@ -62,12 +61,6 @@ class PublishSettings {
   /// 关联行动标题，仅用于创作页上下文条展示，不进 payload。
   final String gatheringTitle;
 
-  /// 用户在发布确认页显式确认的文字形态（`micro` | `article`；空 = 尚未确认）。
-  ///
-  /// 系统只能「建议」形态；确认页打开时把建议值固化到此字段并允许用户修改，
-  /// 提交阶段以此为唯一真相，不得再次静默推导（GWT-001）。不进
-  /// [toPayloadFields]——payload 的 `contentType` 由 payload builder 顶层写入。
-  final String textContentType;
   final String summary;
   final List<String> tagRefs;
   final List<String> tagLabels;
@@ -125,12 +118,6 @@ class PublishSettings {
       homepage: _homepageReferenceFromDraftMap(map['homepage']),
       gatheringRef: (map['gatheringRef'] as String? ?? '').trim(),
       gatheringTitle: (map['gatheringTitle'] as String? ?? '').trim(),
-      textContentType: switch ((map['textContentType'] as String? ?? '')
-          .trim()) {
-        'micro' => 'micro',
-        'article' => 'article',
-        _ => '',
-      },
       summary: (map['summary'] as String? ?? '').trim(),
       tagRefs: List<String>.from(map['tagRefs'] as List? ?? const <String>[]),
       tagLabels: List<String>.from(
@@ -185,7 +172,6 @@ class PublishSettings {
     'homepage': _homepageReferenceToDraftMap(homepage),
     'gatheringRef': gatheringRef,
     'gatheringTitle': gatheringTitle,
-    'textContentType': textContentType,
     'summary': summary,
     'tagRefs': tagRefs,
     'tagLabels': tagLabels,
@@ -253,7 +239,6 @@ class PublishSettings {
     HomepageCanonicalReference? homepage,
     String? gatheringRef,
     String? gatheringTitle,
-    String? textContentType,
     String? summary,
     List<String>? tagRefs,
     List<String>? tagLabels,
@@ -279,7 +264,6 @@ class PublishSettings {
     gatheringTitle: clearGatheringRef
         ? ''
         : (gatheringTitle ?? this.gatheringTitle),
-    textContentType: textContentType ?? this.textContentType,
     summary: summary ?? this.summary,
     tagRefs: tagRefs ?? this.tagRefs,
     tagLabels: tagLabels ?? this.tagLabels,

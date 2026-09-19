@@ -131,7 +131,7 @@ class AppGeneratedManifestContractTest(unittest.TestCase):
             "lib/service/content_service/content/post/domain/generated/"
             "content_post_snapshot_policy.g.dart",
             "lib/service/content_service/content/post/presentation/generated/"
-            "post_read_surface_id.g.dart",
+            "surface_layout_policy.g.dart",
             "lib/service/circle_service/circle_management/circle/presentation/generated/"
             "circle_ui_config.g.dart",
             "lib/service/entity_service/entity_homepage/homepage/application/public/generated/"

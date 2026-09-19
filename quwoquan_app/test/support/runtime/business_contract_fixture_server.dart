@@ -245,7 +245,6 @@ final class BusinessContractFixtureServer {
           'items': _filteredFeed(request.uri.queryParameters),
           'outcome': 'content',
           'feedRequestId': 'fixture-feed-request-1',
-          'objectCards': const <Map<String, Object?>>[],
         });
         return;
       }
@@ -412,14 +411,8 @@ final class BusinessContractFixtureServer {
         ((_fixtures.contentSeed['posts'] as List<dynamic>)
                 .cast<Map<String, dynamic>>())
             .toList(growable: false);
-    final identity = query['identity'];
     final type = query['type'];
     final limit = int.tryParse(query['limit'] ?? '');
-    if (identity != null && identity.isNotEmpty) {
-      items = items
-          .where((item) => item['contentIdentity'] == identity)
-          .toList(growable: false);
-    }
     if (type != null && type.isNotEmpty) {
       items = items
           .where((item) => item['contentType'] == type)
@@ -428,7 +421,10 @@ final class BusinessContractFixtureServer {
     if (limit != null) {
       items = items.take(limit).toList(growable: false);
     }
-    return items.map(_contentFeedWire).toList(growable: false);
+    return items
+        .map(contentListItemWireFromReadModelMap)
+        .map(Map<String, dynamic>.from)
+        .toList(growable: false);
   }
 
   Map<String, dynamic> _contentFeedWire(Map<String, dynamic> source) =>
@@ -454,7 +450,6 @@ final class BusinessContractFixtureServer {
       'createdAt': wire['createdAt'],
       'updatedAt': wire['updatedAt'],
       for (final field in const <String>[
-        'contentIdentity',
         'assistantUsePolicy',
         'authorId',
         'authorDisplayName',

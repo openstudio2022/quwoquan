@@ -243,7 +243,7 @@ abstract final class ProfileText {
   static const String lifestyleSubSoul = '书影音';
   static const String lifestyleSubTaste = '味蕾';
   static const String lifestyleSubPrivate = '爱物';
-  static const String creationSubAll = '全部', creationSubMicro = '点滴';
+  static const String creationSubAll = '全部';
   static const String creationSubImage = '图片', creationSubVideo = '视频';
   static const String creationSubArticle = '文章', creationSubText = '长文';
   static const String profileCompletenessSubtitle = '补全头像、标签、圈子与实体，让连接更容易被看见';

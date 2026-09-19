@@ -74,22 +74,23 @@ type appLaunchArtifactSchemas struct {
 }
 
 type appLaunchArtifactMetadata struct {
-	SchemaID             string                                   `yaml:"schema_id"`
-	Description          string                                   `yaml:"description"`
-	Owner                string                                   `yaml:"owner"`
-	DigestContract       appLaunchDigestContract                  `yaml:"digest_contract"`
-	Environments         []string                                 `yaml:"environments"`
-	Platforms            []string                                 `yaml:"platforms"`
-	BuildModes           []string                                 `yaml:"build_modes"`
-	WebApplicationID     string                                   `yaml:"web_application_id"`
-	ArtifactFormats      []string                                 `yaml:"artifact_formats"`
-	BuildProfiles        map[string]appLaunchBuildProfileContract `yaml:"build_profiles"`
-	BuildProducts        yaml.Node                                `yaml:"build_products"`
-	DistributionClasses  yaml.Node                                `yaml:"distribution_classes"`
-	ApplicationIdentity  appLaunchArtifactApplicationIdentity     `yaml:"application_identity"`
-	LaunchProvenances    []string                                 `yaml:"launch_provenances"`
-	DistributionChannels yaml.Node                                `yaml:"distribution_channels"`
-	Schemas              appLaunchArtifactSchemas                 `yaml:"schemas"`
+	SchemaID               string                                   `yaml:"schema_id"`
+	Description            string                                   `yaml:"description"`
+	Owner                  string                                   `yaml:"owner"`
+	DigestContract         appLaunchDigestContract                  `yaml:"digest_contract"`
+	Environments           []string                                 `yaml:"environments"`
+	Platforms              []string                                 `yaml:"platforms"`
+	BuildModes             []string                                 `yaml:"build_modes"`
+	WebApplicationID       string                                   `yaml:"web_application_id"`
+	ArtifactFormats        []string                                 `yaml:"artifact_formats"`
+	BuildProfiles          map[string]appLaunchBuildProfileContract `yaml:"build_profiles"`
+	BuildProducts          yaml.Node                                `yaml:"build_products"`
+	AndroidRuntimeProfiles yaml.Node                                `yaml:"android_runtime_profiles"`
+	DistributionClasses    yaml.Node                                `yaml:"distribution_classes"`
+	ApplicationIdentity    appLaunchArtifactApplicationIdentity     `yaml:"application_identity"`
+	LaunchProvenances      []string                                 `yaml:"launch_provenances"`
+	DistributionChannels   yaml.Node                                `yaml:"distribution_channels"`
+	Schemas                appLaunchArtifactSchemas                 `yaml:"schemas"`
 }
 
 type appLaunchRuntimeConfigSourceIdentity struct {

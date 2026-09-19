@@ -4,8 +4,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
 import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/discovery_feed_page.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/discovery_feed_resident_page_window.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_feed_object_card.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show AssistantUsePolicy, ContentPostProjection, FeedObjectCard;
+    show AssistantUsePolicy, ContentPostProjection, ContentType;
+
+import '../../../../../support/service/content_service/content/feed_delivery_page/content_feed_object_card_test_builder.dart';
 
 void main() {
   test('resident window keeps four visible pages and six retained pages', () {
@@ -96,14 +99,8 @@ void main() {
       incomingCursor: 'cursor_1',
       page: DiscoveryFeedPage(
         items: remoteItems,
-        objectCards: <FeedObjectCard>[
-          FeedObjectCard(
-            objectKind: 'homepage',
-            objectId: 'object_after_duplicate',
-            title: 'Object after duplicate',
-            tagRefs: const <String>[],
-            anchorIndex: 3,
-          ),
+        objectCards: <ContentFeedObjectCard>[
+          buildContentFeedObjectCard(homepageId: 'object_after_duplicate', title: 'Object after duplicate', anchorIndex: 3),
         ],
         nextCursor: 'cursor_2',
       ),
@@ -123,21 +120,9 @@ void main() {
           incomingCursor: null,
           page: DiscoveryFeedPage(
             items: items,
-            objectCards: <FeedObjectCard>[
-              FeedObjectCard(
-                objectKind: 'homepage',
-                objectId: 'object_before_last',
-                title: 'Object before last',
-                tagRefs: const <String>[],
-                anchorIndex: 3,
-              ),
-              FeedObjectCard(
-                objectKind: 'homepage',
-                objectId: 'object_after_page',
-                title: 'Object after page',
-                tagRefs: const <String>[],
-                anchorIndex: 4,
-              ),
+            objectCards: <ContentFeedObjectCard>[
+              buildContentFeedObjectCard(homepageId: 'object_before_last', title: 'Object before last', anchorIndex: 3),
+              buildContentFeedObjectCard(homepageId: 'object_after_page', title: 'Object after page', anchorIndex: 4),
             ],
             nextCursor: 'cursor_1',
           ),
@@ -196,28 +181,10 @@ void main() {
           incomingCursor: null,
           page: DiscoveryFeedPage(
             items: items,
-            objectCards: <FeedObjectCard>[
-              FeedObjectCard(
-                objectKind: 'homepage',
-                objectId: 'object_before_removed',
-                title: 'Object before removed',
-                tagRefs: const <String>[],
-                anchorIndex: 1,
-              ),
-              FeedObjectCard(
-                objectKind: 'homepage',
-                objectId: 'object_after_removed',
-                title: 'Object after removed',
-                tagRefs: const <String>[],
-                anchorIndex: 3,
-              ),
-              FeedObjectCard(
-                objectKind: 'homepage',
-                objectId: 'object_after_page',
-                title: 'Object after page',
-                tagRefs: const <String>[],
-                anchorIndex: 4,
-              ),
+            objectCards: <ContentFeedObjectCard>[
+              buildContentFeedObjectCard(homepageId: 'object_before_removed', title: 'Object before removed', anchorIndex: 1),
+              buildContentFeedObjectCard(homepageId: 'object_after_removed', title: 'Object after removed', anchorIndex: 3),
+              buildContentFeedObjectCard(homepageId: 'object_after_page', title: 'Object after page', anchorIndex: 4),
             ],
             nextCursor: 'cursor_1',
           ),
@@ -273,14 +240,8 @@ DiscoveryFeedResidentPage _page(int pageIndex) {
     incomingCursor: pageIndex == 0 ? null : 'cursor_$pageIndex',
     page: DiscoveryFeedPage(
       items: List.generate(20, (index) => _post(pageIndex, index)),
-      objectCards: <FeedObjectCard>[
-        FeedObjectCard(
-          objectKind: 'homepage',
-          objectId: 'object_$pageIndex',
-          title: 'Object $pageIndex',
-          tagRefs: const <String>[],
-          anchorIndex: 1,
-        ),
+      objectCards: <ContentFeedObjectCard>[
+        buildContentFeedObjectCard(homepageId: 'object_$pageIndex', title: 'Object $pageIndex', anchorIndex: 1),
       ],
       nextCursor: 'cursor_${pageIndex + 1}',
       previousCursor: pageIndex == 0 ? null : 'previous_cursor_$pageIndex',
@@ -294,8 +255,7 @@ ContentPostViewData _post(int pageIndex, int itemIndex) {
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: 'page_${pageIndex}_post_$itemIndex',
-      contentType: 'micro',
-      contentIdentity: 'moment',
+      contentType: ContentType.article,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author_$pageIndex',
       authorDisplayName: 'Window Author',

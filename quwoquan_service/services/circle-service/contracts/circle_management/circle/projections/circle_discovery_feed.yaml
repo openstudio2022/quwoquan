@@ -25,7 +25,6 @@ source_events:
 - PostPublished
 - PostUpdated
 - PostSettingsUpdated
-- PostPromotedToWork
 - PostModerationRejected
 - PostDeleted
 - PostPrivacyRedacted

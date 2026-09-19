@@ -78,7 +78,7 @@ class MongoReleaseCandidateOps:
             raise ReleaseNotReady("candidate object set or document drift")
         return event
 
-    def list_release_for_ranking(self, fence, *, scenario, subject_id, limit):
+    def list_release_for_ranking(self, fence, *, scenario, subject_id, limit, eligible_content_types=None):
         if self._release_runtime_binding is None:
             raise ReleaseNotReady("managed candidate binding not configured")
         binding = self._release_runtime_binding(fence.release)
@@ -95,21 +95,27 @@ class MongoReleaseCandidateOps:
                 row = self._release_premium.find_one({"_id": digest({"release": binding.release, "id": p.identity.objectId})})
                 if row and row["ownerStatus"] == "active":
                     a = row["admission"]
-                    if a["source"] == canonical(p.identity) and a["status"] == "active" and a["qualityAdmission"] == "approved" and a["scope"] == "global" and a["qualityScore"] >= .75 and datetime.fromisoformat(a["expiresAt"].replace("Z", "+00:00")) > now and p.contentType == "video" and p.contentIdentity == "work" and p.videoUrl and p.durationMs > 0:
+                    if a["source"] == canonical(p.identity) and a["status"] == "active" and a["qualityAdmission"] == "approved" and a["scope"] == "global" and a["qualityScore"] >= .75 and datetime.fromisoformat(a["expiresAt"].replace("Z", "+00:00")) > now and p.contentType == "video" and p.videoUrl and p.durationMs > 0:
                         allowed.add(p.identity.objectId)
         following = set(self.following_persona_ids(subject_id)) if scenario == "following" else None
         out = []
-        for p in event.snapshot.posts:
+        for p in self._presentable_release_posts(event.snapshot.posts, eligible_content_types):
             if p.status != "published" or p.visibility != "public" or p.moderationStatus != "approved": continue
             if allowed is not None and p.identity.objectId not in allowed: continue
             if following is not None and p.authorId not in following: continue
             if scenario == "travel_photography" and p.contentVertical != scenario: continue
             if self._account_restrictions.find_one({"subjectIds": p.authorId, "restricted": True}): continue
             out.append({"contentId": p.identity.objectId, "contentType": p.contentType, "authorId": p.authorId, "tagRefs": p.tagRefs, "entityRefs": p.entityRefs, "publishedAt": p.publishedAt, "updatedAt": p.updatedAt, "qualityScore": 0, "likeCount": 0, "commentCount": 0, "shareCount": 0, "viewCount": 0, "supplySource": "qwq_data", "contentVertical": p.contentVertical, "intersectionFeatures": {}, "recallPath": "premium_pool" if allowed is not None else "explore_recall"})
-        ordinary = self.list_for_ranking(scenario=scenario, subject_id=subject_id, limit=limit)
+        ordinary = self.list_for_ranking(scenario=scenario, subject_id=subject_id, limit=limit, eligible_content_types=eligible_content_types)
         ids = {d["contentId"] for d in out}
         if any(d["contentId"] in ids for d in ordinary): raise ReleaseCandidateError("cross-source public identity collision")
         return (out + ordinary)[:limit]
+
+    @staticmethod
+    def _presentable_release_posts(posts, eligible_content_types):
+        if eligible_content_types is None:
+            return posts
+        return tuple(post for post in posts if post.contentType in eligible_content_types)
 
     def read_release_supply_projection(self, binding, snapshot_digest, *, now=None):
         """只读重算完整home供给S与当前premium子集P；结果不是readiness proof。"""
@@ -134,7 +140,7 @@ class MongoReleaseCandidateOps:
             if admission["source"] != canonical(post.identity):
                 continue
             until = datetime.fromisoformat(admission["expiresAt"].replace("Z", "+00:00"))
-            if (row["ownerStatus"] == "active" and admission["status"] == "active" and admission["scope"] == "global" and admission["qualityAdmission"] == "approved" and admission["qualityScore"] >= .75 and until > now and post.contentIdentity == "work" and post.contentType == "video" and post.videoUrl and post.durationMs > 0):
+            if (row["ownerStatus"] == "active" and admission["status"] == "active" and admission["scope"] == "global" and admission["qualityAdmission"] == "approved" and admission["qualityScore"] >= .75 and until > now and post.contentType == "video" and post.videoUrl and post.durationMs > 0):
                 if digest(admission, "admissionDigest") != admission["admissionDigest"]:
                     raise ReleaseCandidateError("premium storage digest drift")
                 premium.append(post)

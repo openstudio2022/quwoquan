@@ -43,14 +43,19 @@ void main() {
           SubmitContentPostPublicationCommand(
             publishIntentId: 'profile-interaction-uat-$suffix',
             localDraftId: 'profile-interaction-uat-draft-$suffix',
-            contentType: ContentType.micro,
-            contentIdentity: ContentIdentity.moment,
-            body: '互动投影验收对象 $suffix',
+            contentType: ContentType.article,
+            articleMarkdown:
+                '---\nmarkdownDialect: qwq-rich-md\n---\n\n'
+                '互动投影验收对象 $suffix',
             visibility: Visibility.public,
           ),
         );
         postId = publication.postId;
-        expect(postId.trim(), isNotEmpty, reason: 'publication must return postId');
+        expect(
+          postId.trim(),
+          isNotEmpty,
+          reason: 'publication must return postId',
+        );
         await harness.comments.createComment(
           CreateContentCommentCommand(postId: postId, content: commentBody),
         );
@@ -67,9 +72,8 @@ void main() {
         await launchPatrolAppOnce($);
         await patrolGoTo($, AppRoutePaths.profile);
 
-        await $(
-          find.text(ProfileText.profileTabInteraction),
-        ).waitUntilVisible(timeout: const Duration(seconds: 20));
+        await $(find.text(ProfileText.profileTabInteraction))
+            .waitUntilVisible(timeout: const Duration(seconds: 20));
         await $(find.text(ProfileText.profileTabInteraction)).tap();
 
         final rendered = await _waitForCreatedInteraction($, commentBody);

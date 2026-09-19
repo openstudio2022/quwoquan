@@ -306,7 +306,11 @@ def _rights_snapshot_refs(
 def _object_root(canonical: Path, kind: str, ref: str) -> Path:
     from content.release.canonical.aggregate_release_closure import object_root
 
-    return object_root(canonical, kind, ref.removeprefix(f"{kind}/"))
+    logical = ref.removeprefix(f"{kind}/")
+    direct = canonical / kind / logical
+    if direct.is_dir():
+        return direct
+    return object_root(canonical, kind, logical)
 
 
 def build_release_media_manifest(
@@ -327,6 +331,7 @@ def build_release_media_manifest(
     """
     canonical = publish_root or PUBLISH_ROOT
     objects = object_root or canonical
+    packaged_objects = object_root is not None
     assets: dict[str, dict[str, Any]] = {}
     slice_owners: dict[str, str] = {}
     issues: list[str] = []
@@ -336,7 +341,8 @@ def build_release_media_manifest(
         ("entities", entity_refs),
     ):
         for ref in refs:
-            selected_object = _object_root(objects, kind, ref)
+            logical_ref = ref.removeprefix(f"{kind}/")
+            selected_object = (objects / kind / logical_ref) if packaged_objects else _object_root(objects, kind, logical_ref)
             if not selected_object.is_dir():
                 issues.append(f"object missing: {kind}/{ref}")
                 continue
@@ -355,7 +361,7 @@ def build_release_media_manifest(
                 try:
                     physical = _carried_path(selected_object, object_key)
                 except (OSError, ValueError):
-                    issues.append(f"carried object missing: {kind}/{ref}:{object_key}")
+                    issues.append(f"carried object missing: {kind}/{logical_ref}:{object_key}")
                     continue
                 actual = sha256_file(physical)
                 if actual != expected or physical.stat().st_size != row.get("bytes"):
@@ -483,7 +489,8 @@ def _carried_path(root: Path, relative: str) -> Path:
             or any(part in {"", ".", ".."} for part in relative.split("/"))):
         raise ValueError(f"invalid carried media ref: {relative}")
     candidate = root / relative
-    if any(path.is_symlink() for path in (candidate, *candidate.parents)):
+    bounded = (candidate, *candidate.parents[:len(Path(relative).parts)])
+    if any(path.is_symlink() for path in bounded):
         raise ValueError(f"carried media symlink: {relative}")
     if not candidate.is_file():
         raise ValueError(f"carried media missing: {relative}")
@@ -526,7 +533,9 @@ def copy_release_media_objects(
         if sha256_file(source) != expected or source.stat().st_size != row.get("bytes"):
             raise ValueError(f"release media source is missing or corrupt: {expected}")
         target = payload_file(release_root, delivery_key)
-        if any(path.is_symlink() for path in (target, *target.parents)):
+        payload_root = payload_file(release_root, "")
+        bounded = (target, *target.parents[:len(Path(delivery_key).parts)])
+        if any(path.is_symlink() for path in bounded) or not target.is_relative_to(payload_root):
             raise ValueError(f"release media symlink: {delivery_key}")
         if target.is_file():
             if sha256_file(target) != expected or target.stat().st_size != row.get("bytes"):
@@ -556,13 +565,14 @@ def materialize_release_media(
 ) -> dict[str, Any]:
     """Freeze the exact canonical CAS closure into one release payload."""
     release = (release_root or RELEASE_ROOT) / release_id
+    objects = payload_file(release, "objects")
     manifest = build_release_media_manifest(
         release_id=release_id,
         post_refs=post_refs,
         entity_refs=entity_refs,
         creator_refs=creator_refs,
         publish_root=publish_root,
-        object_root=payload_file(release, "objects"),
+        object_root=objects if objects.is_dir() else publish_root,
         source_owner=source_owner,
     )
     if manifest["issues"]:

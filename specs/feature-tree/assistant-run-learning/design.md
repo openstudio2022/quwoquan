@@ -37,7 +37,7 @@
 - [`run-stream-policy`](./run-stream-policy/spec.md)：规范助手 Run/Stream 主链路的协议、策略模板与域路由行为。
 - [`skill-product-integration-platform`](./skill-product-integration-platform/spec.md)：把 active package、用户设置、Consent、主动 Subscription、共享 Placement、Domain Reader 和 Connector grant 组合为用户可理解的 Skill 生命周期。
 - [`world-class-trinity-experience-baseline`](./world-class-trinity-experience-baseline/spec.md)：以统一 Agent 主线、Skill 中心、Markdown-first 输出、可解释折叠过程与显式偏好回注，提供可持续扩展且可回退的小趣体验。
-- 工程边界由 spec 的“工程归属”声明；设计不复制具体实现文件。
+- Feature 层表达业务与设计边界；工程影响由 current actual diff 与 dependency closure 推导。
 
 ## 5. 关键决策
 

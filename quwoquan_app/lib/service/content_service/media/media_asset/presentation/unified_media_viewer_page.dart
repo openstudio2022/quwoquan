@@ -38,7 +38,6 @@ class _UnifiedMediaViewerPageState
         externalPostViews: widget.extra.posts,
         initialPostIndex: widget.extra.initialIndex,
         initialImageIndex: widget.extra.initialImageIndex,
-        source: widget.extra.source,
         referralSource: widget.extra.referralSource,
         feedRequestId: widget.extra.feedRequestId,
         policyDigest: widget.extra.policyDigest,

@@ -153,16 +153,19 @@ def test_gamma_startup_derives_managed_connections_ignoring_caller_env(monkeypat
     path=tmp_path/"missing-current.json"; monkeypatch.setattr(entry,"_source_current_path",lambda target:path)
     monkeypatch.setattr(entry.output_paths,"deployment_target_path",lambda *parts:(tmp_path/"material").absolute())
     monkeypatch.setattr(entry,"_apply_connections",lambda *args,**kwargs:(captured.update(kwargs) or object()))
-    monkeypatch.setattr(entry,"_gamma_local_source_password",lambda:"managed-source-secret")
+    monkeypatch.setattr(entry,"_gamma_local_source_password",lambda *args, **kwargs:"managed-source-secret")
     monkeypatch.setattr(entry,"_publish_source_current",lambda *args:("descriptor"))
     descriptor, actual, actual_binding, connections=entry.ensure_source_allocation_for_locked_up("gamma-local")
     assert descriptor=="descriptor" and actual is selected and actual_binding is binding
     assert connections["pg_admin"].startswith("postgresql://quwoquan:quwoquan@127.0.0.1:")
     assert "evil.invalid" not in repr(connections)
     assert captured["management_connections"]==connections
+    alpha_descriptor, alpha_actual, alpha_binding, alpha_connections=entry.ensure_source_allocation_for_locked_up("alpha-local")
+    assert alpha_descriptor=="descriptor" and alpha_actual is selected and alpha_binding is binding
+    assert alpha_connections["pg_admin"].startswith("postgresql://quwoquan:quwoquan@127.0.0.1:")
     with pytest.raises(ValueError,match="forbidden"):
         entry.ensure_source_allocation_for_locked_up("gamma-local",management_connections=connections)
-    with pytest.raises(ValueError,match="gamma-local only"):
+    with pytest.raises(ValueError,match="does not support"):
         entry.ensure_source_allocation_for_locked_up("prod-hosted")
 
 

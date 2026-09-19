@@ -12,8 +12,7 @@ ContentPostViewData contentCachePostFixture(
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: id,
-      contentType: 'micro',
-      contentIdentity: 'moment',
+      contentType: ContentType.article,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: authorId,
       authorDisplayName: '用户一',
@@ -39,7 +38,6 @@ ContentPostDetailPayload contentCacheDetailPayloadFixture(
     ContentPostDetailSlice(
       postId: id,
       contentType: resolvedPost.type,
-      contentIdentity: resolvedPost.identity,
       assistantUsePolicy: resolvedPost.assistantUsePolicy,
       authorId: resolvedPost.authorId,
       authorDisplayName: resolvedPost.displayName,

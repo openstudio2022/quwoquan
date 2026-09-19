@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -112,168 +111,35 @@ void main() {
     );
   });
 
-  test('CallKit/FCM 是 startup-critical 且后台 handler 不直接拉起 Activity', () {
-    final pluginPolicy = File(
-      '${appRoot.path}/configs/plugin_registration_policy.json',
-    ).readAsStringSync();
-    final deferredRegistry = File(
-      '${appRoot.path}/android/app/src/main/java/com/quwoquan/quwoquan_app/'
-      'StartupDeferredPluginRegistry.java',
-    ).readAsStringSync();
-    final eagerRegistry = File(
-      '${appRoot.path}/android/app/src/main/java/com/quwoquan/quwoquan_app/'
-      'StartupEagerPluginRegistry.java',
-    ).readAsStringSync();
-    final firebaseRuntime = File(
-      '${appRoot.path}/lib/runtime/platform/firebase_incoming_call_runtime.dart',
-    ).readAsStringSync();
-    final bootstrap = File(
-      '${appRoot.path}/lib/runtime/shell/startup/app_bootstrap.dart',
-    ).readAsStringSync();
-    final pushEndpointGateway = File(
-      '${appRoot.path}/lib/runtime/platform/push_endpoint_gateway.dart',
-    ).readAsStringSync();
-    final incomingCallPresenter = File(
-      '${appRoot.path}/lib/runtime/platform/incoming_call_native_presenter.dart',
-    ).readAsStringSync();
-    final androidSettings = File('${appRoot.path}/android/settings.gradle.kts')
-        .readAsStringSync();
-    final androidAppBuild = File('${appRoot.path}/android/app/build.gradle.kts')
-        .readAsStringSync();
-    final androidNativeBridge = File(
-      '${appRoot.path}/android/app/src/main/java/com/quwoquan/quwoquan_app/'
-      'IncomingCallNativeBridgePlugin.java',
-    ).readAsStringSync();
-    final iosCallKitPlugin = File(
-      '${appRoot.path}/vendor/plugins/flutter_callkit_incoming/ios/'
-      'flutter_callkit_incoming/Classes/SwiftFlutterCallkitIncomingPlugin.swift',
-    ).readAsStringSync();
-    final androidCallKitPlugin = File(
-      '${appRoot.path}/vendor/plugins/flutter_callkit_incoming/android/src/'
-      'main/kotlin/com/hiennv/flutter_callkit_incoming/'
-      'FlutterCallkitIncomingPlugin.kt',
-    ).readAsStringSync();
-    final decodedPolicy = jsonDecode(pluginPolicy) as Map<String, Object?>;
-    final eagerPlugins = (decodedPolicy['eagerRuntime'] as List).cast<String>();
-    final deferredRtcPlugins = (decodedPolicy['rtc'] as List).cast<String>();
-    expect(
-      pluginPolicy,
-      contains(
-        '"com.hiennv.flutter_callkit_incoming.'
-        'FlutterCallkitIncomingPlugin"',
-      ),
-    );
-    expect(
-      eagerPlugins,
-      contains(
-        'com.hiennv.flutter_callkit_incoming.'
-        'FlutterCallkitIncomingPlugin',
-      ),
-    );
-    expect(
-      eagerPlugins,
-      contains('io.flutter.plugins.firebase.core.FlutterFirebaseCorePlugin'),
-    );
-    expect(
-      eagerPlugins,
-      contains(
-        'io.flutter.plugins.firebase.messaging.'
-        'FlutterFirebaseMessagingPlugin',
-      ),
-    );
-    expect(
-      eagerPlugins,
-      contains('io.flutter.plugins.sharedpreferences.SharedPreferencesPlugin'),
-    );
-    expect(
-      deferredRtcPlugins,
-      isNot(
-        contains(
-          'com.hiennv.flutter_callkit_incoming.'
-          'FlutterCallkitIncomingPlugin',
-        ),
-      ),
-    );
-    expect(
-      pluginPolicy,
-      contains('"io.flutter.plugins.firebase.core.FlutterFirebaseCorePlugin"'),
-    );
-    expect(
-      pluginPolicy,
-      contains(
-        '"io.flutter.plugins.firebase.messaging.'
-        'FlutterFirebaseMessagingPlugin"',
-      ),
-    );
-    expect(deferredRegistry, isNot(contains('FlutterCallkitIncomingPlugin')));
-    expect(deferredRegistry, isNot(contains('SharedPreferencesPlugin')));
-    expect(eagerRegistry, contains('FlutterCallkitIncomingPlugin'));
-    expect(eagerRegistry, contains('SharedPreferencesPlugin'));
-    expect(eagerRegistry, isNot(contains('FlutterWebRTCPlugin')));
-    expect(firebaseRuntime, contains("@pragma('vm:entry-point')"));
-    expect(firebaseRuntime, contains('onBackgroundMessage'));
-    expect(firebaseRuntime, contains('canUseFullScreenIntent'));
-    expect(firebaseRuntime, contains('IncomingCallPushEnvelope.fromMap'));
-    expect(firebaseRuntime, contains('IncomingCallPushAction.cancel'));
-    expect(
-      bootstrap.indexOf('registerFirebaseIncomingCallBackgroundHandler()'),
-      lessThan(bootstrap.indexOf('runApp(')),
-    );
-    expect(
-      pushEndpointGateway,
-      contains('FlutterSecurePushEndpointSecretStore'),
-    );
-    expect(pushEndpointGateway, isNot(contains('setString(_activeKey')));
-    expect(RegExp(r'\bstartActivity\s*\(').hasMatch(firebaseRuntime), isFalse);
-    expect(firebaseRuntime, isNot(contains('requestPermission')));
-    expect(incomingCallPresenter, contains('isFullScreen: false'));
-    expect(
-      incomingCallPresenter,
-      contains('isShowFullLockedScreen: fullScreenAllowed'),
-    );
-    expect(androidSettings, contains('id("com.google.gms.google-services")'));
-    expect(androidAppBuild, contains('googleServicesConfig.isFile'));
-    expect(
-      androidAppBuild,
-      contains('Firebase incoming calls remain fail-closed'),
-    );
-    expect(androidAppBuild, contains('shipsProductionBinary'));
-    expect(
-      androidAppBuild,
-      contains(
-        'production Android build requires android/app/google-services.json',
-      ),
-    );
-    expect(androidNativeBridge, isNot(contains('"backgroundPushConfigured"')));
-    expect(androidNativeBridge, isNot(contains('"google_app_id"')));
-    expect(androidNativeBridge, isNot(contains('startActivity(')));
-    expect(iosCallKitPlugin, contains('registeredMessengerIds'));
-    expect(
-      iosCallKitPlugin,
-      contains('guard !registeredMessengerIds.contains(messengerId)'),
-    );
-    final attachedToEngineBody = RegExp(
-      r'override fun onAttachedToEngine\([^\{]+\) \{(?<body>.*?)\n    \}',
-      dotAll: true,
-    ).firstMatch(androidCallKitPlugin)?.namedGroup('body');
-    expect(attachedToEngineBody, isNotNull);
-    expect(attachedToEngineBody, contains('sharePluginWithRegister'));
-    expect(attachedToEngineBody, contains('schedulePhoneAccountRegistration'));
-    expect(
-      attachedToEngineBody,
-      isNot(contains('.registerPhoneAccount()')),
-      reason: 'Telecom Binder 注册不得阻塞 Flutter 主线程的 engine attach',
-    );
-    expect(
-      androidCallKitPlugin,
-      contains('phoneAccountRegistrationInFlight.compareAndSet(false, true)'),
-    );
-    expect(androidCallKitPlugin, contains('Executors.newSingleThreadExecutor'));
-    expect(androidCallKitPlugin, contains('isDaemon = true'));
-    expect(androidCallKitPlugin, contains('registrationExecutor.shutdown()'));
-    expect(
-      androidCallKitPlugin,
-      contains('PhoneAccount registration failed off the main thread.'),
-    );
+  test('Android startup and dependencies are Google-service-free', () {
+    final sources =
+        <String>[
+              'configs/plugin_registration_policy.json',
+              'android/settings.gradle.kts',
+              'android/build.gradle.kts',
+              'android/app/build.gradle.kts',
+              'android/app/src/main/java/com/quwoquan/quwoquan_app/StartupEagerPluginRegistry.java',
+              'lib/runtime/shell/startup/app_bootstrap.dart',
+              'pubspec.yaml',
+              'pubspec.lock',
+            ]
+            .map((path) => File('${appRoot.path}/$path').readAsStringSync())
+            .join('\n');
+    for (final forbidden in <String>[
+      'firebase_core',
+      'firebase_messaging',
+      'com.google.gms.google-services',
+      'com.google.firebase.crashlytics',
+      'com.google.android.gms:play-services',
+      'google-'
+          'services.json',
+      'google_app_id',
+      'mobile_scanner',
+    ]) {
+      expect(sources, isNot(contains(forbidden)), reason: forbidden);
+    }
+    expect(sources, contains('FlutterCallkitIncomingPlugin'));
+    expect(sources, contains('androidx.core:core-splashscreen'));
+    expect(sources, contains('google()'));
   });
 }

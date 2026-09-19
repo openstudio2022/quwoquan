@@ -173,7 +173,7 @@ AppTelemetryPayload? _publicationTelemetryFor(
 String _publicationContentType(Object? raw) {
   final normalized = raw?.toString().trim() ?? '';
   return switch (normalized) {
-    'micro' || 'article' || 'image' || 'video' => normalized,
+    'article' || 'image' || 'video' => normalized,
     _ => 'unknown',
   };
 }

@@ -15,6 +15,10 @@ PY
   )" || { echo "[local-gamma] GATE_BLOCK: managed Redis ACL material unavailable" >&2; exit 2; }
   eval "$redis_acl_projection"
   export LOCAL_GAMMA_REDIS_ACL_FILE LOCAL_GAMMA_REDIS_RUNTIME_PASSWORD_FILE
+  if [[ ! -f "${LOCAL_GAMMA_REDIS_ACL_FILE:-}" || -L "${LOCAL_GAMMA_REDIS_ACL_FILE:-}" ]]; then
+    echo "[local-gamma] GATE_BLOCK: managed Redis ACL file is unavailable" >&2
+    exit 2
+  fi
 
   compose_cmd=(docker compose -p "$LOCAL_GAMMA_COMPOSE_PROJECT_NAME" "${COMPOSE_FILE_ARGS[@]}")
   if [[ "$EARLY_BUILD_ONLY" != "1" && "$LOCAL_RUN_ACTION" == "up" ]]; then
@@ -39,7 +43,11 @@ PY
 import json, subprocess, sys
 from pathlib import Path
 out, *command = sys.argv[1:]
-document = json.loads(subprocess.run([*command, "config", "--format", "json"], check=True, capture_output=True, text=True).stdout)
+result = subprocess.run([*command, "config", "--format", "json"], capture_output=True, text=True)
+if result.returncode != 0:
+    sys.stderr.write(result.stderr or result.stdout or "docker compose config failed\n")
+    raise SystemExit(result.returncode)
+document = json.loads(result.stdout)
 services = {}
 for name, definition in document.get("services", {}).items():
     environment = definition.get("environment") or {}
@@ -67,12 +75,12 @@ prepare_service_core_runtime_authorities() {
   # User schema/runtime 身份由 source allocator 同轨创建。source owner 已完成
   # migration；service-core 只消费独立最小权限 runtime DSN。
   local user_postgres_projection=""
-  if [[ "$QWQ_LOCAL_RELEASE_TARGET" == "gamma-local" ]]; then
+  if [[ "$QWQ_LOCAL_RELEASE_TARGET" == "alpha-local" || "$QWQ_LOCAL_RELEASE_TARGET" == "beta-local" || "$QWQ_LOCAL_RELEASE_TARGET" == "gamma-local" ]]; then
     if ! user_postgres_projection="$(
     PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 "$QWQ_STACKCTL_PYTHON" -B - <<'PY_RUNTIME_PG'
 import shlex
 from quwoquan_ops.cli.commands.source_allocation import gamma_local_user_runtime_postgres_dsn
-print("export QWQ_USER_RUNTIME_POSTGRES_DSN=" + shlex.quote(gamma_local_user_runtime_postgres_dsn()))
+print("export QWQ_USER_RUNTIME_POSTGRES_DSN=" + shlex.quote(gamma_local_user_runtime_postgres_dsn(__import__("os").environ.get("QWQ_LOCAL_RELEASE_TARGET",""))))
 PY_RUNTIME_PG
     )"; then
       echo "[local-gamma] GATE_BLOCK: managed User runtime PostgreSQL binding unavailable" >&2
@@ -98,16 +106,17 @@ PY_RUNTIME_PG_OVERRIDE
   # 外层 stackctl up 已持有 target operation lock；这里直接调用同一 canonical
   # library，不能再经会重复取锁的公开子命令，也不能先启动服务再补材料。
   local post_safety_projection=""
-  if [[ "$QWQ_LOCAL_RELEASE_TARGET" == "gamma-local" ]]; then
+  if [[ "$QWQ_LOCAL_RELEASE_TARGET" == "alpha-local" || "$QWQ_LOCAL_RELEASE_TARGET" == "beta-local" || "$QWQ_LOCAL_RELEASE_TARGET" == "gamma-local" ]]; then
     if ! post_safety_projection="$(
     PYTHONPATH="$ROOT" PYTHONDONTWRITEBYTECODE=1 "$QWQ_STACKCTL_PYTHON" -B - <<'PY'
+import os
 import shlex
 
 from quwoquan_ops.cli.commands.post_safety_runtime import (
 ensure_post_safety_runtime_for_locked_up,
 )
 
-projection = ensure_post_safety_runtime_for_locked_up("gamma-local")
+projection = ensure_post_safety_runtime_for_locked_up(os.environ["QWQ_LOCAL_RELEASE_TARGET"])
 for key, source in (
     ("CONTENT_POST_SAFETY_HMAC_SECRET_REF", "hmacSecretRef"),
     ("CONTENT_POST_SAFETY_RECOVERY_EVIDENCE_REF", "recoveryEvidenceRef"),

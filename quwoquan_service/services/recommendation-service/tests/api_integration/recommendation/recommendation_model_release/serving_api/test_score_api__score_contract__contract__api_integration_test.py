@@ -75,8 +75,8 @@ def test_score_content_feed():
             "userId": "u1",
             "sessionId": "s1",
             "candidates": [
-                {"contentId": "c1", "likeCount": 10, "viewCount": 100, "ageHours": 1.0},
-                {"contentId": "c2", "likeCount": 5, "viewCount": 50, "ageHours": 12.0},
+                {"contentId": "c1", "contentType": "article", "likeCount": 10, "viewCount": 100, "ageHours": 1.0},
+                {"contentId": "c2", "contentType": "article", "likeCount": 5, "viewCount": 50, "ageHours": 12.0},
             ],
         },
     )
@@ -103,8 +103,8 @@ def test_score_uses_session_signals_tag_boost():
                 "negativeIds": [],
             },
             "candidates": [
-                {"contentId": "c1", "tagRefs": ["travel"], "likeCount": 1, "viewCount": 10, "ageHours": 1.0},
-                {"contentId": "c2", "tagRefs": ["food"], "likeCount": 1, "viewCount": 10, "ageHours": 1.0},
+                {"contentId": "c1", "contentType": "article", "tagRefs": ["travel"], "likeCount": 1, "viewCount": 10, "ageHours": 1.0},
+                {"contentId": "c2", "contentType": "article", "tagRefs": ["food"], "likeCount": 1, "viewCount": 10, "ageHours": 1.0},
             ],
         },
     )
@@ -126,9 +126,9 @@ def test_score_filters_exposed_or_negative():
                 "negativeIds": ["c2"],
             },
             "candidates": [
-                {"contentId": "c1", "tagRefs": ["travel"], "likeCount": 10, "viewCount": 100, "ageHours": 1.0},
-                {"contentId": "c2", "tagRefs": ["travel"], "likeCount": 10, "viewCount": 100, "ageHours": 1.0},
-                {"contentId": "c3", "tagRefs": ["travel"], "likeCount": 10, "viewCount": 100, "ageHours": 1.0},
+                {"contentId": "c1", "contentType": "article", "tagRefs": ["travel"], "likeCount": 10, "viewCount": 100, "ageHours": 1.0},
+                {"contentId": "c2", "contentType": "article", "tagRefs": ["travel"], "likeCount": 10, "viewCount": 100, "ageHours": 1.0},
+                {"contentId": "c3", "contentType": "article", "tagRefs": ["travel"], "likeCount": 10, "viewCount": 100, "ageHours": 1.0},
             ],
         },
     )

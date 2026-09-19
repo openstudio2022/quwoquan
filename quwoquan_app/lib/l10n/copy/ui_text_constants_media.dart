@@ -148,14 +148,12 @@ abstract final class MediaText {
   static const String imageEditorFlipHorizontal = '水平翻转';
   static const String imageEditorFlipVertical = '垂直翻转';
   static const String imageSavedSuccess = '保存图片成功';
-  static const String momentImageReorderHint = '拖动图片可以调整顺序，点击可以编辑图片';
-  static const String momentPublished = '已发表';
   static const String articleCoverLabel = '封面图', noDraft = '暂无草稿';
   static const String saveDraftConfirm = '保存草稿？';
   static const String saveDraftHint = '如果不保存，当前编辑的内容将会丢失。';
   static const String discardAndExit = '放弃并退出';
   static const String saveAndExit = '保存并退出', draftCount = '草稿箱';
-  static const String draftMoment = '点滴草稿', draftPhoto = '图片草稿';
+  static const String draftPhoto = '图片草稿';
   static const String draftVideo = '视频草稿';
   static const String draftArticle = '笔记草稿';
   static const String unlabeled = '[未填写]';
@@ -293,8 +291,6 @@ abstract final class MediaText {
   static const String cameraVideoDiscardConfirm = '放弃';
   static const String cameraVideoDiscardCancel = '继续录制';
   static const String articleTitlePlaceholder = '请输入标题';
-  static const String shareTemplateMomentTitle = '分享点滴';
-  static const String shareTemplateMomentSubtitle = '保留当时的语境与氛围';
   static const String shareTemplateWorkTitle = '分享作品';
   static const String shareTemplateWorkSubtitle = '突出标题、摘要与长期参考价值';
   static const String imageOriginalLoaded = '已加载原图';

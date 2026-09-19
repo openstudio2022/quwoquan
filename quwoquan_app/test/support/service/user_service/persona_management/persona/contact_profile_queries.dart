@@ -52,10 +52,9 @@ final class ContactProfileQueryFake implements ProfileQuery {
 }
 
 final class ContactProfileEditQueryFake implements ProfileEditQuery {
-  ContactProfileEditQueryFake({required this.qrCard, this.resolveResult});
+  ContactProfileEditQueryFake({required this.qrCard});
 
   final ProfileQrCardData qrCard;
-  final ProfileQrResolveWire? resolveResult;
 
   @override
   Future<ProfileQrCardData> getProfileQrCard() async => qrCard;
@@ -63,18 +62,6 @@ final class ContactProfileEditQueryFake implements ProfileEditQuery {
   @override
   Future<ProfileEditSnapshotData> getProfileEditSnapshot() {
     throw UnimplementedError();
-  }
-
-  @override
-  Future<ProfileQrResolveWire> resolveProfileQrToken({
-    required String token,
-    String handle = '',
-  }) async {
-    final value = resolveResult;
-    if (value == null) {
-      throw StateError('QR resolve result not configured');
-    }
-    return value;
   }
 }
 

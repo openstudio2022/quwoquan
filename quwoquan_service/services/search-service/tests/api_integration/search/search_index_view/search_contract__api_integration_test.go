@@ -56,7 +56,6 @@ func fakeES(t *testing.T) *httptest.Server {
 						"visibility": "public",
 						"payload": map[string]any{
 							"coverUrl":        "https://cdn.example/post_es.webp",
-							"contentIdentity": "work",
 							"likeCount":       "12",
 						},
 					},

@@ -89,7 +89,7 @@ func TestContentPostExecutorForwardsOnlyAnExactGraphQLSelection(t *testing.T) {
 		data.ContentPostDetailBase["title"] != "canonical title" {
 		t.Fatalf("projected data=%v", data.ContentPostDetailBase)
 	}
-	if len(data.ContentPostDetailBase) != 33 {
+	if len(data.ContentPostDetailBase) != 32 {
 		t.Fatalf("GraphQL projection keys=%v", data.ContentPostDetailBase)
 	}
 	if liked, exists := data.ContentPostDetailBase["viewerLiked"]; !exists || liked != nil {
@@ -160,6 +160,22 @@ func TestValidateExecutableEntryRejectsSelectedFieldSetDrift(t *testing.T) {
 	}
 }
 
+func TestContentPostExecutorRequiresCanonicalSemanticSlot(t *testing.T) {
+	entry := contentPostBundleEntry("ContentPostDetailSemantic", "8f01162d0d879ffbdc5e96c93145b5c005b7b03582e52dfaa8c390424c62debd")
+	if err := ownerinfra.ValidateExecutableEntry(entry); err != nil {
+		t.Fatal(err)
+	}
+	for _, fields := range [][]string{
+		{"contentType", "entityRefs", "postId", "semanticMentions", "tagRefs"},
+		{"contentType", "entityRefs", "postId", "semanticDocument", "semanticMentions", "tagRefs", "ownerPrivateField"},
+	} {
+		entry.AppClientBundle.SelectedFields = fields
+		if err := ownerinfra.ValidateExecutableEntry(entry); err == nil {
+			t.Fatal("semanticDocument 缺席或额外字段必须 fail closed")
+		}
+	}
+}
+
 func TestContentPostExecutorExecutesEveryTypeAwareBundleSlice(t *testing.T) {
 	for _, testCase := range []struct {
 		operation string
@@ -169,11 +185,11 @@ func TestContentPostExecutorExecutesEveryTypeAwareBundleSlice(t *testing.T) {
 	}{
 		{
 			operation: "ContentPostDetailSemantic",
-			hash:      "b425b396c13494d91b0e970d0e9c2328d07d549c492bd76537dace26ea74aa04",
+			hash:      "8f01162d0d879ffbdc5e96c93145b5c005b7b03582e52dfaa8c390424c62debd",
 			root:      "contentPostDetailSemantic",
 			payload: map[string]any{
-				"postId": "post-1", "contentType": "micro", "tagRefs": []any{},
-				"entityRefs": []any{}, "semanticMentions": []any{},
+				"postId": "post-1", "contentType": "article", "tagRefs": []any{},
+				"entityRefs": []any{}, "semanticMentions": []any{}, "semanticDocument": nil,
 			},
 		},
 		{
@@ -440,7 +456,7 @@ func assertInternalOwnerRequest(t *testing.T, request *http.Request) {
 
 func contentPostBaseEntry() domain.Entry {
 	entry := validRegistryEntry()
-	entry.SHA256Hash = "7e03c295fb73f2aaed2e8f944d7133b19a02dabd6a3ccc297b7f9f0b16b588d7"
+	entry.SHA256Hash = "6d1f340a4caedf270c46377b1b3a8ae48e3d669f3f7709ec81b3efcf2f6d9820"
 	entry.OperationName = "ContentPostDetailBase"
 	entry.Cost.Depth = 3
 	entry.Cost.Complexity = 60
@@ -472,13 +488,13 @@ func contentPostAppClientBundle(operationName string) *domain.AppClientBundle {
 	selected := map[string][]string{
 		"ContentPostDetailBase": {
 			"assistantUsePolicy", "authorAvatarAccessMode", "authorAvatarAssetId", "authorAvatarUrl",
-			"authorDisplayName", "authorId", "body", "canonicalEntityId", "commentCount", "contentIdentity",
+			"authorDisplayName", "authorId", "body", "canonicalEntityId", "commentCount",
 			"contentType", "coverUrl", "createdAt", "gatheringRef", "geoTagRef", "likeCount", "location",
 			"locationName", "postId", "primaryHomepageId", "primaryHomepageSnapshot", "primaryHomepageType",
 			"publishedAt", "shareCount", "sourceAttribution", "status", "summary", "title", "updatedAt",
 			"viewCount", "viewerLiked", "visibility", "visitedAt",
 		},
-		"ContentPostDetailSemantic": {"contentType", "entityRefs", "postId", "semanticMentions", "tagRefs"},
+		"ContentPostDetailSemantic": {"contentType", "entityRefs", "postId", "semanticDocument", "semanticMentions", "tagRefs"},
 		"ContentPostDetailMedia": {
 			"contentType", "coverFrameTimeMs", "coverStrategy", "durationMs", "height", "mediaAssetIds",
 			"mediaItems", "mediaUrls", "postId", "thumbnailUrl", "videoUrl", "width",
@@ -492,7 +508,7 @@ func contentPostAppClientBundle(operationName string) *domain.AppClientBundle {
 	}
 	bundle := &domain.AppClientBundle{
 		BundleID: "content.post.ContentPostDetail", Role: "base",
-		SupportedContentTypes: []string{"article", "image", "micro", "video"},
+		SupportedContentTypes: []string{"article", "image", "video"},
 		SelectedFields:        append([]string(nil), selected[operationName]...), AssemblyMappings: []domain.AssemblyMapping{},
 	}
 	if operationName == "ContentPostDetailBase" {
@@ -501,7 +517,7 @@ func contentPostAppClientBundle(operationName string) *domain.AppClientBundle {
 	bundle.Role = "extension"
 	bundle.SupportedContentTypes = nil
 	bundle.RequiredForContentTypes = map[string][]string{
-		"ContentPostDetailSemantic":            {"article", "image", "micro", "video"},
+		"ContentPostDetailSemantic":            {"article", "image", "video"},
 		"ContentPostDetailMedia":               {"image", "video"},
 		"ContentPostDetailArticleRenderAssets": {"article"},
 		"ContentPostDetailArticleEntities":     {"article"},
@@ -522,7 +538,7 @@ func contentPostAppClientBundle(operationName string) *domain.AppClientBundle {
 
 func baseOwnerPost(postID, title string) map[string]any {
 	return map[string]any{
-		"postId": postID, "contentType": "article", "contentIdentity": nil,
+		"postId": postID, "contentType": "article",
 		"assistantUsePolicy": nil, "authorId": nil, "authorDisplayName": nil,
 		"authorAvatarUrl": nil, "authorAvatarAssetId": nil, "authorAvatarAccessMode": nil,
 		"title": title, "body": nil, "summary": nil,

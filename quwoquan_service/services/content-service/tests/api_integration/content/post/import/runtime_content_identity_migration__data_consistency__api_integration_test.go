@@ -30,7 +30,7 @@ func TestMongoImportMigratesPriorPostRefIDToStableContentID(t *testing.T) {
 	}
 	post := PostDoc{
 		PostRef: nextRef, ContentID: contentID, ContentVersion: 4,
-		ContentType: "article", ContentIdentity: "work", Title: "测试景区攻略",
+		ContentType: "article", Title: "测试景区攻略",
 		AuthorID: "builtin_travel_blogger", CreatedAt: time.Now().UTC(),
 		UpdatedAt: time.Now().UTC(), PublishedAt: time.Now().UTC(),
 	}

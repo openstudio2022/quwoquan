@@ -232,7 +232,7 @@ func (h *CircleHandler) handleFeed(w http.ResponseWriter, r *http.Request, circl
 	}
 	result, err := h.circleService.GetCircleFeed(
 		r.Context(), circleID, limit, q.Get("cursor"), q.Get("sort"),
-		q.Get("identity"), q.Get("type"),
+		q.Get("type"),
 	)
 	if err != nil {
 		writeHTTPError(w, r, err)

@@ -11,8 +11,16 @@ import 'package:quwoquan_app/service/content_service/media/media_asset/applicati
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/discovery_feed_provider.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/home_feed_post_open_action.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
+
+import '../../../../../support/runtime/cloud_boundary_test_scope.dart';
+
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
-    show AssistantUsePolicy, BehaviorEventType, ContentPostProjection;
+    show
+        AssistantUsePolicy,
+        BehaviorEventType,
+        ContentPostProjection,
+        ContentType;
 
 import '../../../../../support/service/content_service/content/content_behavior_fact/recording_content_behavior_repository.dart';
 
@@ -76,6 +84,11 @@ void main() {
             path: '/works/browser/:workId',
             builder: (context, state) {
               final extra = state.extra! as MediaViewerExtra;
+              expect(
+                state.uri.queryParameters['source'],
+                extra.referralSource.value,
+              );
+              expect(extra.referralSource, ReferralSource.organicFeed);
               if (extras.isEmpty || !identical(extras.last, extra)) {
                 extras.add(extra);
               }
@@ -89,6 +102,7 @@ void main() {
       await tester.pumpWidget(
         ProviderScope(
           overrides: [
+            ...sealedCloudBoundaryOverrides(),
             behaviorReporterProvider.overrideWithValue(reporter),
             discoveryFeedMapProvider.overrideWith(
               () => _SeededFeedMap(<String, AsyncValue<DiscoveryFeedState>>{
@@ -145,8 +159,7 @@ ContentPostViewData _post(String id) {
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: id,
-      contentType: 'micro',
-      contentIdentity: 'moment',
+      contentType: ContentType.article,
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: 'author-$id',
       authorDisplayName: 'Attribution Author',

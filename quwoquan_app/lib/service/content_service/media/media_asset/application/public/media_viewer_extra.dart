@@ -229,7 +229,6 @@ class MediaViewerExtra {
     this.dtoPosts = const <ContentPostViewData>[],
     required this.initialIndex,
     this.initialImageIndex = 0,
-    this.source = 'default',
     this.circleId,
     this.showWorksNavigation = false,
     this.rawPostsById = const <String, MediaViewerPostWireRow>{},
@@ -249,11 +248,12 @@ class MediaViewerExtra {
 
   /// 单帖内图片索引（nested 模式使用，默认为 0）。
   final int initialImageIndex;
-  final String source;
   final String? circleId;
   final bool showWorksNavigation;
   final Map<String, MediaViewerPostWireRow> rawPostsById;
   final MediaViewerInteractionSnapshot interactionSnapshot;
+
+  /// 来源归因与目的展示面正交；路由 source query 使用同一契约 value。
   final ReferralSource referralSource;
   final String? feedRequestId;
   final String? policyDigest;
@@ -269,7 +269,6 @@ class MediaViewerExtra {
       dtoPosts: dtoPosts,
       initialIndex: initialIndex,
       initialImageIndex: initialImageIndex,
-      source: source,
       circleId: circleId,
       showWorksNavigation: showWorksNavigation,
       rawPostsById: rawPostsById,
@@ -290,6 +289,7 @@ class WorkBrowserEntryRouteExtra {
     this.feedRequestId,
   });
 
+  /// 来源归因与目的展示面正交；路由 source query 使用同一契约 value。
   final ReferralSource referralSource;
   final String? feedRequestId;
 }

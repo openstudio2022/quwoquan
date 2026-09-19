@@ -53,8 +53,11 @@ func TestPostReadPresentationWriterRetiresImmersiveWireKeysOutput(t *testing.T) 
 	if _, err := os.Stat(retired); !os.IsNotExist(err) {
 		t.Fatalf("retired immersive wire keys output was emitted: %v", err)
 	}
+	retiredSurface := contentPostPresentationOutputPath(appDir, "post_read_surface_id.g.dart")
+	if _, err := os.Stat(retiredSurface); !os.IsNotExist(err) {
+		t.Fatalf("retired second surface enum was emitted: %v", err)
+	}
 	for _, path := range []string{
-		contentPostPresentationOutputPath(appDir, "post_read_surface_id.g.dart"),
 		contentPostAdaptersOutputPath(appDir, "article_detail_wire_keys.g.dart"),
 		contentPostPublicGeneratedOutputPath(appDir, "content_media_post_projection_keys.g.dart"),
 	} {

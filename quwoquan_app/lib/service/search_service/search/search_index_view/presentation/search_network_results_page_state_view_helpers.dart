@@ -99,8 +99,8 @@ extension _SearchNetworkResultsPageStateViewHelpers
     final models = <_IntersectionCardModel>[];
     for (final item in _discoveryContentItems) {
       final card = _NetworkResultCardModel.fromSearchItem(item);
-      final isVideo = item.contentType == 'video';
-      final isArticle = item.contentType == 'article';
+      final isVideo = item.contentType == ContentType.video;
+      final isArticle = item.contentType == ContentType.article;
       // §3：发现/交集线索区的交集句只来自云侧 primaryText；无 primaryText 不拼装。
       final intersectionSentence =
           _SearchNetworkResultsPageState._contentIntersectionPrimaryText(item);

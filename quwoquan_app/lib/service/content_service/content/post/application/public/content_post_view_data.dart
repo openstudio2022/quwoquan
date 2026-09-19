@@ -9,8 +9,6 @@ final class ContentPostViewData {
   const ContentPostViewData({
     required this.id,
     required this.type,
-    required this.identity,
-    required this.displayFormat,
     required this.assistantUsePolicy,
     required this.authorId,
     required this.displayName,
@@ -52,13 +50,17 @@ final class ContentPostViewData {
     this.primaryHomepageId,
     this.primaryHomepageType,
     this.gatheringRef,
+    this.openSurface,
+    this.presentationRecipe,
   });
 
   factory ContentPostViewData.fromWire(
     ContentPostProjection wire, {
     SourceAttribution? sourceAttribution,
+    ContentUiSurface? openSurface,
+    FeedPresentationRecipe? presentationRecipe,
   }) {
-    final type = wire.contentType.trim();
+    final type = wire.contentType;
     final rawMedia = wire.mediaUrls ?? const <String>[];
     final mediaUrls = rawMedia
         .where((value) => value.isNotEmpty)
@@ -66,27 +68,12 @@ final class ContentPostViewData {
     final explicitVideoUrl = wire.videoUrl ?? '';
     final videoUrl = explicitVideoUrl.isNotEmpty
         ? explicitVideoUrl
-        : type == 'video' && mediaUrls.isNotEmpty
+        : type == ContentType.video && mediaUrls.isNotEmpty
         ? mediaUrls.first
         : null;
-    final identity = wire.contentIdentity?.trim() ?? '';
     return ContentPostViewData(
       id: wire.postId,
       type: type,
-      identity: identity.isNotEmpty
-          ? identity
-          : type == 'micro'
-          ? 'moment'
-          : 'work',
-      displayFormat: switch (type) {
-        'video' => 'video',
-        'image' => 'image',
-        'article' => 'note',
-        'micro' when videoUrl != null => 'video',
-        'micro' when mediaUrls.isNotEmpty => 'image',
-        'micro' => 'note',
-        _ => throw FormatException('Unsupported contentType: $type'),
-      },
       // 契约层已经把 wire 字符串解成 typed enum，这里只补 `DEFAULT_INHERIT`。
       // 再走一次字符串 codec 会把枚举 toString 成 `AssistantUsePolicy.inherit`
       // 并被 fromWire 拒绝。
@@ -105,7 +92,7 @@ final class ContentPostViewData {
       title: wire.title ?? '',
       body: wire.body,
       summary: wire.summary ?? '',
-      imageUrls: type == 'video' ? const <String>[] : mediaUrls,
+      imageUrls: type == ContentType.video ? const <String>[] : mediaUrls,
       coverUrl: wire.coverUrl,
       articleTemplate: wire.articleTemplate ?? '',
       articleFontPreset: wire.articleFontPreset ?? '',
@@ -134,13 +121,15 @@ final class ContentPostViewData {
       primaryHomepageId: wire.primaryHomepageId,
       gatheringRef: wire.gatheringRef,
       primaryHomepageType: wire.primaryHomepageType,
+      openSurface: openSurface,
+      presentationRecipe: presentationRecipe,
     );
   }
 
   final String id;
-  final String type;
-  final String identity;
-  final String displayFormat;
+
+  /// 对象身份的唯一权威轴：写入时确定，读侧只翻译，不从媒体附件反推。
+  final ContentType type;
   final AssistantUsePolicy assistantUsePolicy;
   final String authorId;
   String get personaId => authorId;
@@ -200,6 +189,15 @@ final class ContentPostViewData {
   final String? gatheringRef;
   final String? primaryHomepageType;
 
+  /// 云物化的目的面：列表项点击只按这一个字段导航。
+  ///
+  /// 只有下发列表信封的操作才有值；详情与离线快照当前不下发信封，缺席时导航
+  /// 进入需升级的 typed 终态，不按 [type] 反推目的面。
+  final ContentUiSurface? openSurface;
+
+  /// 首页卡片家族；只有 `homeFeed` 会下发，其它面缺席。
+  final FeedPresentationRecipe? presentationRecipe;
+
   bool get hasMeaningfulUpdate {
     final value = updatedAt;
     return value != null && value.difference(createdAt).inSeconds > 1;
@@ -238,9 +236,6 @@ final class ContentPostViewData {
     return primaryImageUrl;
   }
 
-  bool get isArticleLike => identity == 'work' && displayFormat == 'note';
-  bool get isVideoLike => hasVideo;
-  bool get isTextOnly => displayFormat == 'note' && !hasAnyMedia;
   bool get supportsUnifiedViewer =>
       hasAnyMedia || normalizedTitle.isNotEmpty || normalizedBody.isNotEmpty;
 
@@ -252,8 +247,6 @@ final class ContentPostViewData {
   }) => ContentPostViewData(
     id: id ?? this.id,
     type: type,
-    identity: identity,
-    displayFormat: displayFormat,
     assistantUsePolicy: assistantUsePolicy,
     authorId: authorId,
     displayName: displayName,
@@ -295,5 +288,7 @@ final class ContentPostViewData {
     primaryHomepageId: primaryHomepageId,
     gatheringRef: gatheringRef,
     primaryHomepageType: primaryHomepageType,
+    openSurface: openSurface,
+    presentationRecipe: presentationRecipe,
   );
 }

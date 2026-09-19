@@ -27,11 +27,5 @@ final class WorksImmersiveViewerObservability {
 
   static String fallbackReasonName(String reason) => reason;
 
-  static ContentType contentTypeForPost(ContentPostViewData post) {
-    final format = post.displayFormat;
-    if (format == 'video') return ContentType.video;
-    if (format == 'article') return ContentType.article;
-    if (post.type == 'micro') return ContentType.micro;
-    return ContentType.image;
-  }
+  static ContentType contentTypeForPost(ContentPostViewData post) => post.type;
 }

@@ -4,17 +4,17 @@
 >
 > Journey / Scenario：[`JNY-003 / SCN-008`](../../../spec.md#scn-008)
 >
-> 设计归属：[L2 DEC-001](../design.md#dec-001)
+> 设计引用：[L2 DEC-001](../design.md#dec-001)
 
 ## 1. 用户价值
 
-作为内容创作者或浏览者，我希望写文字从编辑、显式形态确认、发布前安全准入、可靠提交到结果回流与运营观测的商用闭环，从而完成可恢复的内容创作、发现或互动。
+作为内容创作者或浏览者，我希望纯文字或富文图文混排文章从编辑、发布信息确认、发布前安全准入、可靠提交到结果回流与运营观测形成商用闭环，从而完成可恢复的内容创作、发现或互动。
 
 ## 2. 范围与非目标
 
 ### In Scope
 
-- micro/article 统一文字编辑器与显式发布形态确认。
+- 文章编辑器承载纯文字与富文图文混排，统一发布为文章，不按长度建议或确认短文字/文章形态。
 - LocalPostDraft、PostPublicationIntent、Post receipt 和 CirclePostPlacement 的可靠协作。
 - 发布前长度、频控和内容安全 fail-closed 准入。
 - 发布结果回流、发布任务恢复、tag 事实、审核运营和发布漏斗。
@@ -28,19 +28,17 @@
 ## 3. 行为要求
 
 <a id="req-001"></a>
-### REQ-001 写文字入口正文优先且短文字与文章由用户显式确认
+### REQ-001 写文字入口正文优先且统一发布为文章
 
-- 系统按内容长度给出形态建议（`shouldPublishAsArticleForPayload`），发布确认页把建议
-  固化为 `PublishSettings.textContentType` 并显示「发布形态」行允许用户修改；草稿已
-  确认的形态不被建议覆盖。
-- 提交阶段以确认值为唯一真相（`resolveTextPublishAsArticle`），文字发布在确认值缺失时
-  fail-closed；micro 与 article 两种确认结果均有 widget 与 payload 合同证据。
+- 写文字进入文章编辑器，默认正文焦点，标题通过可选入口渐进展开；纯文字与富文图文混排都是文章，不由字数、有无标题或附件重新判型。
+- 发布确认页确认正文和去向，不出现短文字/文章选择、形态建议或退役身份提升操作；提交只使用编辑流程已确定的文章类型。
+- 图片创作有或无配文均为图片，配文与图片集合分区而不形成文章混排；类型边界遵循 [`content-type-framework REQ-001`](../../content-type-framework/spec.md#req-001)，读侧不得嗅探媒体补猜。
 
 <a id="req-002"></a>
 ### REQ-002 文字长度合同和发布频控端云同源
 
 - App 与真实 content API 必须对相同输入边界返回同一 canonical 错误语义。
-- 长度上限与形态建议阈值以 `publication_policy.yaml` 为唯一真相，端侧只消费
+- 文章长度上限以 `publication_policy.yaml` 为唯一真相，端侧只消费
   codegen `ContentPublicationPolicy` 常量，禁止页面第二份边界；编辑器常显
   「当前/上限」剩余量并在接近上限（≥90%）时转警示色。
 - 频控命中按服务端 recovery-after 调度下一次尝试，不做默认回退，不无限立即重试。
@@ -64,7 +62,7 @@
 <a id="req-005"></a>
 ### REQ-005 发布成功立即回流真实 Post 并刷新消费投影
 
-- 写短文字和写文章两条完整 UAT 均从底栏加号走到回读页。
+- 纯文字文章与富文图文混排文章两条完整旅程均从底栏加号走到文章回读页，发布后读取同一 Post；不能按正文长短分流为不同内容身份。
 
 <a id="req-006"></a>
 ### REQ-006 标签和实体只以可证实 semantic mention 进入交集投影
@@ -116,19 +114,19 @@
 ## 5. 验收场景
 
 <a id="gwt-001"></a>
-### GWT-001 写文字入口正文优先且短文字与文章由用户显式确认
+### GWT-001 纯文字与富文图文混排统一发布文章
 
-- GIVEN 用户已登录并从全局创作面板点击写文字。
-- WHEN 用户分别输入轻量正文和包含标题、多段落或插图的重内容并进入发布确认。
-- THEN 顶栏显示写文字而非长文编辑，默认焦点进入正文。
+- GIVEN 用户已登录并从全局创作面板点击写文字，分别准备短纯文字、长纯文字和段落与插图交错的正文。
+- WHEN 用户完成编辑并进入发布确认、提交三种正文。
+- THEN 顶栏显示写文字且默认正文焦点。
 - THEN 标题以添加标题可选入口渐进展开。
-- THEN 系统可建议短文字或文章，但确认页显示并允许用户修改最终形态。
-- THEN 最终 typed command 的 contentType 与用户确认一致，提交阶段不得再次静默推导。
+- THEN 发布确认保留正文和去向确认，不出现短文字/文章形态选择或按长度提出的类型建议。
+- THEN 三个 typed command 均为文章；发布与回读保留正文顺序，纯文字不被补成图片，插图不把文章改成图片内容。
 
 <a id="gwt-002"></a>
 ### GWT-002 文字长度合同和发布频控端云同源
 
-- GIVEN 标题、micro 正文、article Markdown、摘要与 mention 已声明唯一长度上限。
+- GIVEN 标题、文章正文、摘要与 mention 的长度上限由同一 publication policy 声明，短纯文字与富文正文使用文章规则。
 - WHEN 用户在边界值和超边界值提交，或同一 Persona 在频控窗口内连续发布。
 - THEN 边界值可发布，超界请求返回 CONTENT.USER.content_too_long。
 - THEN 频控命中返回 CONTENT.USER.rate_limited 和 recovery-after。
@@ -158,9 +156,9 @@
 <a id="gwt-005"></a>
 ### GWT-005 发布成功立即回流真实 Post 并刷新消费投影
 
-- GIVEN micro 或 article 发布返回 published receipt。
+- GIVEN 纯文字文章或富文图文混排文章发布返回 published receipt。
 - WHEN App 处理成功结果。
-- THEN micro 打开内容详情，article 打开作品浏览器文章。
+- THEN 按权威目的面打开同一 Post 的文章阅读面，不从文字长度或有无媒体反推目的面。
 - THEN 目标页展示已发布和真实圈子、实体、标签、位置去向。
 - THEN feed 与当前 Persona 作品列表失效并回读同一 Post。
 - THEN 不出现仅 Toast 后关闭或要求手动下拉的断点。
@@ -201,16 +199,22 @@
 
 ## 7. 开放事项
 
+<a id="open-001"></a>
+### OPEN-001 文章单轨发布与长度边界证据
+
+- 类型：`capability_gap`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：尚缺纯文字与富文混排统一文章发布、确认页无形态选择、长度边界与频控端云一致的完整真实测试证据。
+- 完成判定：`GWT-001`、`GWT-002` 由真实 widget/local_contract 与 API 边界测试绑定，命令只发布文章且确认页无形态选择，长度与频控仍端云一致。
+
 <a id="open-005"></a>
 ### OPEN-005 发布成功立即回流真实 Post 并刷新消费投影
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺 `RUN_PATROL_ACCEPTANCE` 真机窗口的执行证据与真机边界值发布
-  验收；单条入口旅程 UAT `text_publication_entry_journey__user_acceptance_test.dart`
-  已覆盖底栏加号→写文字→显式确认→发布→去向摘要→回读→workBrowser，与两条 draft
-  深链文字 UAT、弱网五段旅程 local_contract、五步联程 api_integration 均绑定 `#gwt-005`。
+- 影响或价值：尚缺真实设备上纯文字与富文文章从发布成功到同一对象文章目的面回流的证据，目标页去向摘要和 feed/作者列表刷新也须经真实交互回读证明。
 - 完成判定：`GWT-005` 对应行为满足且真实测试 `spec_ref` 有效
 
 <a id="open-007"></a>

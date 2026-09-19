@@ -4,8 +4,6 @@
     "com.github.dart_lang.jni_flutter.JniFlutterPlugin",
     "com.hiennv.flutter_callkit_incoming.FlutterCallkitIncomingPlugin",
     "com.it_nomads.fluttersecurestorage.FlutterSecureStoragePlugin",
-    "io.flutter.plugins.firebase.core.FlutterFirebaseCorePlugin",
-    "io.flutter.plugins.firebase.messaging.FlutterFirebaseMessagingPlugin",
     "io.flutter.plugins.sharedpreferences.SharedPreferencesPlugin",
     "com.tekartik.sqflite.SqflitePlugin",
     "io.flutter.plugins.videoplayer.VideoPlayerPlugin"
@@ -15,7 +13,6 @@
     "com.mr.flutter.plugin.filepicker.FilePickerPlugin",
     "co.quis.flutter_contacts.FlutterContactsPlugin",
     "com.ryanheise.just_audio.JustAudioPlugin",
-    "dev.steenbakker.mobile_scanner.MobileScannerPlugin",
     "com.baseflow.permissionhandler.PermissionHandlerPlugin",
     "com.llfbandit.record.RecordPlugin",
     "dev.fluttercommunity.plus.share.SharePlusPlugin",

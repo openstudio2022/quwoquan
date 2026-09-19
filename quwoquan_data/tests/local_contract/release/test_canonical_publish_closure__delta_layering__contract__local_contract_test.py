@@ -61,7 +61,7 @@ def _codes(report: dict) -> set[str]:
     return {str(issue["code"]) for issue in report["issues"]}
 
 
-def test_delta_closure_blocks_environment_media_url_and_non_work_identity(
+def test_delta_closure_blocks_environment_media_url(
     tmp_path: Path,
 ) -> None:
     publish = build_canonical(tmp_path)
@@ -75,7 +75,6 @@ def test_delta_closure_blocks_environment_media_url_and_non_work_identity(
             "posts/image/摄影/作品/1/manifest.json",
             {
                 "schema": "quwoquan_data.post_object",
-                "contentIdentity": "draft",
                 "contentType": "image",
                 "assets": [
                     {
@@ -96,7 +95,6 @@ def test_delta_closure_blocks_environment_media_url_and_non_work_identity(
     )
 
     assert report["status"] == "failed"
-    assert "post_content_identity_invalid" in _codes(report)
     assert "environment_media_url_in_canonical" in _codes(report)
 
 
@@ -112,7 +110,6 @@ def test_delta_closure_resolves_media_from_library_and_blocks_dangling(
     def _manifest(key: str) -> dict[str, object]:
         return {
             "schema": "quwoquan_data.post_object",
-            "contentIdentity": "work",
             "contentType": "image",
             "assets": [{"assetId": "cover", "kind": "image", "objectKey": key}],
         }
@@ -170,7 +167,7 @@ def test_delta_refuses_to_land_a_media_body_under_a_canonical_root(
     )
 
     assert report["status"] == "failed"
-    assert "media_body_in_publish" in _codes(report)
+    assert "noncanonical_file" in _codes(report)
 
 
 def test_delta_closure_blocks_video_poster_closure_gap(tmp_path: Path) -> None:
@@ -189,7 +186,6 @@ def test_delta_closure_blocks_video_poster_closure_gap(tmp_path: Path) -> None:
                 "posts/video/纪录/作品/1/manifest.json",
                 {
                     "schema": "quwoquan_data.post_object",
-                    "contentIdentity": "work",
                     "contentType": "video",
                     "assets": [
                         {

@@ -31,13 +31,12 @@ def _payload_template() -> dict:
     from lib.candidate_evidence import build_candidate_evidence, export_candidate_closure
     from lib.feature_tree.commands import _context_manifest
     from lib.feature_tree.nodes import discover_nodes
-    from lib.feature_tree.ownership import resolve_target_details
     from lib.feature_tree.content_addressed_writer import _write_content_addressed_bytes
     target = "quwoquan_ops/cli/lib/handoff_store.py"
     nodes = discover_nodes()
-    owner = _context_manifest(target, resolve_target_details(target, nodes), nodes)
+    owner = _context_manifest(target, nodes)
     owner_ref = _write_content_addressed_bytes(canonical_json_bytes(owner)).relative_to(ROOT).as_posix()
-    candidate = build_candidate_evidence(owner_ref, [target], repo_root=ROOT)
+    candidate = build_candidate_evidence([target], repo_root=ROOT)
     candidate_ref = _write_content_addressed_bytes(canonical_json_bytes(candidate), subdirectory="candidates/by-fingerprint").relative_to(ROOT).as_posix()
     payload = {
         "schema_version": contract_schema_version("handoff_manifest"),
@@ -48,7 +47,6 @@ def _payload_template() -> dict:
         "downstream": "plan-next",
         "human_decision_ref": None,
         "human_decision_projection": project_runtime_decision(target_kind="handoff"),
-        "owner_identity_ref": owner_ref,
         "candidate_evidence_ref": candidate_ref,
         "candidate_closure": export_candidate_closure(candidate_ref, repo_root=ROOT),
         "review_plan_ref": "plan.json",

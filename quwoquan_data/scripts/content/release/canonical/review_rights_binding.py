@@ -185,6 +185,8 @@ def validate_review_authority(
     object_ref: str,
     source_assets: Mapping[str, Mapping[str, Any]] | None = None,
     require_approved: bool = True,
+    object_aliases: Sequence[str] = (),
+    candidate_root: Path | None = None,
 ) -> dict[str, str]:
     """Validate and bind the sole review file as evidence and rights authority."""
 
@@ -196,14 +198,14 @@ def validate_review_authority(
         content_review,
         execution_id=execution_id,
         object_ref=object_ref,
-        object_aliases=(str(manifest.get("topicId") or ""),),
+        object_aliases=(str(manifest.get("topicId") or ""), *object_aliases),
         required_asset_refs=required_review_asset_refs(
             manifest,
             object_kind=object_kind,
         ),
         source_assets=source_assets,
         require_approved=require_approved,
-        candidate_root=review_root.parent,
+        candidate_root=candidate_root or review_root.parent,
     )
     normalized_object_ref = _normalized_object_ref(object_ref)
     if object_kind == "posts" and not normalized_object_ref.startswith("posts/"):

@@ -9,8 +9,10 @@ ContentPostProjection contentPostProjectionFromReadModelMap(
 ) {
   return ContentPostProjection(
     postId: _requiredText(source, 'postId'),
-    contentType: _requiredText(source, 'contentType'),
-    contentIdentity: _optionalText(source['contentIdentity']),
+    contentType: ContentType.fromWire(
+      _requiredText(source, 'contentType'),
+      'ContentPostProjection.contentType',
+    ),
     assistantUsePolicy: assistantUsePolicyFromWire(
       source['assistantUsePolicy'],
       'ContentPostProjection.assistantUsePolicy',
@@ -56,14 +58,52 @@ ContentPostProjection contentPostProjectionFromReadModelMap(
   );
 }
 
+/// [source] 的 `openSurface` / `presentationRecipe` 只在 App 本地快照里出现；
+/// canonical Post 投影不含展示轴，缺席即为未下发信封，不按内容类型补猜。
 ContentPostViewData contentPostViewDataFromReadModelMap(
   Map<String, dynamic> source,
-) =>
-    ContentPostViewData.fromWire(contentPostProjectionFromReadModelMap(source));
+) => ContentPostViewData.fromWire(
+  contentPostProjectionFromReadModelMap(source),
+  openSurface: source['openSurface'] == null
+      ? null
+      : ContentUiSurface.fromWire(
+          source['openSurface'],
+          'ContentPostViewData.openSurface',
+        ),
+  presentationRecipe: source['presentationRecipe'] == null
+      ? null
+      : FeedPresentationRecipe.fromWire(
+          source['presentationRecipe'],
+          'ContentPostViewData.presentationRecipe',
+        ),
+);
 
 Map<String, Object?> contentPostWireFromReadModelMap(
   Map<String, dynamic> source,
 ) => contentPostProjectionFromReadModelMap(source).toWire();
+
+/// 发现流 items 的唯一混排信封；实体主页不再走 objectCards 旁路。
+Map<String, Object?> contentListItemWireFromReadModelMap(
+  Map<String, dynamic> source,
+) {
+  final post = contentPostWireFromReadModelMap(source);
+  final postId = post['postId']! as String;
+  final contentType = post['contentType']! as String;
+  final openSurface = switch (contentType) {
+    'article' => 'article_reader',
+    'video' => 'media_immersive',
+    _ => 'home_feed',
+  };
+  return <String, Object?>{
+    'envelope': <String, Object?>{
+      'objectKind': 'post',
+      'contentType': contentType,
+      'openSurface': openSurface,
+      'post': <String, Object?>{'postId': postId},
+    },
+    'post': post,
+  };
+}
 
 String _requiredText(Map<String, dynamic> source, String field) {
   final value = _optionalText(source[field]);

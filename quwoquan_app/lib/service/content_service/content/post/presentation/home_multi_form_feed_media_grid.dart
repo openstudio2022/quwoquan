@@ -124,8 +124,8 @@ class _HomeFeedMediaOverlayPill extends StatelessWidget {
   }
 }
 
-class _HomeMomentGridCard extends StatelessWidget {
-  const _HomeMomentGridCard({
+class _HomeImageGridCard extends StatelessWidget {
+  const _HomeImageGridCard({
     required this.urls,
     required this.deliveryIndex,
     required this.isDark,
@@ -141,12 +141,12 @@ class _HomeMomentGridCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final visibleCount = _momentGridVisibleCount(urls.length);
-    final columns = _momentGridColumns(visibleCount);
+    final visibleCount = _imageGridVisibleCount(urls.length);
+    final columns = _imageGridColumns(visibleCount);
     final rows = ((visibleCount + columns - 1) ~/ columns).clamp(1, 3).toInt();
     final remaining = urls.length - visibleCount;
     return ClipRRect(
-      key: const ValueKey('home-moment-grid'),
+      key: const ValueKey('home-image-grid'),
       borderRadius: BorderRadius.circular(
         DiscoveryFeedSpacing.homeFeedMediaCornerRadius,
       ),
@@ -175,7 +175,7 @@ class _HomeMomentGridCard extends StatelessWidget {
                   width: tileWidth,
                   height: tileHeight,
                   child: _HomeMomentGridTile(
-                    tileKey: ValueKey<String>('home-moment-grid-tile-$index'),
+                    tileKey: ValueKey<String>('home-image-grid-tile-$index'),
                     url: urls[index],
                     delivery: deliveryIndex[urls[index].trim()],
                     isDark: isDark,
@@ -229,7 +229,7 @@ class _HomeMomentGridTile extends ConsumerWidget {
           if (showMore)
             Positioned.fill(
               child: DecoratedBox(
-                key: const ValueKey('home-moment-grid-more-scrim'),
+                key: const ValueKey('home-image-grid-more-scrim'),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
@@ -253,7 +253,7 @@ class _HomeMomentGridTile extends ConsumerWidget {
               top: AppSpacing.intraGroupSm,
               right: AppSpacing.intraGroupSm,
               child: _HomeFeedMediaOverlayPill(
-                key: const ValueKey('home-moment-grid-more'),
+                key: const ValueKey('home-image-grid-more'),
                 label: '+$remaining',
               ),
             ),
@@ -614,5 +614,5 @@ class _HomeFeedVideoCard extends ConsumerWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-/// Action row for moment (微趣) posts.
+/// Action row for image grid posts.
 /// 赞 / 转 / 评三列等宽，数字变化不挤压图标位置。

@@ -118,12 +118,12 @@ func TestContentPostOwnsTypeAwarePersistedGraphQLBundle(t *testing.T) {
 		"content_post_detail": {
 			canonicalID:   "content.post.GetPost",
 			operationName: "ContentPostDetailBase", role: "base",
-			contentTypes: []string{"article", "image", "micro", "video"},
+			contentTypes: []string{"article", "image", "video"},
 		},
 		"content_post_detail_semantic": {
 			canonicalID:   "content.post.GetPostSemantic",
 			operationName: "ContentPostDetailSemantic", role: "extension",
-			contentTypes: []string{"article", "image", "micro", "video"},
+			contentTypes: []string{"article", "image", "video"},
 		},
 		"content_post_detail_media": {
 			canonicalID:   "content.post.GetPostMedia",

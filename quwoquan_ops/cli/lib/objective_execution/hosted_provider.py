@@ -32,7 +32,7 @@ _TEST_ISSUER_SUFFIXES = (".test", ".invalid", ".localhost")
 _ALLOWED_OBSERVE_ACTIONS = frozenset(
     {
         "create_objective", "create_increment", "observe_objective", "observe_increment", "read_authority_receipt",
-        "read_owner_manifest", "read_readiness", "read_review_result", "read_handoff",
+        "read_candidate_evidence", "read_readiness", "read_review_result", "read_handoff",
     }
 )
 

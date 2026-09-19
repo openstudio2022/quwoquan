@@ -54,13 +54,7 @@ class _StubProfileEditQuery implements ProfileEditQuery {
     throw UnimplementedError('qr card is not part of this contract');
   }
 
-  @override
-  Future<ProfileQrResolveWire> resolveProfileQrToken({
-    required String token,
-    String handle = '',
-  }) async {
-    throw UnimplementedError('qr resolve is not part of this contract');
-  }
+
 }
 
 class _StubProposalReader implements ProfileUpdateProposalReader {

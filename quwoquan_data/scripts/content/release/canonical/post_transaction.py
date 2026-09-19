@@ -100,6 +100,14 @@ def build_post_object_transaction_package(
     source_manifest = _read_json(source / "manifest.json")
     if any(field in source_manifest for field in ("assetRefsRef", "creatorRefsRef", "tagRefsRef")):
         raise ObjectTransactionError("post manifest contains retired sidecar pointers")
+    retired = {"variantPurpose", "releaseClass", "productLifecycleState", "readinessPhase"}
+    if retired & source_manifest.keys():
+        raise ObjectTransactionError("RETIRED_CLASSIFICATION_FIELD: post manifest")
+    if any("distributionDecision" in asset for asset in source_manifest.get("assets") or [] if isinstance(asset, dict)):
+        raise ObjectTransactionError("RETIRED_CLASSIFICATION_FIELD: distributionDecision")
+    attribution = source_manifest.get("sourceAttribution")
+    if isinstance(attribution, dict) and "publicationAdmission" in attribution:
+        raise ObjectTransactionError("RETIRED_CLASSIFICATION_FIELD: publicationAdmission")
     # Pool delivery freezes the reviewed object with the repository-wide Merkle
     # contract.  The transaction must consume that exact digest instead of
     # deriving a second, transaction-private tree identity.

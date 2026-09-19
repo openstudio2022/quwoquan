@@ -8,7 +8,6 @@ final class PostSearchItemView {
   const PostSearchItemView({
     required this.postId,
     required this.contentType,
-    this.contentIdentity,
     this.title,
     this.summary,
     this.coverUrl,
@@ -28,8 +27,9 @@ final class PostSearchItemView {
   });
 
   final String postId;
-  final String contentType;
-  final String? contentIdentity;
+
+  /// 对象身份的唯一权威轴：由 canonical search hit 直接透传，不做端侧推导。
+  final ContentType contentType;
   final String? title;
   final String? summary;
   final String? coverUrl;
@@ -60,8 +60,7 @@ final class PostSearchItemView {
     final reason = intersectionReason;
     return PostSearchItemView(
       postId: hit.postId,
-      contentType: hit.contentType.wireName,
-      contentIdentity: hit.contentIdentity?.wireName,
+      contentType: hit.contentType,
       title: hit.title,
       summary: hit.summary,
       coverUrl: hit.coverUrl,

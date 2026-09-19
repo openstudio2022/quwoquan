@@ -291,6 +291,7 @@ func TestModerationDecisionConsumerAppliesExactPostRevisionAndVisibility(t *test
 	now := time.Date(2030, time.June, 7, 8, 9, 10, 0, time.UTC)
 	store := testsupport.NewPostStore([]postmodel.Post{{
 		ID:               "post-moderation-target",
+		ContentType:      "article",
 		Version:          1,
 		AuthorId:         "author-moderation",
 		Status:           "published",

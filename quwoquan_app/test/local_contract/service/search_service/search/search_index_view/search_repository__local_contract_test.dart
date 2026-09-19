@@ -36,7 +36,6 @@ void main() {
           'content': <String, Object?>{
             'postId': 'post-typed-1',
             'contentType': 'article',
-            'contentIdentity': 'work',
             'coverUrl': 'https://cdn.example/typed.jpg',
             'likeCount': 12,
           },
@@ -64,8 +63,25 @@ void main() {
     final hit = result.hits.single;
     expect(hit.content?.coverUrl, 'https://cdn.example/typed.jpg');
     expect(hit.content?.contentType, ContentType.article);
-    expect(hit.content?.contentIdentity, ContentIdentity.work);
     expect(hit.payload, isNull);
+  });
+
+  test('typed content slice 拒绝退役内容类型与身份字段', () {
+    final canonical = <String, Object?>{
+      'postId': 'retired-content',
+      'contentType': 'article',
+      'likeCount': 0,
+    };
+    for (final retired in <Map<String, Object?>>[
+      <String, Object?>{...canonical, 'contentType': 'micro'},
+      <String, Object?>{...canonical, 'contentIdentity': 'work'},
+      <String, Object?>{...canonical, 'displayFormat': 'note'},
+    ]) {
+      expect(
+        () => CanonicalSearchContentHit.fromMap(retired),
+        throwsFormatException,
+      );
+    }
   });
 
   test('content hit 禁止 payload 旧轨与未声明 wire 字段', () {
@@ -201,13 +217,10 @@ void main() {
   });
 
   test('relatedTerms 为空时不在客户端合成词', () async {
-    final response =
-        await RemoteSearchRepository(
-          remoteQuery: _RecordingCanonicalSearchFacet(),
-          sessionIdProvider: () => 'search-session',
-        ).search(
-          SearchRequest(query: '川西', mode: CanonicalSearchMode.result),
-        );
+    final response = await RemoteSearchRepository(
+      remoteQuery: _RecordingCanonicalSearchFacet(),
+      sessionIdProvider: () => 'search-session',
+    ).search(SearchRequest(query: '川西', mode: CanonicalSearchMode.result));
 
     expect(response.relatedTerms, isEmpty);
   });
@@ -233,7 +246,7 @@ final class _RecordingCanonicalSearchFacet
     : result =
           result ??
           SearchResponseView(
-        interpretedQuery: OwnerSearchInterpretedQuery(normalized: 'q'),
+            interpretedQuery: OwnerSearchInterpretedQuery(normalized: 'q'),
             provenance: CanonicalSearchProvenance(
               provider: 'elasticsearch',
               generatedAt: DateTime.utc(2026, 7, 31),

@@ -338,20 +338,6 @@ type RecallFusionConfig struct {
 	SourceBoost    map[string]float64 `yaml:"sourceBoost" json:"sourceBoost"`
 }
 
-// ObjectCardConfig 是首页混合对象卡的 Content 页面布局策略。对象卡候选、公开
-// 快照、理由和召回路径由 Recommendation 在同一 RankedRecommendationWindow
-// 冻结；Content 只按固定间隔和上限计算锚点，不执行第二召回。
-type ObjectCardConfig struct {
-	Enabled bool `yaml:"enabled" json:"enabled"`
-	// EveryN 每 N 条内容后注入 1 张对象卡（anchorIndex = N, 2N, ...）。
-	EveryN int `yaml:"everyN" json:"everyN"`
-	// MaxCards 单页对象卡上限（防对象卡挤占内容主体）。
-	MaxCards int `yaml:"maxCards" json:"maxCards"`
-	// AllowedKinds 允许注入的对象卡类别闭集（entity_homepage/user_card/circle_card）。
-	// S0 只开 entity_homepage；user_card/circle_card 为 S1 触发开启。
-	AllowedKinds []string `yaml:"allowedKinds" json:"allowedKinds"`
-}
-
 // RecPolicy is the full recommendation scoring policy.
 type RecPolicy struct {
 	effectiveHash string
@@ -370,7 +356,6 @@ type RecPolicy struct {
 	ExposureGovernance ExposureGovernanceConfig `yaml:"exposureGovernance" json:"exposureGovernance"`
 	OpsIntervention    OpsInterventionConfig    `yaml:"opsIntervention" json:"opsIntervention"`
 	ABAdmission        ABAdmissionConfig        `yaml:"abAdmission" json:"abAdmission"`
-	ObjectCards        ObjectCardConfig         `yaml:"objectCards" json:"objectCards"`
 	RecallFusion       RecallFusionConfig       `yaml:"recallFusion" json:"recallFusion"`
 }
 
@@ -523,9 +508,6 @@ func (p *RecPolicy) Validate() error {
 	if err := validateABAdmission(p.ABAdmission); err != nil {
 		return err
 	}
-	if err := validateObjectCards(p.ObjectCards); err != nil {
-		return err
-	}
 	if err := validateRecallFusion(p.RecallFusion); err != nil {
 		return err
 	}
@@ -544,32 +526,6 @@ func validateRecallFusion(cfg RecallFusionConfig) error {
 	for source, boost := range cfg.SourceBoost {
 		if boost <= 0 || boost > 5 {
 			return fmt.Errorf("recpolicy: recallFusion.sourceBoost[%s] must be in (0,5], got %v", source, boost)
-		}
-	}
-	return nil
-}
-
-func validateObjectCards(cfg ObjectCardConfig) error {
-	if !cfg.Enabled {
-		return nil
-	}
-	if cfg.EveryN <= 0 {
-		return errors.New("recpolicy: objectCards.everyN must be > 0 when enabled")
-	}
-	if cfg.MaxCards <= 0 {
-		return errors.New("recpolicy: objectCards.maxCards must be > 0 when enabled")
-	}
-	allowed := map[string]bool{
-		"entity_homepage": true,
-		"user_card":       true,
-		"circle_card":     true,
-	}
-	if len(cfg.AllowedKinds) == 0 {
-		return errors.New("recpolicy: objectCards.allowedKinds required when enabled")
-	}
-	for _, kind := range cfg.AllowedKinds {
-		if !allowed[kind] {
-			return fmt.Errorf("recpolicy: objectCards.allowedKinds contains unknown kind %q", kind)
 		}
 	}
 	return nil

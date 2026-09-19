@@ -333,7 +333,6 @@ def build_handoff_fingerprint(
     managed_paths = [
         *identity["artifacts"],
         *([identity["human_decision_ref"]] if identity.get("human_decision_ref") else []),
-        identity["owner_identity_ref"],
         identity["candidate_evidence_ref"],
         *[item["ref"] for item in identity["candidate_closure"]],
         identity["review_plan_ref"],
@@ -414,17 +413,14 @@ def validate_handoff_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raise HandoffConsumerError(
             f"handoff downstream 不属于 canonical workflow registry：{payload['downstream']}"
         )
-    if "owner_manifest_ref" in payload:
-        raise HandoffConsumerError("IDENTITY.MIGRATION_REQUIRED: owner_manifest_ref 已退役")
-    owner_identity_ref = normalize_repo_relative_path(payload["owner_identity_ref"], ROOT)
     candidate_evidence_ref = normalize_repo_relative_path(payload["candidate_evidence_ref"], ROOT)
     from lib.candidate_evidence import export_candidate_closure, validate_candidate_closure
-    validate_candidate_closure(payload["candidate_closure"], candidate_ref=candidate_evidence_ref, owner_identity_ref=owner_identity_ref)
+    validate_candidate_closure(payload["candidate_closure"], candidate_ref=candidate_evidence_ref)
     if payload["candidate_closure"] != export_candidate_closure(candidate_evidence_ref, repo_root=ROOT):
         raise HandoffConsumerError("CANDIDATE.STALE: handoff candidate closure current bytes 漂移")
     plan_ref, plan = _load_json_ref(payload["review_plan_ref"], label="review plan")
-    if owner_identity_ref != (plan.get("owner_identity") or {}).get("ref") or candidate_evidence_ref != (plan.get("candidate_evidence_identity") or {}).get("ref"):
-        raise HandoffConsumerError("handoff owner/candidate refs 与 plan 不一致")
+    if candidate_evidence_ref != (plan.get("candidate_evidence_identity") or {}).get("ref"):
+        raise HandoffConsumerError("handoff candidate ref 与 plan 不一致")
     try:
         review_dispatch.validate_current_review_plan(plan, registry, phase="handoff")
     except review_dispatch.ReviewDispatchError as exc:
@@ -485,7 +481,6 @@ def validate_handoff_payload(payload: dict[str, Any]) -> dict[str, Any]:
         "downstream": payload["downstream"],
         "human_decision_ref": payload["human_decision_ref"],
         "human_decision_projection": human_projection,
-        "owner_identity_ref": owner_identity_ref,
         "candidate_evidence_ref": candidate_evidence_ref,
         "candidate_closure": payload["candidate_closure"],
         "review_plan_ref": plan_ref,

@@ -12,6 +12,8 @@ import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
 import 'package:quwoquan_app/design_system/feedback/app_toast.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/content_share_template.dart';
+import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart'
+    show ContentType;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:quwoquan_app/runtime/di/runtime_observability_dependencies.dart';
 
@@ -164,7 +166,7 @@ class DefaultContentShareActionHandler implements ContentShareActionHandler {
     final canvas = Canvas(recorder);
     final rect = const Rect.fromLTWH(0, 0, width, height);
 
-    final accent = template.profileId == 'moment'
+    final accent = template.profileId == ContentType.image.wireName
         ? AppColors.secondaryColor
         : AppColors.welcomeBackground;
     final background = Paint()

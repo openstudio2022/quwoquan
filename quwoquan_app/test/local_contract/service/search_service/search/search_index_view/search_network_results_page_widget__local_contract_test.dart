@@ -886,8 +886,7 @@ class _CategorySearchRepository implements SearchRepository {
         (
           PostSearchItemView(
             postId: 'post_image',
-            contentType: 'image',
-            contentIdentity: 'work',
+            contentType: ContentType.image,
             title: '图片结果',
             authorDisplayName: '图片作者',
           ),
@@ -896,8 +895,7 @@ class _CategorySearchRepository implements SearchRepository {
         (
           PostSearchItemView(
             postId: 'post_video',
-            contentType: 'video',
-            contentIdentity: 'work',
+            contentType: ContentType.video,
             title: '视频结果',
             authorDisplayName: '视频作者',
           ),
@@ -906,8 +904,7 @@ class _CategorySearchRepository implements SearchRepository {
         (
           PostSearchItemView(
             postId: 'post_article',
-            contentType: 'article',
-            contentIdentity: 'article',
+            contentType: ContentType.article,
             title: '长文结果',
             authorDisplayName: '长文作者',
           ),
@@ -1001,8 +998,7 @@ final class _UnavailableResultSearchRepository implements SearchRepository {
     final normalized = request.normalized();
     const item = PostSearchItemView(
       postId: postId,
-      contentType: 'image',
-      contentIdentity: 'work',
+      contentType: ContentType.image,
       title: resultTitle,
       authorDisplayName: '失效结果作者',
     );
@@ -1060,7 +1056,6 @@ final class _TelemetrySearchRepository implements SearchRepository {
     final item = PostSearchItemView(
       postId: 'post-telemetry-$_calls',
       contentType: contentType,
-      contentIdentity: contentType == 'article' ? 'article' : 'work',
       title: '可观测摄影作品 $_calls',
       authorDisplayName: '漏斗测试作者',
     );
@@ -1135,7 +1130,6 @@ class _FakeNetworkSearchRepository implements SearchRepository {
       final item = PostSearchItemView(
         postId: 'fake_street_photo',
         contentType: wantsArticle ? 'article' : 'image',
-        contentIdentity: wantsArticle ? 'article' : 'work',
         title: '街头摄影',
         summary: '摄影频道结果',
         coverUrl:
@@ -1396,8 +1390,7 @@ class _IntersectionContractSearchRepository implements SearchRepository {
     }
     const connected = PostSearchItemView(
       postId: 'post_connected_liked',
-      contentType: 'image',
-      contentIdentity: 'work',
+      contentType: ContentType.image,
       title: '你点赞过的海边日落',
       summary: '已互动内容',
       coverUrl:
@@ -1408,8 +1401,7 @@ class _IntersectionContractSearchRepository implements SearchRepository {
     );
     final leadWithPrimary = PostSearchItemView(
       postId: 'post_lead_primary',
-      contentType: 'image',
-      contentIdentity: 'work',
+      contentType: ContentType.image,
       title: '环岛路骑行机位合集',
       summary: '交集线索内容',
       coverUrl:
@@ -1424,8 +1416,7 @@ class _IntersectionContractSearchRepository implements SearchRepository {
     );
     const discoveryNoPrimary = PostSearchItemView(
       postId: 'post_discovery_plain',
-      contentType: 'article',
-      contentIdentity: 'article',
+      contentType: ContentType.article,
       title: '城市天际线拍摄攻略',
       summary: '未连接且无交集句内容',
       coverUrl:

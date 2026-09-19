@@ -80,7 +80,6 @@ void main() {
       ContentPostDetailSlice.fromWire(<String, Object?>{
         'postId': 'image-caption-chain',
         'contentType': 'image',
-        'contentIdentity': 'work',
         'authorId': 'author-1',
         'authorDisplayName': '作者',
         'authorAvatarUrl': '',
@@ -185,8 +184,7 @@ void main() {
     final payload = ContentPostDetailPayload.fromWire(
       ContentPostDetailSlice(
         postId: 'article-entity-mention',
-        contentType: 'article',
-        contentIdentity: 'work',
+        contentType: ContentType.article,
         authorId: 'author-1',
         authorDisplayName: '作者',
         authorAvatarUrl: '',
@@ -228,8 +226,7 @@ void main() {
     final post = ContentPostViewData.fromWire(
       ContentPostProjection(
         postId: 'video-post-media-items',
-        contentType: 'video',
-        contentIdentity: 'work',
+        contentType: ContentType.video,
         assistantUsePolicy: AssistantUsePolicy.inherit,
         authorId: 'author-1',
         authorDisplayName: '作者',

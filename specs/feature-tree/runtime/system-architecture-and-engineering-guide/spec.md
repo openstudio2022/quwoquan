@@ -2,7 +2,7 @@
 
 > 所属领域：[`runtime`](../spec.md)
 >
-> 设计归属：[本层 design.md](./design.md)
+> 设计引用：[本层 design.md](./design.md)
 
 ## 1. 能力目标
 
@@ -66,7 +66,7 @@
 
 
 - [`app-cloud-business-object-commercial-closure`](./app-cloud-business-object-commercial-closure/spec.md)：ContractGraph validate/generate/check 可在 clean checkout 幂等重生。
-- [`domain-service-directory-ownership`](./domain-service-directory-ownership/spec.md)：从每个服务的 `contracts/domain.yaml` 和 L1 工程归属直接定位唯一责任领域。
+- [`domain-service-directory-ownership`](./domain-service-directory-ownership/spec.md)：从每个服务的 `contracts/domain.yaml` 与 ContractGraph 直接定位责任领域。
 - [`repository-layout-hygiene-and-retirement`](./repository-layout-hygiene-and-retirement/spec.md)：报告包含固定九类分类、WIP 清单、候选引用证据和最小验证命令。
 - [`absent-empty-failure-nullability`](./absent-empty-failure-nullability/spec.md)：缺席、空值与失败在端云保持三种不可互换的结果状态。
 - [`local-worktree-lifecycle-governance`](./local-worktree-lifecycle-governance/spec.md)：新建工作副本需显式授权，未合入工作按滞留时长分级提醒。
@@ -98,7 +98,7 @@
 ### REQ-002 服务目录、DDD 依赖与 CQRS 规则
 
 - 任意服务文件符合 services/<service>/internal/<context>/<object>/<layer>/file，domain 唯一来自服务 contracts/domain.yaml
-- 任意 App 业务文件符合 `quwoquan_app/lib/service/<service>/<context>/<object>/<layer>/file`，其中 layer 只允许 domain、application、adapters、presentation；`<service>` 是拥有该 context 的云侧服务名的 snake_case 形式，context/object 必须来自 canonical ContractGraph 与所属 L1 工程归属，禁止由文件名启发式、人工 registry 或旧目录别名决定 owner。
+- 任意 App 业务文件符合 `quwoquan_app/lib/service/<service>/<context>/<object>/<layer>/file`，其中 layer 只允许 domain、application、adapters、presentation；`<service>` 是拥有该 context 的云侧服务名的 snake_case 形式，context/object 必须来自 canonical ContractGraph，禁止由文件名启发式、人工 registry 或旧目录别名决定服务边界。
 - App 的 `runtime`、`design_system` 与 `l10n` 是唯一横切根；业务对象不得落入旧 `ui/cloud/core/app/application/infrastructure` 大桶，横切根也不得成为无 owner 业务文件的 fallback。
 - App 层义务按 canonical 端侧能力事实派生：App-exposed operation 要求 application/adapters，页面认领要求 application/presentation，端侧不变式或状态机才要求 domain；未被 App 消费的纯云对象不要求 App 空目录或占位实现。
 - App 必需层由端侧能力事实决定，端侧禁止层与写面形态则由云侧 kind 唯一决定，两者是互补的两组义务，不得互相顶替。

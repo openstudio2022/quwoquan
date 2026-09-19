@@ -37,11 +37,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from core.paths import CONTROL_PLANE_TAXONOMY_ROOT, NOW_ISO
 from governance.taxonomy.axis_roles import axis_role_for
 from governance.taxonomy.same_as_bridges import same_as_refs_for
+from core.schema import assert_valid
 
 TAGS_ROOT = CONTROL_PLANE_TAXONOMY_ROOT
 
 DRY_RUN = False
 _stats: dict[str, int] = {}
+
+_TAXONOMY_FILE_SCHEMAS = {
+    "_group.json": ("governance", "_group"),
+    "_dimension.json": ("governance", "_dimension"),
+    "_taxonomy.json": ("governance", "_taxonomy"),
+}
 
 
 def write_json(path: Path, data: dict):
@@ -52,6 +59,9 @@ def write_json(path: Path, data: dict):
     """
     if DRY_RUN:
         return
+    schema_target = _TAXONOMY_FILE_SCHEMAS.get(path.name)
+    if schema_target is not None:
+        assert_valid(data, *schema_target, label=str(path))
     existing: dict | None = None
     if path.exists():
         try:

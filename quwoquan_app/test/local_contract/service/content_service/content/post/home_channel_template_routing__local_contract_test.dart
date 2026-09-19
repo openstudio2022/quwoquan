@@ -10,6 +10,7 @@ import 'package:quwoquan_app/service/content_service/content/post/presentation/h
 import 'package:quwoquan_app/runtime/di/app_providers_content_runtime.dart'
     show homeChannelsProvider;
 import 'package:shared_preferences/shared_preferences.dart';
+
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
 
@@ -112,7 +113,7 @@ void main() {
       expect(find.byKey(HomePrimaryTabStrip.channelKey('car')), findsNothing);
     });
 
-    testWidgets('默认激活 recommend → body 使用双列发现布局策略', (tester) async {
+    testWidgets('默认激活 recommend，旧频道 template 不再传入布局消费者', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(
         _buildHome(<HomeChannelConfig>[_following, _recommend]),
@@ -123,10 +124,9 @@ void main() {
         find.byType(HomeMultiFormFeed),
       );
       expect(feed.channelId, 'recommend');
-      expect(feed.template, 'intersection_rail_masonry');
     });
 
-    testWidgets('频道集不含 recommend 时回退首个频道 → 单列关系流模板', (tester) async {
+    testWidgets('频道集不含 recommend 时选择首个频道，不选择布局模板', (tester) async {
       _suppressExpectedErrors();
       await tester.pumpWidget(_buildHome(<HomeChannelConfig>[_following]));
       await tester.pump(const Duration(milliseconds: 300));
@@ -135,7 +135,6 @@ void main() {
         find.byType(HomeMultiFormFeed),
       );
       expect(feed.channelId, 'following');
-      expect(feed.template, 'single_column_relations');
     });
   });
 }

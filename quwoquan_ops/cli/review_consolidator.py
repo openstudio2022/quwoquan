@@ -173,22 +173,24 @@ def _health_artifacts(plan: dict, receipt: dict) -> list[tuple[dict, dict]]:
     return reports
 
 
-def _owner_open(finding: dict, disposition: dict, plan: dict) -> None:
-    from lib.feature_tree.commands import discover_nodes
-    from lib.feature_tree.ownership import resolve_target_details
-    from lib.feature_tree.parsing import open_item_details, headings
+def _feature_open(finding: dict, disposition: dict, plan: dict) -> None:
+    from lib.feature_tree.nodes import discover_nodes, node_for_spec
+    from lib.feature_tree.parsing import headings, open_item_details
 
-    nodes = discover_nodes()
-    target = plan["owner_identity"]["resolved_owner"] if finding["path"] == "<candidate>" else _relative(finding["path"])
-    owner = resolve_target_details(target, nodes).node
-    expected_path = owner.spec.relative_to(source_root(ROOT)).as_posix()
     ref = _nonempty(disposition["open_ref"], "open_ref")
     path, separator, anchor = ref.partition("#")
-    if path != expected_path or not separator or anchor not in headings(owner.spec):
-        _closure_error("OPEN 必须为当前最低 owner 有效 anchor")
-    if path not in {item["path"] for item in plan["contexts"] if item.get("exists")}:
+    bound_contexts = {
+        str(item["path"])
+        for item in plan["contexts"]
+        if item.get("exists") and item.get("kind") == "spec"
+    }
+    if not separator or path not in bound_contexts:
         _closure_error("OPEN spec 未绑定 current plan context")
-    matches = [item for item in open_item_details(owner) if item["id"].lower() == anchor]
+    spec = source_root(ROOT) / path
+    node = node_for_spec(spec, discover_nodes())
+    if node is None or anchor not in headings(spec):
+        _closure_error("OPEN 必须为 plan context 中的有效 anchor")
+    matches = [item for item in open_item_details(node) if item["id"].lower() == anchor]
     if len(matches) != 1 or not matches[0]["completion"] or matches[0]["releaseImpact"] != "track":
         _closure_error("OPEN 失效、缺完成判定或阻断准出")
 
@@ -219,14 +221,12 @@ def _disposition_index(dispositions: Any) -> dict:
 
 def _outside_candidate(finding: dict, plan: dict) -> None:
     from lib.feature_tree.commands import discover_nodes
-    from lib.feature_tree.ownership import resolve_target_details
 
     nodes = discover_nodes()
     if finding["path"] == "<candidate>":
         _closure_error("candidate 级 finding 不得 out-of-scope")
     path = _relative(finding["path"])
-    owners = {resolve_target_details(item, nodes).node.rel for item in plan["changed_paths"]}
-    if path in plan["changed_paths"] or resolve_target_details(path, nodes).node.rel in owners:
+    if path in plan["changed_paths"]:
         _closure_error("out-of-scope 的 path/owner 在 candidate 内")
 
 
@@ -254,15 +254,15 @@ def _adjudicate_health(disposition: dict, original: dict, finding: dict,
     _nonempty(disposition["reason"], "reason")
     selected = _evidence_ids(disposition["evidence_ids"], receipt, "disposition evidence")
     action = disposition["disposition"]
-    if action == "owner-open":
-        _owner_open(finding, disposition, plan)
+    if action == "feature-open":
+        _feature_open(finding, disposition, plan)
     elif action == "out-of-scope":
         _outside_candidate(finding, plan)
     elif action == "fix-now":
         _fix_now(original, finding, selected, reports)
     else:
         _closure_error("disposition 非法")
-    if action != "owner-open" and disposition["open_ref"] is not None:
+    if action != "feature-open" and disposition["open_ref"] is not None:
         _closure_error("非 OPEN disposition 不得填写 open_ref")
 
 

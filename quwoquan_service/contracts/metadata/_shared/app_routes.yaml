@@ -181,8 +181,6 @@ routes:
   - id: addContactSearch
     path: /add-contact/search
     query_params: [query]
-  - id: addContactScan
-    path: /add-contact/scan
   - id: addContactPhone
     path: /add-contact/phone
   - id: addContactConfirm

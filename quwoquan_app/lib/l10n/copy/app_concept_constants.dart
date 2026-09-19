@@ -35,13 +35,7 @@ class AppConceptConstants {
   static const List<String> assistantReferenceHostBlocklist = <String>[];
 
   // ==================== 内容与创作概念 ====================
-  /// 微趣：快速记录当下（照片九宫格、纯文字、短视频）
-  static const String weiqu = '微趣';
-
-  /// 微趣副标题
-  static const String weiquSubtitle = '记录生活此刻感悟';
-
-  /// 作品：精心打磨的图片/视频/文章内容
+  /// 作品：图片 / 视频 / 文章三类内容对象的统称
   static const String zuopin = '作品';
 
   /// 作品副标题
@@ -93,14 +87,6 @@ class AppConceptConstants {
   static const String messages = '消息';
   static const String contacts = '联系人';
 
-  // ==================== 创作入口 - 微趣三类 ====================
-  static const String weiquPhoto = '照片';
-  static const String weiquPhotoHint = '相册选择';
-  static const String weiquText = '文字';
-  static const String weiquTextHint = '纯文字';
-  static const String weiquVideo = '视频';
-  static const String weiquVideoHint = '短视频';
-
   // ==================== 创作入口 - 作品三类 ====================
   static const String zuopinImage = '图片';
   static const String zuopinImageHint = '大图展示';
@@ -112,4 +98,5 @@ class AppConceptConstants {
   // ==================== 已退役概念（严禁使用） ====================
   // 随记 (Notes) -> 已合并至文章或生活记录
   // 好物 (Goods) -> 已整合进爱物
+  // 微趣 / 点滴 (micro / moment) -> 内容对象只有图片 / 视频 / 文章三类
 }

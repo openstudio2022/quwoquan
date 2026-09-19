@@ -25,7 +25,6 @@ def build_parser() -> argparse.ArgumentParser:
     )
     context_parser.set_defaults(func=command_context)
     candidate_parser = subparsers.add_parser("candidate-evidence", help="生成 POST candidate evidence")
-    candidate_parser.add_argument("--owner-identity", required=True)
     candidate_parser.add_argument("--changed-path", action="append", required=True)
     candidate_parser.set_defaults(func=command_candidate_evidence)
     overview_parser = subparsers.add_parser("overview", help="生成动态特性树总览")

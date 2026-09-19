@@ -30,7 +30,6 @@ from .content_addressed_writer import (
 from .delta import semantic_anchor_changes
 from .evidence import extract_spec_refs, test_spec_refs
 from .nodes import Node, discover_nodes, node_for_spec, parent_chain
-from .ownership import TargetResolution, owners_for_path, resolve_target_details
 from .parsing import block_open_items, open_item_details, title
 from .patterns import PATH_RE, SPEC_REF_CODE_SPAN_RE, VALID_LEVELS
 from ..evidence_fingerprint import canonical_json_bytes
@@ -156,18 +155,18 @@ def _resolved_direct_reference(
     # quwoquan_ops/policies 文件；即使目标缺失也必须作为 candidate fail-closed。
     # 带目录的普通 YAML 仍按其原路径判断，不映射到 policies。
     if "/" not in path_text and path_text.endswith(".yaml"):
-        candidate = context.REPO_ROOT / "quwoquan_ops" / "policies" / path_text
+        candidate = context.repository_root() / "quwoquan_ops" / "policies" / path_text
         candidate_type = True
     elif path_text.startswith(
         ("specs/", "quwoquan_app/", "quwoquan_service/", "quwoquan_data/", "quwoquan_ops/")
     ):
-        candidate = context.REPO_ROOT / path_text
+        candidate = context.repository_root() / path_text
     else:
         candidate = source.parent / path_text
 
     resolved = candidate.resolve()
     try:
-        relative = resolved.relative_to(context.REPO_ROOT.resolve()).as_posix()
+        relative = resolved.relative_to(context.repository_root().resolve()).as_posix()
     except ValueError as error:
         if candidate_type:
             raise ValueError(
@@ -284,105 +283,52 @@ def _serialize_context_manifest(payload: Mapping[str, object]) -> str:
 
 
 def write_output(name: str, content: str) -> Path:
-    context.OUTPUT_ROOT.mkdir(parents=True, exist_ok=True)
-    path = context.OUTPUT_ROOT / name
+    context.output_root().mkdir(parents=True, exist_ok=True)
+    path = context.output_root() / name
     path.write_text(content.rstrip() + "\n", encoding="utf-8")
     return path
 
 
 def _relative(path: Path) -> str:
-    return path.resolve().relative_to(context.REPO_ROOT.resolve()).as_posix()
+    return path.resolve().relative_to(context.repository_root().resolve()).as_posix()
 
 
-def _canonical_contexts(
-    resolution: TargetResolution,
-    *,
-    raw_target: str,
-) -> list[dict[str, str | None]]:
-    """返回直达 canonical 文档及锚点，不展开中间转引文本。"""
 
-    design_owner = resolution.design_ownership
+
+def _direct_feature_resolution(raw_target: str, nodes: list[Node]) -> tuple[Path, list[Node]]:
+    raw_path = raw_target.partition("#")[0]
+    target = Path(raw_path)
+    if not target.is_absolute():
+        target = context.repository_root() / target
+    try:
+        target.resolve(strict=False).relative_to(context.repository_root().resolve())
+    except ValueError as exc:
+        raise ValueError(f"GATE_BLOCK: {raw_target} 越出仓库") from exc
+    if target.is_dir() and (target / "spec.md").is_file():
+        target = target / "spec.md"
+    spec = target if target.name == "spec.md" else target.parent / "spec.md"
+    direct = node_for_spec(spec, nodes)
+    if direct is None:
+        return target, []
+    by_dir = {node.directory.resolve(): node for node in nodes}
+    return target, parent_chain(direct, by_dir)
+
+def _canonical_contexts(feature_chain: list[Node], *, target: Path) -> list[dict[str, str | None]]:
     contexts: list[dict[str, str | None]] = []
-
-    def append(path: Path, anchor: str | None, kind: str) -> None:
-        entry = declared_object(
-            {"path": _relative(path), "anchor": anchor, "kind": kind},
-            "feature_context_manifest",
-            "context_fields",
-        )
-        if entry not in contexts:
-            contexts.append(entry)
-
-    requested_name = Path(raw_target.partition("#")[0]).name
-    if design_owner is not None:
-        append(design_owner.l2.design, design_owner.anchor, "decision")
-        for anchor in design_owner.requirement_anchors:
-            append(design_owner.story.spec, anchor, "requirement")
-        for anchor in design_owner.acceptance_anchors:
-            append(design_owner.story.spec, anchor, "acceptance")
-        if not design_owner.requirement_anchors and not design_owner.acceptance_anchors:
-            append(design_owner.story.spec, None, "spec")
-    else:
-        # 直接 spec/design 请求只读取被请求文档的直接引用；工程路径没有更精确
-        # DEC 时仍加载当前 owner 的 spec/design。父链只保留在 owner_chain。
-        append(resolution.node.spec, None, "spec")
-        if requested_name != "spec.md" and resolution.node.design.is_file():
-            append(resolution.node.design, None, "design")
-
-    # 只读取已选 DEC/REQ/GWT 锚点中的 direct contract；Story 其他要求、父层全文
-    # 与集中契约清单都不应扩大本次 feature context。
-    source_segments: list[tuple[Path, str]] = []
-    if design_owner is not None:
-        design_text = design_owner.l2.design.read_text(encoding="utf-8")
-        story_text = design_owner.story.spec.read_text(encoding="utf-8")
-        selected = (
-            design_owner.anchor,
-            *design_owner.requirement_anchors,
-            *design_owner.acceptance_anchors,
-        )
-        for anchor in selected:
-            section = _anchor_section(design_text, anchor)
-            if section:
-                source_segments.append((design_owner.l2.design, section))
-                continue
-            section = _anchor_section(story_text, anchor)
-            if section:
-                source_segments.append((design_owner.story.spec, section))
-    else:
-        if requested_name == "spec.md":
-            source_paths = (resolution.node.spec,)
-        elif requested_name == "design.md":
-            source_paths = (resolution.node.design,)
-        else:
-            source_paths = (resolution.node.spec, resolution.node.design)
-        for path in source_paths:
-            if path.is_file():
-                source_segments.append((path, path.read_text(encoding="utf-8")))
-
-    direct_refs: set[tuple[str, str | None, str]] = set()
-    for source, segment in source_segments:
-        direct_refs.update(
-            _direct_canonical_references(
-                source,
-                segment,
-                bare_policy_candidates=(
-                    design_owner is not None or requested_name == "design.md"
-                ),
-            )
-        )
-    for path, anchor, kind in sorted(
-        direct_refs,
-        key=lambda item: (item[2], item[0], item[1] or ""),
-    ):
-        append(context.REPO_ROOT / path, anchor, kind)
-    return contexts
-
+    requested = target.name
+    selected = feature_chain[-1:]
+    for node in selected:
+        sources = [node.spec]
+        if requested != "spec.md" and node.design.is_file(): sources.append(node.design)
+        for source in sources:
+            contexts.append(declared_object({"path": _relative(source), "anchor": None, "kind": "spec" if source.name == "spec.md" else "design"}, "feature_context_manifest", "context_fields"))
+    return sorted(contexts, key=lambda item: (str(item["path"]).encode(), str(item["anchor"] or "").encode(), str(item["kind"]).encode()))
 
 def _applicable_agents(target: Path) -> list[str]:
     """按仓库根到最近子树顺序返回真实存在的 AGENTS.md。"""
 
     try:
-        target.resolve().relative_to(context.REPO_ROOT.resolve())
+        target.resolve().relative_to(context.repository_root().resolve())
     except ValueError:
         return []
     current = target if target.is_dir() else target.parent
@@ -391,137 +337,37 @@ def _applicable_agents(target: Path) -> list[str]:
         candidate = current / "AGENTS.md"
         if candidate.is_file():
             found.append(candidate)
-        if current.resolve() == context.REPO_ROOT.resolve():
+        if current.resolve() == context.repository_root().resolve():
             break
-        if not current.resolve().is_relative_to(context.REPO_ROOT.resolve()):
+        if not current.resolve().is_relative_to(context.repository_root().resolve()):
             break
         current = current.parent
     return [_relative(path) for path in reversed(found)]
 
 
-def _context_manifest(
-    raw_target: str,
-    resolution: TargetResolution,
-    nodes: list[Node],
-    *,
-    fingerprint_receipt: dict[str, object] | None = None,
-) -> dict[str, object]:
-    by_dir = {node.directory.resolve(): node for node in nodes}
-    chain = parent_chain(resolution.node, by_dir)
-    open_items = [
-        declared_object(
-            {
-                "path": str(item["node"]),
-                "id": str(item["id"]),
-                "title": str(item["title"]),
-                "release_impact": str(item["releaseImpact"]),
-            },
-            "feature_context_manifest",
-            "open_item_fields",
-        )
-        for item in open_item_details(resolution.node)
-    ]
-    payload = {
-        "schema_version": contract_schema_version("feature_context_manifest"),
-        "target": _relative(resolution.target),
-        "resolved_owner": resolution.node.rel,
-        "owner_chain": [
-            declared_object(
-                {"level": item.level, "node_id": item.node_id, "path": item.rel},
-                "feature_context_manifest",
-                "owner_chain_fields",
-            )
-            for item in chain
-        ],
-        "canonical_contexts": _canonical_contexts(resolution, raw_target=raw_target),
-        "applicable_agents": _applicable_agents(resolution.target),
-        "open_items": open_items,
-    }
-    receipt = (
-        fingerprint_receipt
-        if fingerprint_receipt is not None
-        else build_feature_context_fingerprint(payload, repo_root=context.REPO_ROOT)
-    )
-    payload["evidence_fingerprint"] = embedded_fingerprint_binding(receipt)
-    validate_feature_context_manifest(payload)
-    return payload
+def _context_manifest(raw_target: str, nodes: list[Node], *, fingerprint_receipt: dict[str, object] | None = None) -> dict[str, object]:
+    target, chain = _direct_feature_resolution(raw_target, nodes)
+    open_items = [declared_object({"path": str(item["node"]), "id": str(item["id"]), "title": str(item["title"]), "release_impact": str(item["releaseImpact"])}, "feature_context_manifest", "open_item_fields") for node in chain[-1:] for item in open_item_details(node)]
+    contexts = _canonical_contexts(chain, target=target)
+    payload = {"schema_version": contract_schema_version("feature_context_manifest"), "target": _relative(target), "context_status": "context_resolved" if chain else "context_unresolved", "feature_chain": [declared_object({"level": item.level, "node_id": item.node_id, "path": item.rel}, "feature_context_manifest", "feature_chain_fields") for item in chain], "canonical_contexts": contexts, "applicable_agents": _applicable_agents(target), "open_items": open_items, "dependency_evidence": sorted({path for node in chain[-1:] for source in (node.spec, node.design) if source.is_file() for path, _, _ in _direct_canonical_references(source, source.read_text(encoding="utf-8"), bare_policy_candidates=False)}, key=lambda item: item.encode())}
+    receipt = fingerprint_receipt or build_feature_context_fingerprint(payload, repo_root=context.repository_root())
+    payload["evidence_fingerprint"] = embedded_fingerprint_binding(receipt); validate_feature_context_manifest(payload); return payload
 
-
-def _command_expanded_context(
-    args: argparse.Namespace,
-    nodes: list[Node],
-    node: Node,
-) -> int:
-    by_dir = {item.directory.resolve(): item for item in nodes}
-    chain = parent_chain(node, by_dir)
-    blocks = [
-        "# Feature Context",
-        "",
-        f"- TARGET：`{args.target}`",
-        f"- 归属节点：`{node.rel}`",
-        "",
-    ]
+def _command_expanded_context(args: argparse.Namespace, nodes: list[Node], chain: list[Node]) -> int:
+    blocks = ["# Feature Context", "", f"- TARGET：`{args.target}`", f"- 上下文状态：`{'context_resolved' if chain else 'context_unresolved'}`", ""]
     for item in chain:
-        blocks.extend([f"## {VALID_LEVELS[item.level]} · {item.node_id}", "", item.spec.read_text(encoding="utf-8").strip(), ""])
-        if item.design.is_file():
-            blocks.extend([f"### 有效设计 · {item.node_id}", "", item.design.read_text(encoding="utf-8").strip(), ""])
-
-    metadata_refs: set[str] = set()
-    for item in chain:
-        for path in (item.spec, item.design):
-            if path.is_file():
-                metadata_refs.update(
-                    ref for ref in PATH_RE.findall(path.read_text(encoding="utf-8"))
-                    if ref.startswith("quwoquan_service/contracts/metadata/")
-                )
-    blocks.extend(["## Metadata 引用", "", *([f"- `{ref}`" for ref in sorted(metadata_refs)] or ["- 无"]), ""])
-
-    chain_specs = {item.spec.relative_to(context.REPO_ROOT).as_posix() for item in chain}
-    refs_by_test = test_spec_refs()
-    matching_tests = {
-        test: sorted(ref for ref in refs if ref.partition("#")[0] in chain_specs)
-        for test, refs in refs_by_test.items()
-        if any(ref.partition("#")[0] in chain_specs for ref in refs)
-    }
-    blocks.extend(["## 测试/可执行门规格引用", ""])
-    if matching_tests:
-        for test, refs in sorted(matching_tests.items()):
-            blocks.append(f"- `{test}`")
-            blocks.extend(f"  - `{ref}`" for ref in refs)
-    else:
-        blocks.append("- 无；若验收已关闭，`verify-feature-tree` 将阻断。")
-    blocks.append("")
-
-    siblings = [
-        item for item in nodes
-        if item.level == node.level and item.directory.parent == node.directory.parent and item != node
-    ]
-    blocks.extend(["## 相邻节点", "", *([f"- `{item.rel}`" for item in siblings] or ["- 无"]), ""])
-
-    changed = gitio.git_changed_paths()
-    chain_prefixes = [item.directory.relative_to(context.REPO_ROOT).as_posix().rstrip("/") + "/" for item in chain]
-    related_changes: list[str] = []
-    for rel in changed:
-        if any(rel.startswith(prefix) for prefix in chain_prefixes):
-            related_changes.append(rel)
-            continue
-        owners = owners_for_path(context.REPO_ROOT / rel, nodes)
-        if len(owners) == 1 and owners[0] in chain:
-            related_changes.append(rel)
-    blocks.extend(["## 当前 Git 增量", "", *([f"- `{rel}`" for rel in related_changes] or ["- 无"]), ""])
-    output = write_output("context.md", "\n".join(blocks))
-    print(output.relative_to(context.REPO_ROOT))
-    return 0
-
+        blocks.extend([f"## {VALID_LEVELS[item.level]} · {item.node_id}", "", item.spec.read_text(encoding="utf-8").strip(), ""]);
+        if item.design.is_file(): blocks.extend([f"### 有效设计 · {item.node_id}", "", item.design.read_text(encoding="utf-8").strip(), ""])
+    output = write_output("context.md", "\n".join(blocks)); print(output.relative_to(context.repository_root())); return 0
 
 def command_context(args: argparse.Namespace) -> int:
     nodes = discover_nodes()
     try:
-        resolution = resolve_target_details(args.target, nodes)
+        target, chain = _direct_feature_resolution(args.target, nodes)
         output_format = getattr(args, "format", "manifest")
         if output_format == "expanded":
-            return _command_expanded_context(args, nodes, resolution.node)
-        manifest = _context_manifest(args.target, resolution, nodes)
+            return _command_expanded_context(args, nodes, chain)
+        manifest = _context_manifest(args.target, nodes)
         content = canonical_json_bytes(manifest)
         size = len(content)
         receipt: Mapping[str, object] | None = None
@@ -549,16 +395,14 @@ def command_context(args: argparse.Namespace) -> int:
     except ValueError as error:
         print(error, file=sys.stderr)
         return 2
-    print(output.relative_to(context.REPO_ROOT))
+    print(output.relative_to(context.repository_root()))
     return 0
 
 
 
 def command_candidate_evidence(args: argparse.Namespace) -> int:
     try:
-        payload = build_candidate_evidence(
-            args.owner_identity, list(args.changed_path), repo_root=context.REPO_ROOT
-        )
+        payload = build_candidate_evidence(list(args.changed_path), repo_root=context.repository_root())
         content = canonical_json_bytes(payload)
         if len(content) > int(contract_section("candidate_evidence_manifest")["max_bytes"]):
             raise CandidateEvidenceError(
@@ -570,8 +414,7 @@ def command_candidate_evidence(args: argparse.Namespace) -> int:
         # 发布后完整读回；缺依赖/当前字节漂移时不返回可消费ref。
         from ..candidate_evidence import validate_candidate_ref
         validate_candidate_ref(
-            output.relative_to(context.REPO_ROOT).as_posix(), repo_root=context.REPO_ROOT,
-            expected_owner_identity_ref=args.owner_identity,
+            output.relative_to(context.repository_root()).as_posix(), repo_root=context.repository_root(),
             expected_changed_paths=list(args.changed_path),
         )
     except CandidateEvidenceError as error:
@@ -580,7 +423,7 @@ def command_candidate_evidence(args: argparse.Namespace) -> int:
     except (KeyError, TypeError, ValueError) as error:
         print(f"CANDIDATE.STALE: {error}", file=sys.stderr)
         return 2
-    print(output.relative_to(context.REPO_ROOT))
+    print(output.relative_to(context.repository_root()))
     return 0
 
 def command_overview(_: argparse.Namespace) -> int:
@@ -619,7 +462,7 @@ def command_overview(_: argparse.Namespace) -> int:
         text = l1.spec.read_text(encoding="utf-8")
         children = [node for node in nodes if node.level == 2 and node.directory.parent == l1.directory]
         open_count = len(re.findall(r"^###\s+OPEN-\d{3,}\b", text, re.MULTILINE))
-        l1_prefix = l1.directory.relative_to(context.REPO_ROOT).as_posix() + "/"
+        l1_prefix = l1.directory.relative_to(context.repository_root()).as_posix() + "/"
         subtree_open = [item for item in open_items if str(item["node"]).startswith(l1_prefix)]
         subtree_block = sum(item["releaseImpact"] == "block" for item in subtree_open)
         lines.extend(
@@ -636,17 +479,17 @@ def command_overview(_: argparse.Namespace) -> int:
         for l2 in children:
             story_count = sum(node.level == 3 and node.directory.parent == l2.directory for node in nodes)
             l2_open = len(re.findall(r"^###\s+OPEN-\d{3,}\b", l2.spec.read_text(encoding="utf-8"), re.MULTILINE))
-            l2_prefix = l2.directory.relative_to(context.REPO_ROOT).as_posix() + "/"
+            l2_prefix = l2.directory.relative_to(context.repository_root()).as_posix() + "/"
             l2_subtree = [item for item in open_items if str(item["node"]).startswith(l2_prefix)]
             lines.append(
-                f"- [{title(l2.spec)}]({os.path.relpath(l2.spec, context.OUTPUT_ROOT).replace(os.sep, '/')})："
+                f"- [{title(l2.spec)}]({os.path.relpath(l2.spec, context.output_root()).replace(os.sep, '/')})："
                 f"{story_count} Story；本层 {l2_open} OPEN；子树 {len(l2_subtree)} OPEN"
             )
         lines.append("")
     lines.extend(["## 准出阻断 OPEN", ""])
     lines.extend(
         f"- `{item['priority']}/{item['type']}` `{item['id']}` "
-        f"[{item['title']}]({os.path.relpath(context.REPO_ROOT / str(item['node']), context.OUTPUT_ROOT).replace(os.sep, '/')}) "
+        f"[{item['title']}]({os.path.relpath(context.repository_root() / str(item['node']), context.output_root()).replace(os.sep, '/')}) "
         f"· 完成判定：{item['completion']}"
         for item in block_items
     )
@@ -656,7 +499,7 @@ def command_overview(_: argparse.Namespace) -> int:
     lines.extend(["## 全部开放事项", ""])
     lines.extend(
         f"- `{item['priority']}/{item['releaseImpact']}/{item['type']}` `{item['id']}` "
-        f"[{item['title']}]({os.path.relpath(context.REPO_ROOT / str(item['node']), context.OUTPUT_ROOT).replace(os.sep, '/')}) "
+        f"[{item['title']}]({os.path.relpath(context.repository_root() / str(item['node']), context.output_root()).replace(os.sep, '/')}) "
         f"· 完成判定：{item['completion']}"
         for item in open_items
     )
@@ -671,7 +514,7 @@ def command_overview(_: argparse.Namespace) -> int:
             indent=2,
         ),
     )
-    print(f"{markdown_path.relative_to(context.REPO_ROOT)}\n{json_path.relative_to(context.REPO_ROOT)}")
+    print(f"{markdown_path.relative_to(context.repository_root())}\n{json_path.relative_to(context.repository_root())}")
     return 0
 
 
@@ -681,9 +524,8 @@ def command_change_report(_: argparse.Namespace) -> int:
     changed = gitio.git_changed_paths()
     impacted: dict[str, list[str]] = {}
     impacted_nodes: set[Node] = set()
-    unowned: list[str] = []
     for rel in changed:
-        path = context.REPO_ROOT / rel
+        path = context.repository_root() / rel
         node = None
         if rel.startswith("specs/feature-tree/"):
             current = path if path.name == "spec.md" else path.parent / "spec.md"
@@ -692,12 +534,6 @@ def command_change_report(_: argparse.Namespace) -> int:
                 if node:
                     break
                 current = current.parent.parent / "spec.md"
-        else:
-            owners = owners_for_path(path, nodes)
-            if len(owners) == 1:
-                node = owners[0]
-            elif rel.startswith(("quwoquan_app/", "quwoquan_service/", "quwoquan_data/", "quwoquan_ops/")):
-                unowned.append(rel)
         if node:
             impacted_nodes.add(node)
             chain = " -> ".join(item.node_id for item in parent_chain(node, by_dir))
@@ -713,13 +549,13 @@ def command_change_report(_: argparse.Namespace) -> int:
     metadata_changes = [rel for rel in changed if rel.startswith("quwoquan_service/contracts/metadata/")]
     metadata_breaking: list[str] = []
     for rel in metadata_changes:
-        path = context.REPO_ROOT / rel
+        path = context.repository_root() / rel
         if not path.exists():
             metadata_breaking.append(f"{rel}: 删除 canonical metadata 文件")
             continue
         diff = subprocess.run(
             ["git", "diff", "--unified=0", "HEAD", "--", rel],
-            cwd=context.REPO_ROOT,
+            cwd=context.repository_root(),
             check=False,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
@@ -732,30 +568,14 @@ def command_change_report(_: argparse.Namespace) -> int:
         if removed_contract_line:
             metadata_breaking.append(f"{rel}: 存在删除/收窄行，必须执行 breaking-contract 审核")
 
-    changed_anchor_kinds = {
-        anchor.split("-", 1)[0]
-        for delta in semantic_changes.values()
-        for key in ("added", "modified", "deleted")
-        for anchor in delta[key]
+    from quwoquan_ops.ci.impact_planner_core import classify_impacts
+
+    impact_plan = classify_impacts(changed)
+    required_layers = {
+        name for name, required in impact_plan["local_scopes"].items() if required
     }
-    required_layers: set[str] = set()
-    if "UAT" in changed_anchor_kinds:
-        required_layers.add("user_acceptance")
-    if "DOM" in changed_anchor_kinds:
-        required_layers.update({"local_contract", "api_integration"})
-    if "SIT" in changed_anchor_kinds:
-        required_layers.update({"local_contract", "api_integration"})
-    if "GWT" in changed_anchor_kinds:
-        required_layers.add("local_contract")
-    required_gates = {"make verify-feature-tree"}
-    if metadata_changes:
-        required_gates.update({"metadata verify/codegen", "python3 quwoquan_ops/gate/verify_single_track_contracts.py"})
-    if any(rel.startswith("quwoquan_app/") for rel in changed):
-        required_gates.add("App scoped tests/gates")
-    if any(rel.startswith("quwoquan_service/") for rel in changed):
-        required_gates.add("Service scoped tests/gates")
-    if any(rel.startswith("quwoquan_data/") for rel in changed):
-        required_gates.add("Data scoped tests/gates")
+    required_gates = {"canonical ImpactPlan required_ids"}
+
 
     release_blockers: list[str] = []
     for node in impacted_nodes:
@@ -770,7 +590,6 @@ def command_change_report(_: argparse.Namespace) -> int:
         f"- 规格/设计语义增量文件：{len(semantic_changes)}",
         f"- Metadata 变更：{len(metadata_changes)}",
         f"- 准出阻断 OPEN：{len(release_blockers)}",
-        f"- 未归属工程变更：{len(unowned)}",
         "",
         "## 受影响父链",
         "",
@@ -792,7 +611,6 @@ def command_change_report(_: argparse.Namespace) -> int:
     lines.extend(["", "## 所需测试与门禁", "", f"- 测试层：{', '.join(sorted(required_layers)) if required_layers else '按代码影响面最小验证'}"])
     lines.extend(f"- 门禁：`{gate}`" for gate in sorted(required_gates))
     lines.extend(["", "## 准出阻断 OPEN", "", *([f"- `{item}`" for item in sorted(release_blockers)] or ["- 无"]), ""])
-    lines.extend(["## 未归属工程变更", "", *([f"- `{path}`" for path in unowned] or ["- 无"]), ""])
     output = write_output("change-report.md", "\n".join(lines))
     json_output = write_output(
         "change-report.json",
@@ -802,16 +620,16 @@ def command_change_report(_: argparse.Namespace) -> int:
                 "impacted": impacted,
                 "semantic_anchor_changes": semantic_changes,
                 "metadata": {"changed": metadata_changes, "breaking_signals": metadata_breaking},
+                "impact_plan": impact_plan,
                 "required_test_layers": sorted(required_layers),
                 "required_gates": sorted(required_gates),
                 "release_blockers": sorted(release_blockers),
-                "unowned": unowned,
             },
             ensure_ascii=False,
             indent=2,
         ),
     )
-    print(f"{output.relative_to(context.REPO_ROOT)}\n{json_output.relative_to(context.REPO_ROOT)}")
+    print(f"{output.relative_to(context.repository_root())}\n{json_output.relative_to(context.repository_root())}")
     if release_blockers:
         print(
             "RELEASE_GATES_BLOCKED: 当前变更关联的正式发布准出仍被 OPEN 阻断；"
@@ -820,4 +638,4 @@ def command_change_report(_: argparse.Namespace) -> int:
     # `verify-feature-tree --changes` 校验的是目录归属和可追溯性。block OPEN
     # 仍是正式发布门禁，但不能令其本身的非提升性修复无法提交；stackctl release
     # profile 继续消费 change report 中的 release blockers 并如实阻断发布。
-    return 2 if unowned else 0
+    return 0

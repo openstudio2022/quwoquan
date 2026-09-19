@@ -8,7 +8,24 @@ import (
 	"quwoquan_service/internal/metadata/ast"
 	"quwoquan_service/internal/metadata/graph"
 	contractopenapi "quwoquan_service/internal/metadata/openapi"
+	"quwoquan_service/internal/metadata/requestbinding"
 )
+
+func validateJSONQueryBindings(contractGraph *graph.ContractGraph, operation ast.Operation) []Issue {
+	if operation.RequestBindings == nil {
+		return nil
+	}
+	var issues []Issue
+	for _, binding := range operation.RequestBindings.Query {
+		if binding.Encoding == "" {
+			continue
+		}
+		if _, err := requestbinding.Resolve(contractGraph.Documents, operation, binding); err != nil {
+			issues = append(issues, issue("CONTRACT.REQUEST_BINDING.JSON_OBJECT", operation.SourcePath, "%v", err))
+		}
+	}
+	return issues
+}
 
 var (
 	typedBindingIdentifier        = regexp.MustCompile(`^[A-Z][A-Za-z0-9]*$`)
@@ -216,6 +233,7 @@ func Run(contractGraph *graph.ContractGraph, profile Profile) []Issue {
 				transportKeys[transportKey] = operation.ID
 			}
 		}
+		issues = append(issues, validateJSONQueryBindings(contractGraph, operation)...)
 		if profile == ProfileCommercial {
 			issues = append(
 				issues,

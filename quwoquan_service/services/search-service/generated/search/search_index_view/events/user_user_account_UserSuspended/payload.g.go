@@ -5,11 +5,54 @@ package eventpayload
 
 import "time"
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
+type AccountState string
+
+const (
+	AccountStateAnonymous AccountState = "anonymous"
+	AccountStateActive    AccountState = "active"
+	AccountStateSuspended AccountState = "suspended"
+	AccountStateClosed    AccountState = "closed"
+)
+
+func (v AccountState) Validate() error {
+	switch v {
+	case "anonymous", "active", "suspended", "closed":
+		return nil
+	}
+	return fmt.Errorf("invalid AccountState")
+}
+func (v AccountState) MarshalJSON() ([]byte, error) {
+	if err := v.Validate(); err != nil {
+		return nil, err
+	}
+	return json.Marshal(string(v))
+}
+func (v *AccountState) UnmarshalJSON(data []byte) error {
+	var wire *string
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if wire == nil {
+		return fmt.Errorf("invalid AccountState")
+	}
+	next := AccountState(*wire)
+	if err := next.Validate(); err != nil {
+		return err
+	}
+	*v = next
+	return nil
+}
+
 type UserAccountEnforcementPayload struct {
-	UserId       string    `json:"userId"`
-	PersonaIds   []string  `json:"personaIds"`
-	AccountState string    `json:"accountState"`
-	AuthEpoch    int       `json:"authEpoch"`
-	DecisionRef  string    `json:"decisionRef"`
-	OccurredAt   time.Time `json:"occurredAt"`
+	UserId       string       `json:"userId"`
+	PersonaIds   []string     `json:"personaIds"`
+	AccountState AccountState `json:"accountState"`
+	AuthEpoch    int          `json:"authEpoch"`
+	DecisionRef  string       `json:"decisionRef"`
+	OccurredAt   time.Time    `json:"occurredAt"`
 }

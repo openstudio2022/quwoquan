@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/user_profile_route_extra.dart';
 import 'package:quwoquan_app/design_system/colors/app_colors.dart';
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
@@ -286,7 +287,7 @@ class _ShareInteractionListState extends ConsumerState<ShareInteractionList> {
       AppRoutePaths.workBrowser(
         workId: objectId,
         filter: _targetFilter(item.targetContentType),
-        source: ShareInteractionTelemetry.source,
+        source: ReferralSource.authorProfile.value,
       ),
     );
   }
@@ -466,9 +467,8 @@ class _ShareVisibilityTrackerState extends State<_ShareVisibilityTracker> {
   void _evaluate() {
     if (!mounted || _reported) return;
     final box = context.findRenderObject();
-    final scrollableBox = Scrollable.maybeOf(
-      context,
-    )?.context.findRenderObject();
+    final scrollableBox = Scrollable.maybeOf(context)?.context
+        .findRenderObject();
     if (box is! RenderBox ||
         scrollableBox is! RenderBox ||
         !box.attached ||

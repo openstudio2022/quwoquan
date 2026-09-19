@@ -11,7 +11,6 @@ import (
 
 	rthealth "quwoquan_service/runtime/health"
 	rtrec "quwoquan_service/runtime/recommendation"
-	rtrecpolicy "quwoquan_service/runtime/recpolicy"
 	rtredis "quwoquan_service/runtime/redis"
 	contentgenerated "quwoquan_service/services/content-service/generated/content/post"
 	commenthttp "quwoquan_service/services/content-service/internal/content/comment/adapters/inbound/http"
@@ -71,7 +70,6 @@ type contentHTTPHandlerInput struct {
 	router                       *rtredis.Router
 	bufferedWriter               *rtrec.BufferedHotPath
 	sessionCache                 *rtrec.SessionCache
-	policyStore                  *rtrecpolicy.Store
 	postStore                    *persistence.MongoPostStore
 	postQueryReader              *persistence.MongoPostQueryReader
 	activeSupplyReader           feedapp.ActiveSupplyReader
@@ -119,7 +117,6 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) (contentHTTPHandlers
 	router := input.router
 	bufferedWriter := input.bufferedWriter
 	sessionCache := input.sessionCache
-	policyStore := input.policyStore
 	store := input.postStore
 	postQueryReader := input.postQueryReader
 	activeSupplyReader := input.activeSupplyReader
@@ -152,11 +149,6 @@ func buildContentHTTPHandler(input contentHTTPHandlerInput) (contentHTTPHandlers
 
 	feedServiceOpts := []feedapp.FeedServiceOption{
 		feedapp.WithFeedFilterObserver(feedmetrics.Observer{}),
-		feedapp.WithObjectCardPolicy(
-			func() rtrecpolicy.ObjectCardConfig {
-				return policyStore.Current().ObjectCards
-			},
-		),
 	}
 	if intersectionService != nil {
 		feedServiceOpts = append(feedServiceOpts, feedapp.WithFeedIntersectionProvider(intersectionService))

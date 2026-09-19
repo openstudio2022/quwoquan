@@ -174,7 +174,6 @@ def _emit_recap_post(
                     "gatheringRef": gathering_id or None,
                     "tagRefs": tag_refs or [],
                     "contentType": "article",
-                    "contentIdentity": "work",
                     "title": "活动回顾",
                     "body": "公开活动回顾内容",
                     "summary": "活动回顾摘要",

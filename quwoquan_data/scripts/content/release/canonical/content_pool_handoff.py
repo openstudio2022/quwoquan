@@ -269,6 +269,13 @@ def project_content_pool_handoff(
         raise ObjectTransactionError(
             f"DATA.POOL.MANIFEST_INVALID: {kind}/{normalized_ref}"
         )
+    from core.publish_layout import PublishLayoutError, logical_object_ref
+    try:
+        normalized_ref = logical_object_ref(manifest, kind)
+    except PublishLayoutError as exc:
+        raise ObjectTransactionError(
+            f"DATA.POOL.IDENTITY_INVALID: {kind}/{normalized_ref}"
+        ) from exc
     record = latest_pool_record(object_root, normalized_type)
     if not isinstance(record, Mapping):
         raise ObjectTransactionError(

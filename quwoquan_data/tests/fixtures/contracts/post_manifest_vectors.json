@@ -1,0 +1,1517 @@
+{
+  "spec_ref": "specs/feature-tree/discovery-content/object-homepage-coverage-scaling/multi-carrier-release/spec.md#gwt-046",
+  "vectors": [
+    {
+      "name": "article-author",
+      "valid": true,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "image-author",
+      "valid": true,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "contentType": "image",
+        "title": "Image",
+        "assets": [
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          }
+        ],
+        "sourceCollectionId": "collection-1",
+        "creator": "creator",
+        "collectionPageUrl": "https://example.com/collection",
+        "rightsAuditStatus": "verified"
+      }
+    },
+    {
+      "name": "video-author",
+      "valid": true,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "video",
+        "title": "Video",
+        "caption": "Caption",
+        "assets": [
+          {
+            "assetId": "video-1",
+            "fileName": "media/video.mp4",
+            "kind": "video",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "mimeType": "video/mp4",
+            "durationMs": 1000,
+            "width": 1080,
+            "height": 1920,
+            "container": "mp4",
+            "codec": "h264",
+            "pixelFormat": "yuv420p",
+            "posterFileName": "media/poster.jpg",
+            "posterAssetId": "poster-1",
+            "posterSha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sourceAssetRefs": [
+              "source-video"
+            ],
+            "rightsRefs": [
+              "rights-video"
+            ],
+            "cdnUrl": "https://cdn.example/video.mp4",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "poster-1",
+            "fileName": "media/poster.jpg",
+            "kind": "image",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified",
+            "role": "cover"
+          }
+        ],
+        "videoBindings": [
+          {
+            "assetId": "video-1",
+            "role": "shortVideo"
+          }
+        ]
+      }
+    },
+    {
+      "name": "article-canonical",
+      "valid": true,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "article",
+        "title": "Article",
+        "contentId": "post-1",
+        "version": 1,
+        "sourceType": "data",
+        "sourceIdentity": {
+          "executionId": "exec",
+          "sourceRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entityCatalogDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "identityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "payloadDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "admission": {
+          "processResult": "completed",
+          "qualityResult": "passed",
+          "rightsResult": "passed",
+          "rightsAuthorityRef": "content_review.json",
+          "rightsAuthorityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "evidenceRef": "evidence.json",
+          "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "active",
+        "creatorProfileId": "creator-1",
+        "assets": []
+      }
+    },
+    {
+      "name": "unknown-content-type",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "audio",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "image-without-image",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "contentType": "image",
+        "title": "Image",
+        "sourceCollectionId": "collection-1",
+        "creator": "creator",
+        "collectionPageUrl": "https://example.com/collection",
+        "rightsAuditStatus": "verified"
+      }
+    },
+    {
+      "name": "video-without-video",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "video",
+        "title": "Video",
+        "caption": "Caption",
+        "assets": [
+          {
+            "assetId": "poster-1",
+            "fileName": "media/poster.jpg",
+            "kind": "image",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ],
+        "videoBindings": [
+          {
+            "assetId": "video-1",
+            "role": "shortVideo"
+          }
+        ]
+      }
+    },
+    {
+      "name": "video-without-poster",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "video",
+        "title": "Video",
+        "caption": "Caption",
+        "assets": [
+          {
+            "assetId": "video-1",
+            "fileName": "media/video.mp4",
+            "kind": "video",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "mimeType": "video/mp4",
+            "durationMs": 1000,
+            "width": 1080,
+            "height": 1920,
+            "container": "mp4",
+            "codec": "h264",
+            "pixelFormat": "yuv420p",
+            "sourceAssetRefs": [
+              "source-video"
+            ],
+            "rightsRefs": [
+              "rights-video"
+            ],
+            "cdnUrl": "https://cdn.example/video.mp4",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          }
+        ],
+        "videoBindings": [
+          {
+            "assetId": "video-1"
+          }
+        ]
+      }
+    },
+    {
+      "name": "video-without-binding",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "video",
+        "title": "Video",
+        "caption": "Caption",
+        "assets": [
+          {
+            "assetId": "video-1",
+            "fileName": "media/video.mp4",
+            "kind": "video",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "mimeType": "video/mp4",
+            "durationMs": 1000,
+            "width": 1080,
+            "height": 1920,
+            "container": "mp4",
+            "codec": "h264",
+            "pixelFormat": "yuv420p",
+            "posterFileName": "media/poster.jpg",
+            "posterAssetId": "poster-1",
+            "posterSha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sourceAssetRefs": [
+              "source-video"
+            ],
+            "rightsRefs": [
+              "rights-video"
+            ],
+            "cdnUrl": "https://cdn.example/video.mp4"
+          },
+          {
+            "assetId": "poster-1",
+            "fileName": "media/poster.jpg",
+            "kind": "image",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          }
+        ]
+      }
+    },
+    {
+      "name": "article-with-video-field",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article",
+        "videoBindings": [
+          {
+            "assetId": "video-1"
+          }
+        ]
+      }
+    },
+    {
+      "name": "image-with-article-field",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "contentType": "image",
+        "title": "Image",
+        "assets": [
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image"
+          }
+        ],
+        "sourceCollectionId": "collection-1",
+        "creator": "creator",
+        "collectionPageUrl": "https://example.com/collection",
+        "rightsAuditStatus": "verified",
+        "markdownDialect": "qwq-rich-md"
+      }
+    },
+    {
+      "name": "unknown-schema-marker",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.future_post",
+        "contentType": "article",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "article-missing-required-vertical",
+      "valid": false,
+      "manifest": {
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "article-missing-required-topicId",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "article-missing-required-contentType",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "article-missing-required-entityRefs",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "article-missing-required-tagRefs",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "article-missing-required-sourceUrls",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "article-missing-required-generator",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "article-missing-required-createdAt",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "article-missing-required-updatedAt",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "article-unknown-field",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article",
+        "futureField": true
+      }
+    },
+    {
+      "name": "image-unknown-field",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "contentType": "image",
+        "title": "Image",
+        "assets": [
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          }
+        ],
+        "sourceCollectionId": "collection-1",
+        "creator": "creator",
+        "collectionPageUrl": "https://example.com/collection",
+        "rightsAuditStatus": "verified",
+        "futureField": true
+      }
+    },
+    {
+      "name": "video-unknown-field",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "video",
+        "title": "Video",
+        "caption": "Caption",
+        "assets": [
+          {
+            "assetId": "video-1",
+            "fileName": "media/video.mp4",
+            "kind": "video",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "mimeType": "video/mp4",
+            "durationMs": 1000,
+            "width": 1080,
+            "height": 1920,
+            "container": "mp4",
+            "codec": "h264",
+            "pixelFormat": "yuv420p",
+            "posterFileName": "media/poster.jpg",
+            "posterAssetId": "poster-1",
+            "posterSha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sourceAssetRefs": [
+              "source-video"
+            ],
+            "rightsRefs": [
+              "rights-video"
+            ],
+            "cdnUrl": "https://cdn.example/video.mp4",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "poster-1",
+            "fileName": "media/poster.jpg",
+            "kind": "image",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified",
+            "role": "cover"
+          }
+        ],
+        "videoBindings": [
+          {
+            "assetId": "video-1",
+            "role": "shortVideo"
+          }
+        ],
+        "futureField": true
+      }
+    },
+    {
+      "name": "article-createdAt-format",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "not-a-date",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "article-entityRefs-type",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": "bad",
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "article",
+        "title": "Article"
+      }
+    },
+    {
+      "name": "image-assets-empty",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "contentType": "image",
+        "title": "Image",
+        "assets": [],
+        "sourceCollectionId": "collection-1",
+        "creator": "creator",
+        "collectionPageUrl": "https://example.com/collection",
+        "rightsAuditStatus": "verified"
+      }
+    },
+    {
+      "name": "image-assets-over-max",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "contentType": "image",
+        "title": "Image",
+        "assets": [
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "image-1",
+            "fileName": "media/image.jpg",
+            "kind": "image",
+            "sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "sourceCollectionId": "collection-1",
+            "creator": "creator",
+            "collectionPageUrl": "https://example.com/collection",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          }
+        ],
+        "sourceCollectionId": "collection-1",
+        "creator": "creator",
+        "collectionPageUrl": "https://example.com/collection",
+        "rightsAuditStatus": "verified"
+      }
+    },
+    {
+      "name": "video-duration-min-negative",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "video",
+        "title": "Video",
+        "caption": "Caption",
+        "assets": [
+          {
+            "assetId": "video-1",
+            "fileName": "media/video.mp4",
+            "kind": "video",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "mimeType": "video/mp4",
+            "durationMs": -1,
+            "width": 1080,
+            "height": 1920,
+            "container": "mp4",
+            "codec": "h264",
+            "pixelFormat": "yuv420p",
+            "posterFileName": "media/poster.jpg",
+            "posterAssetId": "poster-1",
+            "posterSha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sourceAssetRefs": [
+              "source-video"
+            ],
+            "rightsRefs": [
+              "rights-video"
+            ],
+            "cdnUrl": "https://cdn.example/video.mp4",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified"
+          },
+          {
+            "assetId": "poster-1",
+            "fileName": "media/poster.jpg",
+            "kind": "image",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified",
+            "role": "cover"
+          }
+        ],
+        "videoBindings": [
+          {
+            "assetId": "video-1",
+            "role": "shortVideo"
+          }
+        ]
+      }
+    },
+    {
+      "name": "video-rights-enum",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_manifest",
+        "contentType": "video",
+        "title": "Video",
+        "caption": "Caption",
+        "assets": [
+          {
+            "assetId": "video-1",
+            "fileName": "media/video.mp4",
+            "kind": "video",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "mimeType": "video/mp4",
+            "durationMs": 1000,
+            "width": 1080,
+            "height": 1920,
+            "container": "mp4",
+            "codec": "h264",
+            "pixelFormat": "yuv420p",
+            "posterFileName": "media/poster.jpg",
+            "posterAssetId": "poster-1",
+            "posterSha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "sourceAssetRefs": [
+              "source-video"
+            ],
+            "rightsRefs": [
+              "rights-video"
+            ],
+            "cdnUrl": "https://cdn.example/video.mp4",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "future"
+          },
+          {
+            "assetId": "poster-1",
+            "fileName": "media/poster.jpg",
+            "kind": "image",
+            "sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "license": "CC BY 4.0",
+            "termsUrl": "https://creativecommons.org/licenses/by/4.0",
+            "rightsAuditStatus": "verified",
+            "role": "cover"
+          }
+        ],
+        "videoBindings": [
+          {
+            "assetId": "video-1",
+            "role": "shortVideo"
+          }
+        ]
+      }
+    },
+    {
+      "name": "canonical-missing-required-contentId",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "article",
+        "title": "Article",
+        "version": 1,
+        "sourceType": "data",
+        "sourceIdentity": {
+          "executionId": "exec",
+          "sourceRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entityCatalogDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "identityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "payloadDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "admission": {
+          "processResult": "completed",
+          "qualityResult": "passed",
+          "rightsResult": "passed",
+          "rightsAuthorityRef": "content_review.json",
+          "rightsAuthorityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "evidenceRef": "evidence.json",
+          "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "active",
+        "creatorProfileId": "creator-1",
+        "assets": []
+      }
+    },
+    {
+      "name": "canonical-missing-required-version",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "article",
+        "title": "Article",
+        "contentId": "post-1",
+        "sourceType": "data",
+        "sourceIdentity": {
+          "executionId": "exec",
+          "sourceRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entityCatalogDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "identityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "payloadDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "admission": {
+          "processResult": "completed",
+          "qualityResult": "passed",
+          "rightsResult": "passed",
+          "rightsAuthorityRef": "content_review.json",
+          "rightsAuthorityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "evidenceRef": "evidence.json",
+          "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "active",
+        "creatorProfileId": "creator-1",
+        "assets": []
+      }
+    },
+    {
+      "name": "canonical-missing-required-sourceType",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "article",
+        "title": "Article",
+        "contentId": "post-1",
+        "version": 1,
+        "sourceIdentity": {
+          "executionId": "exec",
+          "sourceRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entityCatalogDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "identityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "payloadDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "admission": {
+          "processResult": "completed",
+          "qualityResult": "passed",
+          "rightsResult": "passed",
+          "rightsAuthorityRef": "content_review.json",
+          "rightsAuthorityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "evidenceRef": "evidence.json",
+          "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "active",
+        "creatorProfileId": "creator-1",
+        "assets": []
+      }
+    },
+    {
+      "name": "canonical-missing-required-sourceIdentity",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "article",
+        "title": "Article",
+        "contentId": "post-1",
+        "version": 1,
+        "sourceType": "data",
+        "payloadDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "admission": {
+          "processResult": "completed",
+          "qualityResult": "passed",
+          "rightsResult": "passed",
+          "rightsAuthorityRef": "content_review.json",
+          "rightsAuthorityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "evidenceRef": "evidence.json",
+          "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "active",
+        "creatorProfileId": "creator-1",
+        "assets": []
+      }
+    },
+    {
+      "name": "canonical-missing-required-payloadDigest",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "article",
+        "title": "Article",
+        "contentId": "post-1",
+        "version": 1,
+        "sourceType": "data",
+        "sourceIdentity": {
+          "executionId": "exec",
+          "sourceRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entityCatalogDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "identityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "admission": {
+          "processResult": "completed",
+          "qualityResult": "passed",
+          "rightsResult": "passed",
+          "rightsAuthorityRef": "content_review.json",
+          "rightsAuthorityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "evidenceRef": "evidence.json",
+          "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "active",
+        "creatorProfileId": "creator-1",
+        "assets": []
+      }
+    },
+    {
+      "name": "canonical-missing-required-admission",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "article",
+        "title": "Article",
+        "contentId": "post-1",
+        "version": 1,
+        "sourceType": "data",
+        "sourceIdentity": {
+          "executionId": "exec",
+          "sourceRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entityCatalogDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "identityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "payloadDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "status": "active",
+        "creatorProfileId": "creator-1",
+        "assets": []
+      }
+    },
+    {
+      "name": "canonical-missing-required-status",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "article",
+        "title": "Article",
+        "contentId": "post-1",
+        "version": 1,
+        "sourceType": "data",
+        "sourceIdentity": {
+          "executionId": "exec",
+          "sourceRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entityCatalogDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "identityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "payloadDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "admission": {
+          "processResult": "completed",
+          "qualityResult": "passed",
+          "rightsResult": "passed",
+          "rightsAuthorityRef": "content_review.json",
+          "rightsAuthorityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "evidenceRef": "evidence.json",
+          "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "creatorProfileId": "creator-1",
+        "assets": []
+      }
+    },
+    {
+      "name": "canonical-missing-required-creatorProfileId",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "article",
+        "title": "Article",
+        "contentId": "post-1",
+        "version": 1,
+        "sourceType": "data",
+        "sourceIdentity": {
+          "executionId": "exec",
+          "sourceRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entityCatalogDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "identityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "payloadDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "admission": {
+          "processResult": "completed",
+          "qualityResult": "passed",
+          "rightsResult": "passed",
+          "rightsAuthorityRef": "content_review.json",
+          "rightsAuthorityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "evidenceRef": "evidence.json",
+          "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "active",
+        "assets": []
+      }
+    },
+    {
+      "name": "canonical-missing-required-assets",
+      "valid": false,
+      "manifest": {
+        "vertical": "travel",
+        "topicId": "topic",
+        "entityRefs": [],
+        "tagRefs": [],
+        "sourceUrls": [
+          "https://example.com/source"
+        ],
+        "generator": "agent",
+        "createdAt": "2026-09-15T00:00:00Z",
+        "updatedAt": "2026-09-15T00:00:00Z",
+        "schema": "quwoquan_data.post_object",
+        "contentType": "article",
+        "title": "Article",
+        "contentId": "post-1",
+        "version": 1,
+        "sourceType": "data",
+        "sourceIdentity": {
+          "executionId": "exec",
+          "sourceRevision": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "sourceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "entityCatalogDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "identityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "payloadDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "admission": {
+          "processResult": "completed",
+          "qualityResult": "passed",
+          "rightsResult": "passed",
+          "rightsAuthorityRef": "content_review.json",
+          "rightsAuthorityDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "evidenceRef": "evidence.json",
+          "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        },
+        "status": "active",
+        "creatorProfileId": "creator-1"
+      }
+    }
+  ]
+}

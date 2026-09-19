@@ -65,7 +65,6 @@ CONTENT_POST_POST_DELETED = "PostDeleted"
 CONTENT_POST_POST_IMPORTED = "PostImported"
 CONTENT_POST_POST_MODERATION_REJECTED = "PostModerationRejected"
 CONTENT_POST_POST_PRIVACY_REDACTED = "PostPrivacyRedacted"
-CONTENT_POST_POST_PROMOTED_TO_WORK = "PostPromotedToWork"
 CONTENT_POST_POST_PUBLISHED = "PostPublished"
 CONTENT_POST_POST_PURGED = "PostPurged"
 CONTENT_POST_POST_RELEASE_CANDIDATE_PREPARED = "PostReleaseCandidatePrepared"
@@ -188,7 +187,6 @@ EVENT_TYPES_BY_REF = {
 	"content.post.PostImported": CONTENT_POST_POST_IMPORTED,
 	"content.post.PostModerationRejected": CONTENT_POST_POST_MODERATION_REJECTED,
 	"content.post.PostPrivacyRedacted": CONTENT_POST_POST_PRIVACY_REDACTED,
-	"content.post.PostPromotedToWork": CONTENT_POST_POST_PROMOTED_TO_WORK,
 	"content.post.PostPublished": CONTENT_POST_POST_PUBLISHED,
 	"content.post.PostPurged": CONTENT_POST_POST_PURGED,
 	"content.post.PostReleaseCandidatePrepared": CONTENT_POST_POST_RELEASE_CANDIDATE_PREPARED,

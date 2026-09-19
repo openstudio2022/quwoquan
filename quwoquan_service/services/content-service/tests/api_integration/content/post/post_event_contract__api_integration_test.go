@@ -104,43 +104,6 @@ func TestPostSettingsUpdatedEvent(t *testing.T) {
 	}
 }
 
-func TestPostPromotedToWorkEvent(t *testing.T) {
-	t.Cleanup(func() { cleanPosts(t) })
-	created := submitPublishedPostWithAuthor(t, "promote_event_author", `{
-		"contentType":"micro",
-		"body":"从点滴升级"
-	}`)
-	postID, _ := created["postId"].(string)
-
-	eventSpy.Reset()
-
-	req := httptest.NewRequest(
-		http.MethodPost,
-		"/content/posts/"+postID+":promoteToWork",
-		strings.NewReader(`{"contentType":"image","title":"升级后的作品"}`),
-	)
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("X-Client-User-Id", "promote_event_author")
-	ensureIdempotencyHeader(req, "promote-event")
-	rec := httptest.NewRecorder()
-	testHandler.ServeHTTP(rec, req)
-	if rec.Code != http.StatusOK {
-		t.Fatalf("promote post: %d", rec.Code)
-	}
-
-	events := eventSpy.EventsOfType("PostPromotedToWork")
-	if len(events) != 1 {
-		t.Fatalf("expected 1 PostPromotedToWork event, got %d", len(events))
-	}
-	ev := events[0]
-	if ev.Payload["contentIdentity"] != "work" {
-		t.Errorf("payload.contentIdentity: %v", ev.Payload["contentIdentity"])
-	}
-	if ev.Payload["contentType"] != "image" {
-		t.Errorf("payload.contentType: %v", ev.Payload["contentType"])
-	}
-}
-
 func TestPostDeletedEvent(t *testing.T) {
 	t.Cleanup(func() { cleanPosts(t) })
 	created := submitPublishedPostWithAuthor(t, "delete_event_author", `{

@@ -1,10 +1,11 @@
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/di/navigation/content_open_surface_navigation.dart';
 import 'package:quwoquan_app/service/content_service/content/post/application/public/content_post_view_data.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/content_presentation_terminal.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
-    show BehaviorEvent, ReferralSource;
+    show BehaviorEvent, ReferralSource, ReferralSourceExt;
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/media_viewer_extra.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
@@ -67,26 +68,37 @@ Future<void> openHomeFeedPost(
   final initialIndex = viewerPosts
       .indexWhere((item) => item.id == post.id)
       .clamp(0, viewerPosts.length - 1);
+  // 目的地只来自云物化的 openSurface；内容类型只在目的面内选媒体槽。
+  final openSurface = post.openSurface;
+  final destination = ContentOpenSurfaceNavigation.canOpen(openSurface)
+      ? ContentOpenSurfaceNavigation.pathFor(
+          openSurface: openSurface!,
+          objectId: post.id,
+          source: ReferralSource.organicFeed.value,
+          index: '$initialIndex',
+          sourceTheme: uiErrorAppearanceRouteValueFor(context),
+        )
+      : null;
+  if (destination == null) {
+    await showContentPresentationUnsupportedTerminal(
+      context,
+      objectId: post.id,
+      openSurface: openSurface,
+    );
+    return;
+  }
   final interactionSnapshot = buildMediaViewerInteractionSnapshot(
     ref: ref,
     posts: viewerPosts,
   );
   primeMediaViewerInteractionSnapshot(ref, interactionSnapshot);
   final result = await context.push<Object?>(
-    AppRoutePaths.workBrowser(
-      workId: post.id,
-      filter: post.isVideoLike
-          ? 'video'
-          : (post.isArticleLike ? 'article' : 'image'),
-      source: 'home_feed',
-      index: '$initialIndex',
-      sourceTheme: uiErrorAppearanceRouteValueFor(context),
-    ),
+    destination,
     extra: MediaViewerExtra(
       posts: postViews,
       dtoPosts: viewerPosts,
       initialIndex: initialIndex,
-      source: 'home_feed',
+      referralSource: ReferralSource.organicFeed,
       initialImageIndex: mediaIndex,
       interactionSnapshot: interactionSnapshot,
       feedRequestId: navFeedRequestId,

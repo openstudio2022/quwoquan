@@ -43,14 +43,17 @@ import 'package:quwoquan_app/runtime/shell/actions/content_report_reason_sheet.d
 import 'package:quwoquan_app/l10n/l10n.dart';
 import 'package:quwoquan_app/design_system/avatar/rounded_square_avatar.dart';
 import 'package:quwoquan_app/runtime/di/presentation/home_feed_cross_object_composition.dart';
+import 'package:quwoquan_app/runtime/di/navigation/content_open_surface_navigation.dart';
 import 'package:quwoquan_app/runtime/di/navigation/intersection_target_navigator.dart';
+import 'package:quwoquan_app/service/content_service/content/feed_delivery_page/application/public/content_feed_object_card.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/content_presentation_terminal.dart';
 import 'package:quwoquan_app/service/recommendation_service/recommendation/recommendation_feature_profile_view/application/public/intersection_reason_selection.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/more_action_popup/media_post_config.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/more_action_popup/more_action_popup.dart';
 import 'package:flutter_staggered_grid_view/flutter_staggered_grid_view.dart';
 import 'package:quwoquan_app/design_system/content/post_preview_list_tile.dart';
 import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart'
-    show ReferralSource;
+    show ReferralSource, ReferralSourceExt;
 import 'package:quwoquan_app/runtime/errors/runtime_error_display.dart';
 import 'package:quwoquan_app/runtime/di/app_providers.dart';
 import 'package:quwoquan_app/runtime/errors/ui_error_semantics.dart';
@@ -70,7 +73,7 @@ import 'package:quwoquan_app/design_system/feedback/error_states/app_error_state
 import 'package:quwoquan_app/design_system/feedback/app_request_feedback.dart';
 import 'package:quwoquan_app/design_system/feedback/skeleton/app_skeleton.dart';
 import 'package:quwoquan_app/design_system/media/app_cached_network_image.dart';
-import 'package:quwoquan_app/service/content_service/content/post/domain/home_feed_layout_policy.dart';
+import 'package:quwoquan_app/service/content_service/content/post/presentation/generated/surface_layout_policy.g.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/home_feed_impression_sampling_clock.dart';
 import 'package:quwoquan_app/service/content_service/content/post/domain/home_feed_scroll_anchor.dart';
 import 'package:quwoquan_app/service/content_service/media/media_asset/application/public/home_feed_video_autoplay_policy.dart';
@@ -113,8 +116,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
     super.key,
     required this.isDark,
     required this.onUserTap,
-    this.channelId = 'moment',
-    this.template = '',
+    this.channelId = 'recommend',
     this.inlineImageCarousel = false,
     this.disableImageViewerOnTap = false,
     this.onPostTap,
@@ -125,7 +127,6 @@ class HomeMultiFormFeed extends ConsumerWidget {
   final bool isDark;
   final String channelId;
 
-  final String template;
   final bool inlineImageCarousel;
   final bool disableImageViewerOnTap;
   final void Function(
@@ -166,16 +167,18 @@ class HomeMultiFormFeed extends ConsumerWidget {
     }
 
     final dtos = feedAsync.value?.items ?? const <ContentPostViewData>[];
-    final moments = dtos
-        .where((post) => post.identity == 'moment')
+    final mediaPosts = dtos
+        .where((post) => post.type != ContentType.article)
         .toList(growable: false);
     final articlesById = <String, ContentPostViewData>{
-      for (final article in dtos.where((post) => post.isArticleLike))
+      for (final article in dtos.where(
+        (post) => post.type == ContentType.article,
+      ))
         article.id: article,
     };
     final articles = articlesById.values.toList(growable: false);
     final feedPosts = shouldShowFollowingArticles
-        ? <ContentPostViewData>[...moments, ...articles]
+        ? <ContentPostViewData>[...mediaPosts, ...articles]
         : dtos;
     if (ref.watch(authSessionControllerProvider).isAuthenticated) {
       _scheduleHomeReportContinuationResume(context, ref, feedPosts);
@@ -318,18 +321,13 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final listDividerColor =
         SettingsSemanticConstants.conversationSheetDividerColor(isDark)
             .withValues(alpha: 0.9);
-    final channelConfig = _resolveChannelConfig();
-    final layoutPolicy = HomeFeedLayoutPolicy.fromChannel(
-      channelConfig,
-      fallbackTemplate: template,
+    final channelConfig = _resolveChannelConfig(ref);
+    final layoutPolicy = SurfaceLayoutPolicy.forSurface(
+      ContentUiSurface.homeFeed,
     );
     final effectiveInlineCarousel = inlineImageCarousel;
     final effectiveDisableViewerOnTap = disableImageViewerOnTap;
-    final columns = layoutPolicy.columnsFor(context);
-    final isMultiColumn = columns > 1;
-    final horizontalPad = isMultiColumn
-        ? AppSpacing.feedContentHorizontal(context)
-        : AppSpacing.zero;
+    final gridHorizontalPad = AppSpacing.feedContentHorizontal(context);
     // Impression gate 可能在子树 dispose 时补报弱曝光。此处捕获与本批卡片同源的
     // tracker/频道归因快照，禁止在 deactivated element 的回调里再次通过 ref 查祖先。
     final behaviorTracker = ref.watch(contentBehaviorTrackerProvider);
@@ -340,6 +338,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
       ContentPostViewData dto,
       int index,
       ValueListenable<_HomeFeedVideoScrollSignal> videoScrollSignal,
+      bool isMultiColumn,
     ) {
       // N0-4 七态语义：impressed 必须来自真实视口可见性（50%+1s 门控），
       // 由 _QualifiedImpressionGate 驱动；build 帧不再直接上报（预构建卡片
@@ -353,7 +352,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
               dto.id,
               visibleFraction: visibleFraction,
               visibleDuration: visibleDuration,
-              contentType: dto.identity,
+              contentType: dto.type.wireName,
               position: index,
               referralSource: ReferralSource.organicFeed,
               feedRequestId: impressionFeedRequestId,
@@ -366,7 +365,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
           onWeakVisible: () {
             behaviorTracker.trackVisible(
               dto.id,
-              contentType: dto.identity,
+              contentType: dto.type.wireName,
               position: index,
               referralSource: ReferralSource.organicFeed,
               feedRequestId: impressionFeedRequestId,
@@ -380,7 +379,22 @@ class HomeMultiFormFeed extends ConsumerWidget {
         );
       }
 
-      if (dto.isArticleLike && shouldShowFollowingArticles) {
+      // 文章和媒体点击共享同一批 Feed 归因快照，避免两处参数漂移。
+      void trackPostClick() {
+        behaviorTracker.trackClick(
+          dto.id,
+          contentType: dto.type.wireName,
+          feedRequestId: impressionFeedRequestId,
+          position: index,
+          referralSource: ReferralSource.organicFeed,
+          channelId: channelId,
+          policyDigest: impressionPolicyDigest,
+          recallPath: dto.recallPath,
+          supplySource: dto.supplySource,
+        );
+      }
+
+      if (dto.type == ContentType.article && shouldShowFollowingArticles) {
         return withImpressionGate(
           _FeedPatchVisibilityReporter(
             key: ValueKey<String>('feed-patch-reporter-$index'),
@@ -391,19 +405,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
               summaryLineLimit:
                   _followingArticleDistributionProfile.summaryLineLimit,
               onTap: () {
-                ref
-                    .read(contentBehaviorTrackerProvider)
-                    .trackClick(
-                      dto.id,
-                      contentType: dto.identity,
-                      feedRequestId: impressionFeedRequestId,
-                      position: index,
-                      referralSource: ReferralSource.organicFeed,
-                      channelId: channelId,
-                      policyDigest: impressionPolicyDigest,
-                      recallPath: dto.recallPath,
-                      supplySource: dto.supplySource,
-                    );
+                trackPostClick();
                 onPostTap?.call(dto, 0, feedPosts: feedPosts);
               },
               onMoreTap: () {
@@ -417,6 +419,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
           ),
         );
       }
+      void sharePost() => _showShare(context, ref, dto);
       return withImpressionGate(
         _FeedPatchVisibilityReporter(
           key: ValueKey<String>('feed-patch-reporter-$index'),
@@ -437,19 +440,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
               backgroundUrl: dto.authorBackgroundUrl,
             ),
             onImageTap: (imgIndex) {
-              ref
-                  .read(contentBehaviorTrackerProvider)
-                  .trackClick(
-                    dto.id,
-                    contentType: dto.identity,
-                    feedRequestId: impressionFeedRequestId,
-                    position: index,
-                    referralSource: ReferralSource.organicFeed,
-                    channelId: channelId,
-                    policyDigest: impressionPolicyDigest,
-                    recallPath: dto.recallPath,
-                    supplySource: dto.supplySource,
-                  );
+              trackPostClick();
               if (!(effectiveDisableViewerOnTap && dto.hasImages)) {
                 onPostTap?.call(dto, imgIndex, feedPosts: feedPosts);
               }
@@ -461,26 +452,10 @@ class HomeMultiFormFeed extends ConsumerWidget {
                 entryObservedCommentCount: ref
                     .read(postInteractionStateProvider)
                     .commentCountFor(dto.id, fallback: dto.commentCount),
-                onShareTap: () => _showShare(
-                  context,
-                  ref,
-                  dto,
-                  enableIdentityTemplate: ref.read(
-                    contentFeatureFlagProvider(
-                      'enable_identity_share_template',
-                    ),
-                  ),
-                ),
+                onShareTap: sharePost,
               );
             },
-            onShareTap: () => _showShare(
-              context,
-              ref,
-              dto,
-              enableIdentityTemplate: ref.read(
-                contentFeatureFlagProvider('enable_identity_share_template'),
-              ),
-            ),
+            onShareTap: sharePost,
             onLikeTap: () {
               runWhenLoggedIn(ref, context, AuthGateReason.like, () {
                 final wasLiked = effectivePostLiked(ref, dto.id);
@@ -517,12 +492,11 @@ class HomeMultiFormFeed extends ConsumerWidget {
     final bottomPad =
         MediaQuery.of(context).padding.bottom + AppSpacing.bottomNavHeight;
 
-    final shouldShowFollowingSubjects =
-        channelId == 'following' && layoutPolicy.isSingleColumnRelations;
+    final shouldShowFollowingSubjects = channelId == 'following';
     // 交集 spotlight 只在频道配置声明 spotlightSegment 且 viewer 已登录时出现：
     // 游客没有「我的交集」这个事实面，模块必须整体缺席而不是显示空壳。
     final shouldShowIntersectionSpotlight =
-        layoutPolicy.hasIntersectionSpotlight &&
+        channelConfig?.intersectionModulePolicy == 'spotlightSegment' &&
         ref.watch(authSessionControllerProvider).isAuthenticated;
     final Widget? headerSliver = switch (true) {
       _ when shouldShowFollowingSubjects => FollowingSubjectStrip(
@@ -536,13 +510,12 @@ class HomeMultiFormFeed extends ConsumerWidget {
       _ => null,
     };
 
-    final topPad = isMultiColumn ? AppSpacing.sm : AppSpacing.zero;
     final resourceProfile = ref.watch(appResourceCacheProfileProvider);
     // 混合对象卡编织（B4 插卡模式）：anchorIndex 基于内容序位；post 的埋点
     // position 与 card key 仍用数据索引（postIndex），不受对象卡插入影响。
     final feedEntries = _weaveObjectCards(
       feedPosts,
-      feedAsync.value?.objectCards ?? const <FeedObjectCard>[],
+      feedAsync.value?.objectCards ?? const <ContentFeedObjectCard>[],
     );
     final feedEntryIdentities = feedEntries
         .map((entry) => entry.stableIdentity)
@@ -550,6 +523,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
     Widget buildEntry(
       int entryIndex,
       ValueListenable<_HomeFeedVideoScrollSignal> videoScrollSignal,
+      bool isMultiColumn,
     ) {
       final entry = feedEntries[entryIndex];
       return switch (entry) {
@@ -557,6 +531,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
           post,
           postIndex,
           videoScrollSignal,
+          isMultiColumn,
         ),
         _HomeFeedObjectCardEntry(:final card) => _HomeDiscoverableTargetCard(
           key: ValueKey<String>(
@@ -571,105 +546,123 @@ class HomeMultiFormFeed extends ConsumerWidget {
       };
     }
 
-    final scrollView = _HomeFeedScrollView(
-      key: ValueKey<String>('home-feed-scroll-$channelId'),
-      channelId: channelId,
-      anchorStore: ref.read(homeFeedScrollAnchorStoreProvider),
-      entryIdentities: feedEntryIdentities,
-      pageBackground: pageBackground,
-      isDark: isDark,
-      resourceProfile: resourceProfile,
-      isMultiColumn: isMultiColumn,
-      columns: columns,
-      horizontalPad: horizontalPad,
-      topPad: topPad,
-      bottomPad: isMultiColumn ? bottomPad + AppSpacing.sm : bottomPad,
-      itemCount: feedEntries.length,
-      itemBuilder: buildEntry,
-      isFullSpanItem: (index) => switch (feedEntries[index]) {
-        _HomeFeedPostEntry(:final post) => layoutPolicy.shouldRenderFullSpan(
-          post,
-        ),
-        _HomeFeedObjectCardEntry() => true,
-      },
-      fullSpanBuilder: buildEntry,
-      segmentBuilder: null,
-      dividerColor: listDividerColor,
-      isLoadingMore: feedAsync.value?.isAppending ?? false,
-      hasMore: feedAsync.value?.hasMore ?? false,
-      canRestorePreviousPage: feedAsync.value?.canRestorePreviousPage ?? false,
-      appendError: appendError,
-      staleDataError: staleDataError,
-      onRetryInitialLoad: () => ref
-          .read(discoveryFeedMapProvider.notifier)
-          .load(channelId, force: true),
-      moodCopy: _resolveChannelMoodCopy(),
-      headerSliver: headerSliver,
-      onReachBottom: () =>
-          ref.read(discoveryFeedMapProvider.notifier).appendNextPage(channelId),
-      onReachTop: () => unawaited(
-        ref
-            .read(discoveryFeedMapProvider.notifier)
-            .prependPreviousPage(channelId),
-      ),
-      onResourceSample: () {
-        final imageCache = PaintingBinding.instance.imageCache;
-        final downloadCache = ref.read(mediaDownloadCacheProvider);
-        final observability = ref.read(feedPerformanceObservabilityProvider);
-        observability.recordImageCacheBudget(
-          profile: resourceProfile.name,
-          currentSizeBytes: imageCache.currentSizeBytes,
-          maxSizeBytes: imageCache.maximumSizeBytes,
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // 实际内容区 logical pixels，排除页面壳与网格留白。
+        final columns = layoutPolicy.columnsForWidth(
+          max(0.0, constraints.maxWidth - gridHorizontalPad * 2),
         );
-        observability.recordMediaDownloadQueue(
-          profile: resourceProfile.name,
-          activeDownloads: downloadCache.activeDownloadCount,
-          queuedDownloads: downloadCache.queuedDownloadCount,
-          inflightDownloads: downloadCache.inflightDownloadCount,
-          cacheSizeBytes: downloadCache.currentCacheSizeBytes,
+        final isMultiColumn = columns > 1;
+        final horizontalPad = isMultiColumn
+            ? gridHorizontalPad
+            : AppSpacing.zero;
+        final topPad = isMultiColumn ? AppSpacing.sm : AppSpacing.zero;
+        Widget buildLayoutEntry(
+          int index,
+          ValueListenable<_HomeFeedVideoScrollSignal> signal,
+        ) => buildEntry(index, signal, isMultiColumn);
+        final scrollView = _HomeFeedScrollView(
+          key: ValueKey<String>('home-feed-scroll-$channelId'),
+          channelId: channelId,
+          anchorStore: ref.read(homeFeedScrollAnchorStoreProvider),
+          entryIdentities: feedEntryIdentities,
+          pageBackground: pageBackground,
+          isDark: isDark,
+          resourceProfile: resourceProfile,
+          isMultiColumn: isMultiColumn,
+          columns: columns,
+          horizontalPad: horizontalPad,
+          topPad: topPad,
+          bottomPad: isMultiColumn ? bottomPad + AppSpacing.sm : bottomPad,
+          itemCount: feedEntries.length,
+          itemBuilder: buildLayoutEntry,
+          isFullSpanItem: (index) => switch (feedEntries[index]) {
+            _HomeFeedPostEntry() => false,
+            _HomeFeedObjectCardEntry() => true,
+          },
+          fullSpanBuilder: buildLayoutEntry,
+          segmentBuilder: null,
+          dividerColor: listDividerColor,
+          isLoadingMore: feedAsync.value?.isAppending ?? false,
+          hasMore: feedAsync.value?.hasMore ?? false,
+          canRestorePreviousPage:
+              feedAsync.value?.canRestorePreviousPage ?? false,
+          appendError: appendError,
+          staleDataError: staleDataError,
+          onRetryInitialLoad: () => ref
+              .read(discoveryFeedMapProvider.notifier)
+              .load(channelId, force: true),
+          moodCopy: channelConfig == null
+              ? ''
+              : UITextConstants.homeChannelMoodCopy(channelConfig.moodCopyKey),
+          headerSliver: headerSliver,
+          onReachBottom: () => ref
+              .read(discoveryFeedMapProvider.notifier)
+              .appendNextPage(channelId),
+          onReachTop: () => unawaited(
+            ref
+                .read(discoveryFeedMapProvider.notifier)
+                .prependPreviousPage(channelId),
+          ),
+          onResourceSample: () {
+            final imageCache = PaintingBinding.instance.imageCache;
+            final downloadCache = ref.read(mediaDownloadCacheProvider);
+            final observability = ref.read(
+              feedPerformanceObservabilityProvider,
+            );
+            observability.recordImageCacheBudget(
+              profile: resourceProfile.name,
+              currentSizeBytes: imageCache.currentSizeBytes,
+              maxSizeBytes: imageCache.maximumSizeBytes,
+            );
+            observability.recordMediaDownloadQueue(
+              profile: resourceProfile.name,
+              activeDownloads: downloadCache.activeDownloadCount,
+              queuedDownloads: downloadCache.queuedDownloadCount,
+              inflightDownloads: downloadCache.inflightDownloadCount,
+              cacheSizeBytes: downloadCache.currentCacheSizeBytes,
+            );
+          },
+        );
+
+        return Stack(
+          children: [
+            Positioned.fill(child: scrollView),
+            _buildUpdateNotice(ref, topPad),
+          ],
         );
       },
     );
+  }
 
-    // 顶部「有更新」轻量入口：浮于 feed 之上，不挤占版式、不打断阅读位置；
-    // 仅在有实时 patch 提示时出现，点击触发用户主动刷新（force load）。
-    return Stack(
-      children: [
-        Positioned.fill(child: scrollView),
-        Positioned(
-          top: topPad + AppSpacing.sm,
-          left: AppSpacing.md,
-          right: AppSpacing.md,
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: _FeedRealtimeUpdatePill(
-              channelId: channelId,
-              onRefresh: () {
-                ref
-                    .read(feedRealtimePatchProvider.notifier)
-                    .acknowledgeRefresh(channelId);
-                ref
-                    .read(discoveryFeedMapProvider.notifier)
-                    .load(channelId, force: true);
-              },
-            ),
-          ),
-        ),
-      ],
+  /// 更新入口浮于 feed 上方，不挤占版式或打断阅读位置。
+  Widget _buildUpdateNotice(WidgetRef ref, double topPad) {
+    final pill = _FeedRealtimeUpdatePill(
+      channelId: channelId,
+      onRefresh: () {
+        ref
+            .read(feedRealtimePatchProvider.notifier)
+            .acknowledgeRefresh(channelId);
+        ref
+            .read(discoveryFeedMapProvider.notifier)
+            .load(channelId, force: true);
+      },
+    );
+    return Positioned(
+      top: topPad + AppSpacing.sm,
+      left: AppSpacing.md,
+      right: AppSpacing.md,
+      child: Align(alignment: Alignment.topCenter, child: pill),
     );
   }
 
   void _showShare(
     BuildContext context,
     WidgetRef ref,
-    ContentPostViewData post, {
-    required bool enableIdentityTemplate,
-  }) {
+    ContentPostViewData post,
+  ) {
     runWhenLoggedIn(ref, context, AuthGateReason.share, () {
-      final template = buildDiscoveryShareTemplate(
-        post: post,
-        enableIdentityTemplate: enableIdentityTemplate,
-      );
+      final template = buildDiscoveryShareTemplate(post: post);
       ContentShareSheet.show(
         context,
         template: template,
@@ -719,21 +712,14 @@ class HomeMultiFormFeed extends ConsumerWidget {
         ),
         showShareAction: false,
         showViewOriginalAction: false,
-        onCopyLink: () => _copyLink(
-          context,
-          ref,
-          post,
-          enableIdentityTemplate: ref.read(
-            contentFeatureFlagProvider('enable_identity_share_template'),
-          ),
-        ),
+        onCopyLink: () => _copyLink(context, ref, post),
         onNotInterested: () {
           final attribution = _currentFeedAttribution(ref);
           ref
               .read(contentBehaviorTrackerProvider)
               .trackDislike(
                 post.id,
-                contentType: post.type,
+                contentType: post.type.wireName,
                 authorId: post.authorId,
                 feedRequestId: attribution.feedRequestId,
                 referralSource: ReferralSource.organicFeed,
@@ -753,7 +739,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
                   .read(contentBehaviorTrackerProvider)
                   .trackUndoDislike(
                     post.id,
-                    contentType: post.type,
+                    contentType: post.type.wireName,
                     authorId: post.authorId,
                     feedRequestId: attribution.feedRequestId,
                     referralSource: ReferralSource.organicFeed,
@@ -850,7 +836,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
           .trackHideAuthor(
             post.id,
             authorId: post.authorId,
-            contentType: post.type,
+            contentType: post.type.wireName,
             feedRequestId: attribution.feedRequestId,
             referralSource: ReferralSource.organicFeed,
             channelId: channelId,
@@ -939,7 +925,7 @@ class HomeMultiFormFeed extends ConsumerWidget {
           .read(contentBehaviorTrackerProvider)
           .trackHideContentType(
             post.id,
-            contentType: post.type,
+            contentType: post.type.wireName,
             authorId: post.authorId,
             feedRequestId: attribution.feedRequestId,
             referralSource: ReferralSource.organicFeed,

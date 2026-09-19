@@ -1,16 +1,20 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: 706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31
 
 library;
 
 import '../operation_request_payload.dart';
 import "../generated/search/canonical_search_mode.g.dart";
 import "../generated/search_feedback_event_type.g.dart";
+import "../generated/shared_operation_enums.g.dart";
+import "../generated/shared_operation_types.g.dart";
 
 export "../generated/search/canonical_search_mode.g.dart";
 export "../generated/search/search_contract_vocabulary.g.dart";
 export "../generated/search/search_response_view.g.dart";
 export "../generated/search_feedback_event_type.g.dart";
+export "../generated/shared_operation_enums.g.dart";
+export "../generated/shared_operation_types.g.dart";
 
 part '../generated/requests/search/search_operation_contracts.g.requests.g.dart';
 

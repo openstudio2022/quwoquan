@@ -221,8 +221,8 @@ def test_gamma_managed_acl_survives_real_redis_restart(tmp_path, monkeypatch):
     import shutil
     target, _ = inputs()
     root = (ROOT / ".qwq_output/env/repo/local/tests" / ("source-acl-" + secrets.token_hex(8))).absolute()
-    monkeypatch.setattr(entry, "_gamma_local_connection_root", lambda: root)
-    monkeypatch.setattr(entry, "_gamma_local_prepared_source_target", lambda: target)
+    monkeypatch.setattr(entry, "_gamma_local_connection_root", lambda *args, **kwargs: root)
+    monkeypatch.setattr(entry, "_gamma_local_prepared_source_target", lambda *args, **kwargs: target)
     prepared = entry.prepare_gamma_local_redis_acl(); acl_path = Path(prepared["aclFile"])
     assert acl_path.stat().st_mode & 0o777 == 0o600
     client = docker.DockerClient(base_url=os.environ.get("DOCKER_HOST", "unix://" + str(Path.home() / ".colima/default/docker.sock")))

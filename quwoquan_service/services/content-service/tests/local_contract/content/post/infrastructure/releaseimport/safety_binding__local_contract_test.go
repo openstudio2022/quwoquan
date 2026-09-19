@@ -72,7 +72,7 @@ func TestDataSafetyBindingAndModerationMongo(t *testing.T) {
 	now := time.Now().UTC().Truncate(time.Millisecond)
 	stage := func(name string) ImportedReleaseBinding {
 		opts := ImportOptions{ReleaseID: name, ManifestDigest: "sha256:" + strings.Repeat(string(name[len(name)-1]), 64), ReleaseKind: "content", ActivationMode: "stage-only", Mode: "sync", DeletePolicy: "tombstone", SourceOwner: "qwq_data"}
-		p := PostDoc{PostRef: "posts/article/shared", ContentID: "shared", ContentVersion: 1, PoolSourceType: "data", VariantPurpose: "original", PoolStatus: "active", ContentType: "article", ContentIdentity: "work", Title: "安全测试", AuthorID: "data-author", AuthorDisplayName: "作者", ArticleMarkdown: "# 安全测试", Admission: ContentAdmission{ProcessResult: "completed", QualityResult: "passed", UsageScope: "production", EvidenceRef: "audit/test", EvidenceDigest: "sha256:" + strings.Repeat("a", 64)}, CreatedAt: now.Add(-time.Hour), UpdatedAt: now, PublishedAt: now}
+		p := PostDoc{PostRef: "posts/article/shared", ContentID: "shared", ContentVersion: 1, PoolSourceType: "data", VariantPurpose: "original", PoolStatus: "active", ContentType: "article", Title: "安全测试", AuthorID: "data-author", AuthorDisplayName: "作者", ArticleMarkdown: "# 安全测试", Admission: ContentAdmission{ProcessResult: "completed", QualityResult: "passed", UsageScope: "production", EvidenceRef: "audit/test", EvidenceDigest: "sha256:" + strings.Repeat("a", 64)}, CreatedAt: now.Add(-time.Hour), UpdatedAt: now, PublishedAt: now}
 		if _, err := StageImportedPostRelease(ctx, db, "alpha", []PostDoc{p}, map[string]ReleaseMediaAsset{}, now, opts); err != nil {
 			t.Fatal("stage", err)
 		}

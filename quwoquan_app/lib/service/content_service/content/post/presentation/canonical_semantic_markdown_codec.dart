@@ -140,6 +140,20 @@ void _validate(Map<String, Object?> v) {
     );
 }
 
+/// 校验云端已解码的 exact tree，不经 Markdown 重建节点或补齐身份。
+///
+/// reader 在调用处把本 codec 的失败映射到既有 invalidResponse 契约；
+/// 此入口不声称校验模型尚未携带的对象 revision tuple。
+DocumentEnvelope requireCanonicalEnvelope(DocumentEnvelope? envelope) {
+  if (envelope == null) {
+    throw const CanonicalSemanticMarkdownException(
+      'SEMANTIC_DOCUMENT.INVALID.FIELD_TYPE',
+    );
+  }
+  _validate(documentEnvelopeToWire(envelope));
+  return envelope;
+}
+
 String serializeEnvelope(DocumentEnvelope envelope) {
   final v =
       _normalized(documentEnvelopeToWire(envelope)) as Map<String, Object?>;

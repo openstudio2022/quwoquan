@@ -6,7 +6,7 @@ class _CreatePageState extends ConsumerState<CreatePage>
 
   /// 正文上限单一真相：codegen 自 `publication_policy.yaml`，端云同源，
   /// 禁止在页面内维护第二份长度常量（GWT-002）。
-  static const int _kMaxBodyLength = ContentPublicationPolicy.microBodyMaxRunes;
+  static const int _kMaxBodyLength = ContentPublicationPolicy.articleBodyMaxRunes;
   static const int _kMaxTitleLength = ContentPublicationPolicy.titleMaxRunes;
   final CreateCircleService _circleService = const CreateCircleService();
   final TextEditingController _titleController = TextEditingController();
@@ -773,10 +773,6 @@ class _CreatePageState extends ConsumerState<CreatePage>
           joinedCircles: joinedCircles,
           recommendedCircles: const [],
           circleLoadUnavailable: circleLoadUnavailable,
-          // 文字创作：系统建议形态进确认页固化，最终以用户确认为准（GWT-001）。
-          suggestedTextContentType: state.editorKind == CreateEditorKind.text
-              ? (shouldPublishAsArticleForPayload(state) ? 'article' : 'micro')
-              : null,
         ),
       ),
     );

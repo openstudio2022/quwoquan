@@ -473,14 +473,6 @@ surfaces:
       - GetRelationshipCapability
       - FollowUser
 
-  - id: addContactScan
-    owner: user
-    route_id: addContactScan
-    path_template: /add-contact/scan
-    description: 扫描对方二维码名片（相机 / 图库），解析后进入联系人确认
-    operation_ids:
-      - ResolveProfileQrToken
-      - GetProfileQrCard
 
   - id: addContactPhone
     owner: user

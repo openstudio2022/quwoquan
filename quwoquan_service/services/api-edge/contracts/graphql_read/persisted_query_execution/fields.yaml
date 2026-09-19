@@ -37,6 +37,7 @@ types:
     - {name: data, type: object, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: metadata_only}
   SearchPageInput:
     fields:
+    - {name: clientPresentationContract, source: input.clientPresentationContract, type: ClientContentPresentationContract, constraints: [NULLABLE], classification: PUBLIC, log_policy: metadata_only, api_exposure: write, ops_exposure: none, description: 原样转发 Search owner 的 canonical 四集合能力声明；正常 App 使用生成类型，Edge 不补缺席基线，不将能力改写为 contentTypes 筛选器，也不移除非内容命中。}
     - {name: query, source: input.query, type: string, constraints: [NOT_NULL], classification: SENSITIVE, log_policy: none, api_exposure: write, ops_exposure: none}
     - {name: first, source: input.first, type: int, constraints: [NULLABLE], classification: PUBLIC, log_policy: allow, api_exposure: write, ops_exposure: none}
     - {name: after, source: input.after, type: string, constraints: [NULLABLE], classification: INTERNAL, log_policy: hash, api_exposure: write, ops_exposure: none}

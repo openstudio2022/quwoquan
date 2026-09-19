@@ -231,9 +231,7 @@ void main() {
       surfaceView: ContentSurfaceViewMapper.fromDto(
         ContentPostViewData(
           id: 'post_share_journey',
-          type: 'micro',
-          identity: 'moment',
-          displayFormat: 'note',
+          type: ContentType.article,
           assistantUsePolicy: AssistantUsePolicy.inherit,
           authorId: 'author_share_journey',
           displayName: '旅程作者',
@@ -249,7 +247,6 @@ void main() {
           createdAt: DateTime.utc(2026, 7, 14),
         ),
       ),
-      enableIdentityTemplate: true,
       publicLinks: testPublicContentLinks,
     );
 
@@ -317,9 +314,7 @@ void main() {
       surfaceView: ContentSurfaceViewMapper.fromDto(
         ContentPostViewData(
           id: 'post_share_auth_resume',
-          type: 'micro',
-          identity: 'moment',
-          displayFormat: 'note',
+          type: ContentType.article,
           assistantUsePolicy: AssistantUsePolicy.inherit,
           authorId: 'author_share_auth_resume',
           displayName: '续接作者',
@@ -335,7 +330,6 @@ void main() {
           createdAt: DateTime.utc(2026, 7, 19),
         ),
       ),
-      enableIdentityTemplate: true,
       publicLinks: testPublicContentLinks,
     );
     final container = ProviderContainer(

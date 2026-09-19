@@ -812,7 +812,8 @@ def test_real_builder_orchestrates_five_components_and_final_domain_readback(
     )
     monkeypatch.setattr(sync._builder, "_resolution_seal", lambda _root: {})
 
-    def project(_repo: Path, target: Path) -> Path:
+    def project(_repo: Path, target: Path, *, platforms: frozenset[str]) -> Path:
+        assert platforms == frozenset({"android", "ios"})
         target.mkdir()
         return target / "quwoquan_app"
 
@@ -995,3 +996,28 @@ def test_ios_generated_metadata_must_bind_projection_and_remove_spm(
     project.write_text("FlutterGeneratedPluginSwiftPackage\n", encoding="utf-8")
     with pytest.raises(ValueError, match="flutter_spm_residue_forbidden"):
         sync._builder._assert_ios_generated_metadata(app)
+
+
+def test_android_plan_records_coverage_without_ios_components(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    output = tmp_path / "output"
+    _stub_sync(monkeypatch, output)
+
+    def android_builder(context):
+        roots = _component_builder()(context)
+        for name in ("productionIosPods", "patrolIosPods"):
+            path = roots.pop(name)
+            (path / "manifest.json").unlink()
+            path.rmdir()
+        return roots
+
+    result = sync.command_app_dependency_sync(
+        argparse.Namespace(platform="android"), component_builder=android_builder
+    )
+
+    assert result["exitCode"] == 0
+    assert result["receipt"]["platforms"] == ["android"]
+    assert result["receipt"]["nonPromotable"] is True
+    assert set(result["receipt"]["components"]) == {
+        "productionPub", "patrolPub", "androidGradle"
+    }
+    assert set(result["receipt"]["platformInputs"]) == {"android"}

@@ -12,7 +12,7 @@ import 'package:quwoquan_app/design_system/semantics/navigation_semantic_constan
 import 'package:quwoquan_app/design_system/spacing/app_spacing.dart';
 import 'package:quwoquan_app/design_system/spacing/spacing_extensions.dart';
 import 'package:quwoquan_app/design_system/typography/app_typography.dart';
-/// 'full'：作品模式，含作者/关注/位置；'backOnly'：微趣模式，仅返回+更多
+/// 'full'：含作者/关注/位置；'backOnly'：仅返回+更多
 typedef ToolbarMode = String;
 
 class MediaViewerTopBar extends StatelessWidget {

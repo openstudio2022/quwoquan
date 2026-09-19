@@ -9,6 +9,7 @@ import (
 	"time"
 
 	runtimemedia "quwoquan_service/runtime/media"
+	generated "quwoquan_service/services/content-service/generated/content/post"
 	postmodel "quwoquan_service/services/content-service/generated/content/post/contract/model"
 	semantic "quwoquan_service/services/content-service/generated/content/post/semantic_document"
 )
@@ -21,7 +22,6 @@ type postManifest struct {
 	Admission             ContentAdmission                   `json:"admission"`
 	PoolStatus            string                             `json:"status"`
 	ContentType           string                             `json:"contentType"`
-	ContentIdentity       string                             `json:"contentIdentity"`
 	Title                 string                             `json:"title"`
 	Caption               string                             `json:"caption"`
 	DisplayTitle          string                             `json:"displayTitle"`
@@ -59,6 +59,213 @@ type postManifest struct {
 	CreatedAt             string                             `json:"createdAt"`
 	UpdatedAt             string                             `json:"updatedAt"`
 	PublishedAt           string                             `json:"publishedAt"`
+	VideoBindings         []json.RawMessage                  `json:"videoBindings"`
+	Closure000            json.RawMessage                    `json:"allowedContactNumbers"`
+	Closure001            json.RawMessage                    `json:"articleCategory"`
+	Closure002            json.RawMessage                    `json:"articleRenderProfile"`
+	Closure003            json.RawMessage                    `json:"assetRefsRef"`
+	Closure004            json.RawMessage                    `json:"authorizationProof"`
+	Closure005            json.RawMessage                    `json:"baseSourceRef"`
+	Closure006            json.RawMessage                    `json:"carrier"`
+	Closure007            json.RawMessage                    `json:"citedSourceRefs"`
+	Closure008            json.RawMessage                    `json:"collectionPageUrl"`
+	Closure009            json.RawMessage                    `json:"creatorRefsRef"`
+	Closure010            json.RawMessage                    `json:"executionId"`
+	Closure011            json.RawMessage                    `json:"generator"`
+	Closure012            json.RawMessage                    `json:"generatorModel"`
+	Closure013            json.RawMessage                    `json:"imageBindings"`
+	Closure014            json.RawMessage                    `json:"license"`
+	Closure015            json.RawMessage                    `json:"markdownDialect"`
+	Closure016            json.RawMessage                    `json:"payloadDigest"`
+	Closure017            json.RawMessage                    `json:"publishLayout"`
+	Closure018            json.RawMessage                    `json:"reviewDecision"`
+	Closure019            json.RawMessage                    `json:"rightsAuditIssues"`
+	Closure020            json.RawMessage                    `json:"rightsAuditStatus"`
+	Closure021            json.RawMessage                    `json:"schema"`
+	Closure022            json.RawMessage                    `json:"sourceIdentity"`
+	Closure023            json.RawMessage                    `json:"sourceUrls"`
+	Closure024            json.RawMessage                    `json:"tagRefsRef"`
+	Closure025            json.RawMessage                    `json:"termsUrl"`
+	Closure026            json.RawMessage                    `json:"topicId"`
+	Closure027            json.RawMessage                    `json:"vertical"`
+	Closure028            json.RawMessage                    `json:"writingIntent"`
+}
+
+// ValidatePostManifestCarrierJSON mirrors Data's explicit carrier union at the
+// earliest canonical import boundary. It intentionally permits inventory-backed
+// common fields, while carrier-exclusive fields and unknown discriminator values
+// fail closed before encoding/json can discard them.
+func ValidatePostManifestCarrierJSON(raw []byte, ref string) error {
+	if err := validateRetiredPostManifestClassification(raw, ref); err != nil {
+		return err
+	}
+	var manifest map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		return err
+	}
+	allowedRootFields := map[string]bool{
+		"admission":             true,
+		"allowedContactNumbers": true,
+		"articleCategory":       true,
+		"articleRenderProfile":  true,
+		"assetRefsRef":          true,
+		"assets":                true,
+		"authorId":              true,
+		"authorQualitySignals":  true,
+		"authorizationProof":    true,
+		"baseSourceRef":         true,
+		"caption":               true,
+		"carrier":               true,
+		"citedSourceRefs":       true,
+		"collectionPageUrl":     true,
+		"contentId":             true,
+		"contentType":           true,
+		"createdAt":             true,
+		"creator":               true,
+		"creatorArchetype":      true,
+		"creatorDisclosure":     true,
+		"creatorProfileDigest":  true,
+		"creatorProfileId":      true,
+		"creatorRefsRef":        true,
+		"entityRefs":            true,
+		"executionId":           true,
+		"experienceClaimMode":   true,
+		"finalContentRef":       true,
+		"generator":             true,
+		"generatorModel":        true,
+		"imageBindings":         true,
+		"license":               true,
+		"markdownDialect":       true,
+		"objectRef":             true,
+		"payloadDigest":         true,
+		"publishAngle":          true,
+		"publishLayout":         true,
+		"publishMediaMode":      true,
+		"publishSeq":            true,
+		"publishTitle":          true,
+		"publishedAt":           true,
+		"reviewDecision":        true,
+		"rightsAuditIssues":     true,
+		"rightsAuditStatus":     true,
+		"schema":                true,
+		"semanticMentions":      true,
+		"sourceAttribution":     true,
+		"sourceCollectionId":    true,
+		"sourceIdentity":        true,
+		"sourceRefs":            true,
+		"sourceTaskId":          true,
+		"sourceType":            true,
+		"sourceUrls":            true,
+		"status":                true,
+		"tagRefs":               true,
+		"tagRefsRef":            true,
+		"template":              true,
+		"termsUrl":              true,
+		"title":                 true,
+		"topicId":               true,
+		"updatedAt":             true,
+		"variantPurpose":        true,
+		"version":               true,
+		"vertical":              true,
+		"videoBindings":         true,
+		"writingIntent":         true,
+	}
+	authorSurface := len(manifest["vertical"]) > 0 || len(manifest["topicId"]) > 0 || len(manifest["sourceUrls"]) > 0 || len(manifest["generator"]) > 0
+	if authorSurface {
+		for name := range manifest {
+			if !allowedRootFields[name] {
+				return fmt.Errorf("%s: unknown post manifest field %s", ref, name)
+			}
+		}
+		for _, name := range []string{"vertical", "topicId", "contentType", "entityRefs", "tagRefs", "sourceUrls", "generator", "createdAt", "updatedAt"} {
+			if _, exists := manifest[name]; !exists {
+				return fmt.Errorf("%s: %s is required", ref, name)
+			}
+		}
+		for _, name := range []string{"entityRefs", "tagRefs", "sourceUrls"} {
+			var values []string
+			if err := json.Unmarshal(manifest[name], &values); err != nil {
+				return fmt.Errorf("%s: %s type", ref, name)
+			}
+		}
+		for _, name := range []string{"createdAt", "updatedAt"} {
+			var value string
+			if err := json.Unmarshal(manifest[name], &value); err != nil {
+				return fmt.Errorf("%s: %s format", ref, name)
+			}
+			if _, err := time.Parse(time.RFC3339, value); err != nil {
+				return fmt.Errorf("%s: %s format", ref, name)
+			}
+		}
+	}
+	if rawSchema, exists := manifest["schema"]; exists {
+		var marker string
+		_ = json.Unmarshal(rawSchema, &marker)
+		if marker == "quwoquan_data.post_object" {
+			for _, name := range []string{"contentId", "version", "sourceType", "sourceIdentity", "payloadDigest", "admission", "status", "creatorProfileId", "assets"} {
+				if _, present := manifest[name]; !present {
+					return fmt.Errorf("%s: canonical %s is required", ref, name)
+				}
+			}
+		}
+	}
+	var contentType string
+	if err := json.Unmarshal(manifest["contentType"], &contentType); err != nil {
+		return fmt.Errorf("%s: contentType is required", ref)
+	}
+	if rawSchema, exists := manifest["schema"]; exists {
+		var marker string
+		if err := json.Unmarshal(rawSchema, &marker); err != nil ||
+			(marker != "quwoquan_data.post_manifest" && marker != "quwoquan_data.post_object") {
+			return fmt.Errorf("%s: post schema marker is invalid", ref)
+		}
+	}
+	forbidden := func(names ...string) error {
+		for _, name := range names {
+			if _, exists := manifest[name]; exists {
+				return fmt.Errorf("%s: %s is not allowed for %s content", ref, name, contentType)
+			}
+		}
+		return nil
+	}
+	switch contentType {
+	case "article":
+		return forbidden("sourceCollectionId", "creator", "collectionPageUrl", "license", "termsUrl", "authorizationProof", "rightsAuditStatus", "rightsAuditIssues", "videoBindings")
+	case "image":
+		if len(manifest["assets"]) == 0 {
+			return fmt.Errorf("%s: image manifest assets are required", ref)
+		}
+		if err := forbidden("template", "carrier", "generatorModel", "citedSourceRefs", "reviewDecision", "markdownDialect", "articleRenderProfile", "publishLayout", "articleCategory", "writingIntent", "baseSourceRef", "imageBindings", "videoBindings"); err != nil {
+			return err
+		}
+	case "video":
+		if len(manifest["assets"]) == 0 || len(manifest["videoBindings"]) == 0 {
+			return fmt.Errorf("%s: video manifest assets and videoBindings are required", ref)
+		}
+		if err := forbidden("template", "carrier", "generatorModel", "citedSourceRefs", "reviewDecision", "markdownDialect", "articleRenderProfile", "publishLayout", "articleCategory", "writingIntent", "baseSourceRef", "imageBindings", "sourceCollectionId", "creator", "collectionPageUrl", "license", "termsUrl", "authorizationProof", "rightsAuditStatus", "rightsAuditIssues"); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("%s: unsupported contentType %q", ref, contentType)
+	}
+	var decoded struct {
+		Assets             []AssetManifestItem `json:"assets"`
+		SourceCollectionID string              `json:"sourceCollectionId"`
+		VideoBindings      []json.RawMessage   `json:"videoBindings"`
+	}
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return err
+	}
+	if contentType == "image" {
+		return validateImageAssets(decoded.Assets, decoded.SourceCollectionID, ref)
+	}
+	if contentType == "video" {
+		if len(decoded.VideoBindings) == 0 {
+			return fmt.Errorf("%s: video manifest requires videoBindings", ref)
+		}
+		return validateVideoAssets(decoded.Assets, ref)
+	}
+	return nil
 }
 
 // validateRetiredPostManifestClassification 拒绝 Data schema 已退休的对象分类字段。
@@ -256,6 +463,9 @@ func validateAssetItem(asset AssetManifestItem, ref string) error {
 	if !sha256Pattern.MatchString(strings.TrimSpace(asset.Sha256)) {
 		return fmt.Errorf("%s: asset manifest sha256 invalid", ref)
 	}
+	if asset.DurationMs < 0 {
+		return fmt.Errorf("%s: asset manifest durationMs invalid", ref)
+	}
 	if asset.SourceOriginalSha256 != "" && !sha256Pattern.MatchString(strings.TrimSpace(asset.SourceOriginalSha256)) {
 		return fmt.Errorf("%s: asset manifest sourceOriginalSha256 invalid", ref)
 	}
@@ -315,9 +525,13 @@ func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, 
 	if strings.TrimSpace(sourceCollectionID) == "" {
 		return fmt.Errorf("%s: image manifest missing sourceCollectionId", ref)
 	}
+	hasImage := false
 	for _, asset := range assets {
 		if err := validateAssetItem(asset, ref); err != nil {
 			return err
+		}
+		if strings.EqualFold(strings.TrimSpace(asset.Kind), "image") {
+			hasImage = true
 		}
 		if asset.SourceCollectionID != sourceCollectionID {
 			return fmt.Errorf("%s: image asset sourceCollectionId does not match work manifest", ref)
@@ -333,6 +547,9 @@ func validateImageAssets(assets []AssetManifestItem, sourceCollectionID string, 
 			(strings.TrimSpace(asset.TermsURL) == "" && strings.TrimSpace(asset.AuthorizationProof) == "") {
 			return fmt.Errorf("%s: image asset %q missing license or proof", ref, asset.AssetID)
 		}
+	}
+	if !hasImage {
+		return fmt.Errorf("%s: image manifest requires an image asset", ref)
 	}
 	return nil
 }
@@ -612,13 +829,19 @@ func validateEntityAssetManifest(manifest *EntityAssetManifestDoc, ref string) e
 	return nil
 }
 
-func canonicalImportedContentIdentity(raw string) (string, error) {
-	identity := strings.ToLower(strings.TrimSpace(raw))
-	if identity == "" {
-		return "", fmt.Errorf("canonical release post contentIdentity is required")
+// canonicalImportedContentType 把导入 Post 的 contentType 约束在 canonical
+// ContentType 闭集内。退役成员（micro）与未知取值一律 fail-closed；导入路径
+// 不做分类，存量 micro 只能由一次性迁移命令处理。
+func canonicalImportedContentType(raw string) (string, error) {
+	contentType := strings.ToLower(strings.TrimSpace(raw))
+	if contentType == "" {
+		return "", fmt.Errorf("canonical release post contentType is required")
 	}
-	if identity != "work" {
-		return "", fmt.Errorf("canonical release post contentIdentity must be work")
+	if _, allowed := generated.AllowedContentTypes[contentType]; !allowed {
+		return "", fmt.Errorf(
+			"canonical release post contentType %q is not a ContentType member",
+			contentType,
+		)
 	}
-	return identity, nil
+	return contentType, nil
 }

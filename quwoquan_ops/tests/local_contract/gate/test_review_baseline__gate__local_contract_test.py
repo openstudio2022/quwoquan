@@ -39,13 +39,13 @@ class ReviewBaselineGateContractTest(NamedEvidenceRunnerTest):
             "specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md"
         ]
         manifest = self._manifest(paths[0])
-        candidate = build_candidate_evidence(self.manifest_ref, paths, repo_root=ROOT)
+        candidate = build_candidate_evidence(paths, repo_root=ROOT)
         candidate_path = _write_content_addressed_bytes(
             canonical_json_bytes(candidate), subdirectory="candidates/by-fingerprint"
         )
         plan = review.build_plan(
             registry, "dev", "POST", None, paths,
-            context_manifest=manifest, context_manifest_ref=self.manifest_ref,
+            context_manifest=manifest,
             candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
         )
         captured: dict[str, object] = {}
@@ -140,13 +140,13 @@ class ReviewBaselineGateContractTest(NamedEvidenceRunnerTest):
             "specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md"
         ]
         manifest = self._manifest(paths[0])
-        candidate = build_candidate_evidence(self.manifest_ref, paths, repo_root=ROOT)
+        candidate = build_candidate_evidence(paths, repo_root=ROOT)
         candidate_path = _write_content_addressed_bytes(
             canonical_json_bytes(candidate), subdirectory="candidates/by-fingerprint"
         )
         plan = review.build_plan(
             registry, "dev", "POST", None, paths,
-            context_manifest=manifest, context_manifest_ref=self.manifest_ref,
+            context_manifest=manifest,
             candidate_evidence_ref=candidate_path.relative_to(ROOT).as_posix(),
         )
         wrong_bytes = canonical_json_bytes({**plan, "scope": "forged"})
@@ -154,7 +154,7 @@ class ReviewBaselineGateContractTest(NamedEvidenceRunnerTest):
             self._run(plan, registry, plan_bytes=wrong_bytes)
 
         cases = [
-            ("candidate", lambda value: value["candidate_evidence_identity"].__setitem__("ref", value["owner_identity"]["ref"])),
+            ("candidate", lambda value: value["candidate_evidence_identity"].__setitem__("ref", self.manifest_ref)),
             ("changed_paths", lambda value: value.__setitem__("changed_paths", ["README.md"])),
             ("evidence_registry", lambda value: value["evidence"][0].__setitem__("command", "printf forged")),
         ]

@@ -163,6 +163,7 @@ void main() {
       commentMessage,
     )?.location;
     expect(commentLocation, contains('/works/browser/post_42'));
+    expect(commentLocation, contains('source=push_notification'));
     expect(commentLocation, contains('openComments=true'));
     expect(commentLocation, contains('targetCommentId=comment_42'));
 

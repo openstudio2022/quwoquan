@@ -37,8 +37,7 @@ void main() {
       SubmitContentPostPublicationCommand(
         publishIntentId: 'profile-activity-post-$sequence',
         localDraftId: 'profile-activity-draft-$sequence',
-        contentType: ContentType.micro,
-        contentIdentity: ContentIdentity.moment,
+        contentType: ContentType.article,
         body: 'Profile interaction API contract post $sequence',
         visibility: Visibility.public,
       ),

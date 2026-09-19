@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
+	generated "quwoquan_service/services/content-service/generated/content/post"
 	postports "quwoquan_service/services/content-service/internal/content/post/domain/ports"
 )
 
@@ -496,15 +498,11 @@ func (r *MongoPostQueryReader) ListPublishedFeedPosts(
 		return postports.PostFeedSlice{}, errors.New("published feed query has invalid limit")
 	}
 
-	identity := strings.TrimSpace(string(request.Identity()))
-	if identity != "" && identity != "moment" && identity != "work" {
-		return postports.PostFeedSlice{}, errors.New("published feed query has invalid identity")
-	}
 	contentType := strings.TrimSpace(string(request.ContentType()))
-	switch contentType {
-	case "", "image", "video", "article", "micro", "moment":
-	default:
-		return postports.PostFeedSlice{}, errors.New("published feed query has invalid content type")
+	if contentType != "" {
+		if _, allowed := generated.AllowedContentTypes[contentType]; !allowed {
+			return postports.PostFeedSlice{}, errors.New("published feed query has invalid content type")
+		}
 	}
 
 	filter := bson.D{
@@ -513,12 +511,7 @@ func (r *MongoPostQueryReader) ListPublishedFeedPosts(
 		{Key: "moderationStatus", Value: "approved"},
 		{Key: "accountRestricted", Value: bson.M{"$ne": true}},
 	}
-	if identity != "" {
-		filter = append(filter, bson.E{Key: "contentIdentity", Value: identity})
-	}
-	if contentType != "" {
-		filter = append(filter, bson.E{Key: "contentType", Value: contentType})
-	}
+	filter = append(filter, canonicalContentTypePredicate(contentType))
 	filter = appendCanonicalReleaseFilter(
 		filter,
 		request.ActiveReleaseID(),
@@ -737,13 +730,27 @@ func AuthorPostFilter(request postports.AuthorPostReadRequest) (bson.D, error) {
 		return nil, errors.New("author post query has invalid access scope")
 	}
 
-	if identity := strings.TrimSpace(string(request.Identity())); identity != "" {
-		filter = append(filter, bson.E{Key: "contentIdentity", Value: identity})
-	}
-	if contentType := strings.TrimSpace(string(request.ContentType())); contentType != "" {
-		filter = append(filter, bson.E{Key: "contentType", Value: contentType})
-	}
+	filter = append(
+		filter,
+		canonicalContentTypePredicate(strings.TrimSpace(string(request.ContentType()))),
+	)
 	return filter, nil
+}
+
+// canonicalContentTypePredicate 把每一次 Post 列表读取都限制在 canonical
+// ContentType 闭集内。请求显式指定类型时按该值过滤，否则按整个闭集过滤：
+// 存量里还带着退役取值（micro）或迁移判定为冲突/无法分类的行，因此不能出现
+// 在任何公开列表上，也不允许读侧替它挑一个最接近的成员。
+func canonicalContentTypePredicate(requested string) bson.E {
+	if requested != "" {
+		return bson.E{Key: "contentType", Value: requested}
+	}
+	allowed := make([]string, 0, len(generated.AllowedContentTypes))
+	for value := range generated.AllowedContentTypes {
+		allowed = append(allowed, value)
+	}
+	sort.Strings(allowed)
+	return bson.E{Key: "contentType", Value: bson.D{{Key: "$in", Value: allowed}}}
 }
 
 func afterAuthorPostCursor(
@@ -789,7 +796,6 @@ func PostDetailProjection() bson.D {
 		{Key: "authorAvatarAccessMode", Value: 1},
 		{Key: "personaContextVersion", Value: 1},
 		{Key: "contentType", Value: 1},
-		{Key: "contentIdentity", Value: 1},
 		{Key: "title", Value: 1},
 		{Key: "body", Value: 1},
 		{Key: "summary", Value: 1},
@@ -862,7 +868,6 @@ func AuthorPostProjection() bson.D {
 		{Key: "authorDisplayNameSnapshot", Value: 1},
 		{Key: "authorAvatarUrlSnapshot", Value: 1},
 		{Key: "contentType", Value: 1},
-		{Key: "contentIdentity", Value: 1},
 		{Key: "title", Value: 1},
 		{Key: "body", Value: 1},
 		{Key: "summary", Value: 1},
@@ -904,7 +909,6 @@ func PostFeedProjection() bson.D {
 		{Key: "authorAvatarAssetId", Value: 1},
 		{Key: "authorAvatarAccessMode", Value: 1},
 		{Key: "contentType", Value: 1},
-		{Key: "contentIdentity", Value: 1},
 		{Key: "title", Value: 1},
 		{Key: "body", Value: 1},
 		{Key: "summary", Value: 1},

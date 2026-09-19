@@ -52,25 +52,26 @@ func TestStoreAppendIsImmutableAndLoadDoesNotSlideExpiry(t *testing.T) {
 	if _, exists := payload["version"]; exists {
 		t.Fatalf("canonical delivery page retained a schema-version envelope: %s", raw)
 	}
-	payload["version"] = 1
-	versioned, err := json.Marshal(payload)
-	if err != nil {
-		t.Fatalf("encode forbidden version envelope: %v", err)
-	}
-	if err := client.Set(
-		context.Background(),
-		key,
-		string(versioned),
-		deliverymodel.TTL,
-	); err != nil {
-		t.Fatalf("inject forbidden version envelope: %v", err)
-	}
-	if _, err := store.Load(
-		context.Background(),
-		page.ScopeHash,
-		page.DeliveryPageID,
-	); !errors.Is(err, deliveryapp.ErrNotFound) {
-		t.Fatalf("version envelope error=%v, want fail-closed not found", err)
+	for _, forbidden := range []struct {
+		name  string
+		value any
+	}{
+		{name: "version", value: 1},
+		{name: "objectCards", value: []any{}},
+		{name: "objectCards", value: []map[string]any{{"objectKind": "homepage", "objectId": "homepage-1", "title": "Homepage", "anchorIndex": 1}}},
+	} {
+		payload[forbidden.name] = forbidden.value
+		encoded, err := json.Marshal(payload)
+		if err != nil {
+			t.Fatalf("encode forbidden %s: %v", forbidden.name, err)
+		}
+		if err := client.Set(context.Background(), key, string(encoded), deliverymodel.TTL); err != nil {
+			t.Fatalf("inject forbidden %s: %v", forbidden.name, err)
+		}
+		if _, err := store.Load(context.Background(), page.ScopeHash, page.DeliveryPageID); !errors.Is(err, deliveryapp.ErrNotFound) {
+			t.Fatalf("retired %s error=%v, want fail-closed not found", forbidden.name, err)
+		}
+		delete(payload, forbidden.name)
 	}
 	if err := client.Set(
 		context.Background(),
@@ -108,15 +109,19 @@ func TestStoreEnforcesAtomicCapabilityPayloadAndScopeQuota(t *testing.T) {
 		deliveryredis.WithClock(func() time.Time { return now }),
 	)
 	oversized := storePageForTest(t, now, 0, "")
-	oversized.ObjectCards = make([]deliverymodel.ObjectCard, deliverymodel.MaximumObjectCards)
-	for index := range oversized.ObjectCards {
-		oversized.ObjectCards[index] = deliverymodel.ObjectCard{
-			ObjectKind:  "homepage",
-			ObjectID:    "homepage-payload-budget-" + strings.Repeat("x", 32),
-			Title:       strings.Repeat("t", deliverymodel.MaximumObjectTitleBytes),
-			CoverURL:    strings.Repeat("u", deliverymodel.MaximumObjectCoverURLBytes),
-			AnchorIndex: 1,
+	// 字段分别在限额内，但 JSON 转义后的整页仍必须受 payload 字节预算约束。
+	oversized.OutboundCursor = strings.Repeat("\x00", deliverymodel.MaximumCursorBytes)
+	oversized.Items = make([]deliverymodel.PostReference, deliverymodel.MaximumItems)
+	for index := range oversized.Items {
+		oversized.Items[index] = deliverymodel.PostReference{
+			PostID:          fmt.Sprintf("%03d", index) + strings.Repeat("\x00", deliverymodel.MaximumPostIDBytes-3),
+			RecallPath:      strings.Repeat("\x00", deliverymodel.MaximumAttributionBytes),
+			ContentVertical: strings.Repeat("\x00", deliverymodel.MaximumAttributionBytes),
+			SupplySource:    strings.Repeat("\x00", deliverymodel.MaximumAttributionBytes),
 		}
+	}
+	if err := oversized.Validate(now); err != nil {
+		t.Fatalf("payload budget fixture must pass field-level validation: %v", err)
 	}
 	if _, err := store.Append(context.Background(), oversized); !errors.Is(err, deliveryapp.ErrPayloadTooLarge) {
 		t.Fatalf("oversized append error=%v, want ErrPayloadTooLarge", err)

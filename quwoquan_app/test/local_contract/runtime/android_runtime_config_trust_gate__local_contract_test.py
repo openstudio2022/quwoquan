@@ -134,8 +134,37 @@ tasks.register("assembleNonprodProfile")
         )
 
     def _gradle_user_home(self) -> Path:
+        from quwoquan_ops.cli.lib.package_reuse.android_gradle_capsule import (
+            ANDROID_GRADLE_PROJECTION_RELATIVE,
+        )
+        from quwoquan_ops.cli.lib.package_reuse.android_gradle_component import (
+            ANDROID_GRADLE_SYNC_TREE,
+        )
+        from quwoquan_ops.cli.lib.package_reuse.dependency_bundle import (
+            load_active_dependency_bundle,
+        )
+
         configured = os.environ.get("GRADLE_USER_HOME", "").strip()
-        return Path(configured).expanduser() if configured else Path.home() / ".gradle"
+        if configured:
+            home = Path(configured).expanduser()
+        else:
+            projected = REPO_ROOT / ANDROID_GRADLE_PROJECTION_RELATIVE / "home"
+            if (projected / "caches").is_dir():
+                home = projected
+            else:
+                bundle = load_active_dependency_bundle(
+                    repo_root=REPO_ROOT,
+                    required_platforms=("android",),
+                )
+                home = (
+                    bundle.component_root("androidGradle")
+                    / ANDROID_GRADLE_SYNC_TREE
+                    / "home"
+                )
+        forbidden = Path.home() / ".gradle"
+        if home.expanduser().resolve() == forbidden.expanduser().resolve():
+            self.fail("Android Gradle global cache fallback is forbidden")
+        return home
 
     def _android_sdk_root(self) -> Path:
         configured = (
@@ -148,13 +177,28 @@ tasks.register("assembleNonprodProfile")
 
     def _single_cached_jar(self, pattern: str) -> Path:
         cache_root = self._gradle_user_home()
-        matches = sorted(cache_root.glob(pattern))
+        matches = sorted(path for path in cache_root.glob(pattern) if path.is_file())
+        if not matches:
+            basename = Path(pattern).name
+            matches = sorted(
+                path
+                for path in cache_root.glob(f"wrapper/dists/gradle-*/**/lib/{basename}")
+                if path.is_file()
+            )
         self.assertEqual(
             len(matches),
             1,
             f"cached jar mismatch below {cache_root} for {pattern}: {matches}",
         )
         return matches[0]
+
+    def _android_kotlin_plugin_version(self) -> str:
+        text = (APP_DIR / "android/settings.gradle.kts").read_text(encoding="utf-8")
+        needle = 'id("org.jetbrains.kotlin.android") version "'
+        start = text.index(needle) + len(needle)
+        version = text[start : text.index('"', start)]
+        self.assertTrue(version, "Android Kotlin plugin version is missing")
+        return version
 
     def test_help_and_pure_unit_task_are_explicitly_exempt(self) -> None:
         for task in ("help", "testDebugUnitTest"):
@@ -423,17 +467,25 @@ tasks.register("assembleNonprodProfile")
             flutter_embedding,
             lifecycle_common,
         ) = self._compile_shared_java_contract()
+        kotlin_version = self._android_kotlin_plugin_version()
         kotlin_compiler = self._single_cached_jar(
-            "caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-compiler-embeddable/2.4.0/*/kotlin-compiler-embeddable-2.4.0.jar"
+            "caches/modules-2/files-2.1/org.jetbrains.kotlin/"
+            f"kotlin-compiler-embeddable/{kotlin_version}/*/"
+            f"kotlin-compiler-embeddable-{kotlin_version}.jar"
         )
         kotlin_stdlib = self._single_cached_jar(
-            "caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-stdlib/2.4.0/*/kotlin-stdlib-2.4.0.jar"
+            "caches/modules-2/files-2.1/org.jetbrains.kotlin/"
+            f"kotlin-stdlib/{kotlin_version}/*/kotlin-stdlib-{kotlin_version}.jar"
         )
         kotlin_script_runtime = self._single_cached_jar(
-            "caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-script-runtime/2.4.0/*/kotlin-script-runtime-2.4.0.jar"
+            "caches/modules-2/files-2.1/org.jetbrains.kotlin/"
+            f"kotlin-script-runtime/{kotlin_version}/*/"
+            f"kotlin-script-runtime-{kotlin_version}.jar"
         )
         kotlin_daemon = self._single_cached_jar(
-            "caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-daemon-embeddable/2.4.0/*/kotlin-daemon-embeddable-2.4.0.jar"
+            "caches/modules-2/files-2.1/org.jetbrains.kotlin/"
+            f"kotlin-daemon-embeddable/{kotlin_version}/*/"
+            f"kotlin-daemon-embeddable-{kotlin_version}.jar"
         )
         kotlin_reflect = self._single_cached_jar(
             "caches/modules-2/files-2.1/org.jetbrains.kotlin/kotlin-reflect/1.6.10/*/kotlin-reflect-1.6.10.jar"

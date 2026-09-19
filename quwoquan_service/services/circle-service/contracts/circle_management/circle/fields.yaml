@@ -768,15 +768,6 @@ types:
         log_policy: allow
         api_exposure: read
         ops_exposure: read
-      - name: contentIdentity
-        source: contentIdentity
-        type: string
-        constraints:
-          - NULLABLE
-        classification: PUBLIC
-        log_policy: allow
-        api_exposure: read
-        ops_exposure: read
       - name: assistantUsePolicy
         source: assistantUsePolicy
         type: enum
@@ -1422,14 +1413,13 @@ types:
         client_default: '''recommended'''
   CircleFeedQuery:
     fields:
+      - name: clientPresentationContract
+        type: ClientContentPresentationContract
+        constraints: [NULLABLE]
+        description: 正常 App 上送生成的四集合能力声明；仅服务端计算缺席声明的 effective 能力，过滤后补足分页并绑定 cursor。圈子来源独立于 openSurface，禁止伪装为 home_feed。
       - name: circleId
         type: string
         client_dart_type: String
-      - name: identity
-        type: string
-        constraints:
-          - NULLABLE
-        client_dart_type: String?
       - name: type
         type: string
         constraints:

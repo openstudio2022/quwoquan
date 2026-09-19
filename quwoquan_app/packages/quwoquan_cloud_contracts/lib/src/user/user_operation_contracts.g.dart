@@ -1,5 +1,5 @@
 // Code generated from canonical domain contracts. DO NOT EDIT.
-// ContractGraph SHA256: c9cf831b6c99bc629353ce479d2019eff493f840cd03f8311ddd822f31f16ffd
+// ContractGraph SHA256: 706dad710e4f1250b9e7691b55e7aa2583905544296e2ddaa55ecef53fd07c31
 
 library;
 
@@ -3655,48 +3655,6 @@ final class ProfileQrCardWire {
   };
 }
 
-final class ProfileQrResolveWire {
-  const ProfileQrResolveWire({
-    required this.personaId,
-    required this.userHandle,
-    required this.publicProfileUrl,
-    required this.scanStatus,
-  });
-
-  final String personaId;
-  final String userHandle;
-  final String publicProfileUrl;
-  final String scanStatus;
-
-  factory ProfileQrResolveWire.fromWire(
-    Map<String, Object?> map, [
-    String path = "ProfileQrResolveWire",
-  ]) {
-    _rejectUnknownFields(map, const <String>{
-      "personaId",
-      "userHandle",
-      "publicProfileUrl",
-      "scanStatus",
-    }, path);
-    return ProfileQrResolveWire(
-      personaId: _requiredString(map["personaId"], '$path.personaId'),
-      userHandle: _requiredString(map["userHandle"], '$path.userHandle'),
-      publicProfileUrl: _requiredString(
-        map["publicProfileUrl"],
-        '$path.publicProfileUrl',
-      ),
-      scanStatus: _requiredString(map["scanStatus"], '$path.scanStatus'),
-    );
-  }
-
-  Map<String, Object?> toWire() => <String, Object?>{
-    "personaId": personaId,
-    "userHandle": userHandle,
-    "publicProfileUrl": publicProfileUrl,
-    "scanStatus": scanStatus,
-  };
-}
-
 final class ProfileUpdateProposalCommandResult {
   const ProfileUpdateProposalCommandResult({
     required this.proposalId,
@@ -5034,12 +4992,6 @@ ProfileQrCardWire decodeProfileQrCardWire(Object? response) =>
     ProfileQrCardWire.fromWire(
       _requiredObject(response, "ProfileQrCardWire"),
       "ProfileQrCardWire",
-    );
-
-ProfileQrResolveWire decodeProfileQrResolveWire(Object? response) =>
-    ProfileQrResolveWire.fromWire(
-      _requiredObject(response, "ProfileQrResolveWire"),
-      "ProfileQrResolveWire",
     );
 
 ProfileUpdateProposalCommandResult decodeProfileUpdateProposalCommandResult(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
+from typing import Any
 
 import quwoquan_ops.cli.lib.deployment_candidate_manifest as _pkg
 
@@ -56,6 +57,69 @@ def canonical_contract_graph_digest() -> str:
     if not isinstance(payload, dict):
         raise ValueError("canonical ContractGraph must be a JSON object")
     return "sha256:" + hashlib.sha256(encoded).hexdigest()
+
+
+def _workspace_root_digest() -> str:
+    return "sha256:" + hashlib.sha256(str(_pkg.ROOT.resolve()).encode("utf-8")).hexdigest()
+
+
+def _local_candidate_binding(candidate_evidence: str) -> dict[str, Any]:
+    from quwoquan_ops.cli.lib.candidate_evidence import (
+        candidate_identity,
+        validate_candidate_ref,
+    )
+
+    raw_ref = str(candidate_evidence or "").strip()
+    if not raw_ref:
+        raise ValueError("alpha-local package requires current candidate evidence")
+    ref, raw, payload, fingerprint = validate_candidate_ref(
+        raw_ref, repo_root=_pkg.ROOT
+    )
+    identity = candidate_identity(ref, raw, payload, fingerprint)
+    return {
+        "authority": "local-candidate-evidence",
+        "environmentScope": "alpha-local",
+        "nonPromotable": True,
+        "workspaceRootDigest": _workspace_root_digest(),
+        "candidateEvidence": {
+            "ref": identity["ref"],
+            "canonicalBytesSha256": identity["canonical_bytes_sha256"],
+            "changedPathsDigest": identity["changed_paths_digest"],
+            "impactPlanRef": identity["impact_plan_ref"],
+            "impactPlanDigest": identity["impact_plan_digest"],
+            "workspaceDigests": identity["workspace_digests"],
+        },
+    }
+
+
+def resolve_package_release_binding(
+    env_name: str,
+    target_name: str,
+    *,
+    release_attestation: str,
+    rollback_release_attestation: str,
+    candidate_evidence: str = "",
+) -> dict[str, Any]:
+    if env_name == "alpha" and target_name == "alpha-local":
+        has_release = bool(str(release_attestation or "").strip())
+        has_rollback = bool(str(rollback_release_attestation or "").strip())
+        has_candidate = bool(str(candidate_evidence or "").strip())
+        if has_release or has_rollback:
+            if has_candidate:
+                raise ValueError(
+                    "alpha-local package must choose formal release attestations or local candidate evidence"
+                )
+            return validate_release_attestations(
+                release_attestation, rollback_release_attestation
+            )
+        return _local_candidate_binding(candidate_evidence)
+    if str(candidate_evidence or "").strip():
+        raise ValueError(
+            "local candidate evidence is restricted to alpha-local packaging"
+        )
+    return validate_release_attestations(
+        release_attestation, rollback_release_attestation
+    )
 
 
 def validate_release_attestations(

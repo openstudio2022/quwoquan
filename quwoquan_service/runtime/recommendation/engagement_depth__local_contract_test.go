@@ -19,7 +19,7 @@ func TestComputeEngagementDepth_Article_Normal(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ComputeEngagementDepth(EngagementDepthInput{
-				ContentType: ContentTypeArticle,
+				ContentType: "article",
 				PagesViewed: tt.pages,
 				TotalPages:  tt.total,
 			})
@@ -44,7 +44,7 @@ func TestComputeEngagementDepth_Article_ShortFallback(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ComputeEngagementDepth(EngagementDepthInput{
-				ContentType: ContentTypeArticle,
+				ContentType: "article",
 				TotalPages:  2, // short article triggers dwell fallback
 				PagesViewed: 1,
 				DwellMs:     tt.dwellMs,
@@ -56,7 +56,7 @@ func TestComputeEngagementDepth_Article_ShortFallback(t *testing.T) {
 	}
 }
 
-func TestComputeEngagementDepth_Photo_Normal(t *testing.T) {
+func TestComputeEngagementDepth_Image_Normal(t *testing.T) {
 	tests := []struct {
 		name      string
 		viewed    int
@@ -73,7 +73,7 @@ func TestComputeEngagementDepth_Photo_Normal(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ComputeEngagementDepth(EngagementDepthInput{
-				ContentType:  ContentTypePhoto,
+				ContentType:  "image",
 				ImagesViewed: tt.viewed,
 				TotalImages:  tt.total,
 			})
@@ -84,9 +84,9 @@ func TestComputeEngagementDepth_Photo_Normal(t *testing.T) {
 	}
 }
 
-func TestComputeEngagementDepth_Photo_ShortFallback(t *testing.T) {
+func TestComputeEngagementDepth_Image_ShortFallback(t *testing.T) {
 	got := ComputeEngagementDepth(EngagementDepthInput{
-		ContentType:  ContentTypePhoto,
+		ContentType:  "image",
 		TotalImages:  2, // short → dwell fallback
 		ImagesViewed: 1,
 		DwellMs:      10000,
@@ -112,7 +112,7 @@ func TestComputeEngagementDepth_Video_Normal(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ComputeEngagementDepth(EngagementDepthInput{
-				ContentType:     ContentTypeVideo,
+				ContentType:     "video",
 				PlayPositionMs:  tt.posMs,
 				TotalDurationMs: tt.totalMs,
 			})
@@ -126,7 +126,7 @@ func TestComputeEngagementDepth_Video_Normal(t *testing.T) {
 func TestComputeEngagementDepth_Video_Short(t *testing.T) {
 	// Short video (8s): 60% watched → boosted ratio 0.78 → L3
 	got := ComputeEngagementDepth(EngagementDepthInput{
-		ContentType:     ContentTypeVideo,
+		ContentType:     "video",
 		PlayPositionMs:  4800,
 		TotalDurationMs: 8000,
 	})
@@ -136,7 +136,7 @@ func TestComputeEngagementDepth_Video_Short(t *testing.T) {
 
 	// Short video: full watch → boosted ratio 1.3 → L4
 	got = ComputeEngagementDepth(EngagementDepthInput{
-		ContentType:     ContentTypeVideo,
+		ContentType:     "video",
 		PlayPositionMs:  8000,
 		TotalDurationMs: 8000,
 	})
@@ -145,26 +145,16 @@ func TestComputeEngagementDepth_Video_Short(t *testing.T) {
 	}
 }
 
-func TestComputeEngagementDepth_Moment(t *testing.T) {
-	tests := []struct {
-		name      string
-		dwellMs   int
-		wantDepth int
-	}{
-		{"1s = L0", 1000, 0},
-		{"3s = L1", 3000, 1},
-		{"7s = L2", 7000, 2},
-		{"15s = L3", 15000, 3},
-		{"25s = L4", 25000, 4},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := ComputeEngagementDepth(EngagementDepthInput{
-				ContentType: ContentTypeMoment,
-				DwellMs:     tt.dwellMs,
-			})
-			if got != tt.wantDepth {
-				t.Errorf("got depth %d, want %d", got, tt.wantDepth)
+// spec_ref: specs/feature-tree/recommendation-platform/rec-model-training/training-pipeline/spec.md#gwt-001
+func TestComputeEngagementDepth_UnsupportedContentType(t *testing.T) {
+	for _, contentType := range []string{"micro", "moment", "photo", "homepage", "unknown", ""} {
+		t.Run(contentType, func(t *testing.T) {
+			input := EngagementDepthInput{ContentType: contentType, DwellMs: 60000}
+			if got := ComputeEngagementDepth(input); got != -1 {
+				t.Errorf("unsupported content depth = %d, want -1", got)
+			}
+			if got := ComputeConsumedRatio(input); got != -2 {
+				t.Errorf("unsupported consumed ratio = %v, want -2", got)
 			}
 		})
 	}

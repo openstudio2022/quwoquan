@@ -95,11 +95,11 @@ def _traceable_creator(tmp_path: Path) -> tuple[Path, dict]:
     content = b"avatar-cas"
     digest_hex = hashlib.sha256(content).hexdigest()
     digest = f"sha256:{digest_hex}"
-    object_key = (
-        f"media/objects/sha256/{digest_hex[:2]}/{digest_hex[2:4]}/"
-        f"{digest_hex}.jpg"
-    )
     admit_media_body(content)
+    relative_path = "media/avatar.jpg"
+    carried = creator / relative_path
+    carried.parent.mkdir(parents=True, exist_ok=True)
+    carried.write_bytes(content)
     _write(creator / "_creator.json", {"creatorId": "creator-a"})
     _write(
         creator / "profile.json",
@@ -120,7 +120,8 @@ def _traceable_creator(tmp_path: Path) -> tuple[Path, dict]:
                     "assetId": "avatar-a",
                     "kind": "avatar",
                     "sha256": digest,
-                    "objectKey": object_key,
+                    "path": relative_path,
+                    "sourceRefs": ["sources/avatar/source.json"],
                     "bytes": len(content),
                     "mimeType": "image/jpeg",
                 }
@@ -132,6 +133,30 @@ def _traceable_creator(tmp_path: Path) -> tuple[Path, dict]:
         digest=digest,
         byte_count=len(content),
     )
+    evidence = json.dumps(rights, ensure_ascii=False).encode("utf-8")
+    evidence_digest = "sha256:" + hashlib.sha256(evidence).hexdigest()
+    evidence_path = creator / "sources/avatar/evidence.json"
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_bytes(evidence)
+    _write(creator / "sources/avatar/source.json", {
+        "schema": "quwoquan_data.publish_source",
+        "sourceId": "avatar",
+        "sourceUrl": "https://rights.example/avatar-a",
+        "sourceUseMode": "licensed_adaptation",
+        "fetchedAt": "2026-07-28T00:00:00Z",
+        "metadata": rights,
+        "assets": [{
+            **rights["commercialRights"], "assetId": "avatar-a",
+            "sha256": digest, "bytes": len(content), "mimeType": "image/jpeg",
+        }],
+        "evidence": [{
+            "path": "evidence.json", "sha256": evidence_digest,
+            "bytes": len(evidence), "kind": "acquisition_receipt",
+        }],
+    })
+    profile = json.loads((creator / "profile.json").read_text(encoding="utf-8"))
+    profile["sourceRefs"] = ["sources/avatar/source.json"]
+    _write(creator / "profile.json", profile)
     return creator, rights
 
 

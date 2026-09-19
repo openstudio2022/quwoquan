@@ -8,15 +8,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type readPresentationSurfacesFile struct {
-	Version      int    `yaml:"version"`
-	DartEnumName string `yaml:"dart_enum_name"`
-	Surfaces     []struct {
-		DartMember  string `yaml:"dart_member"`
-		Description string `yaml:"description"`
-	} `yaml:"surfaces"`
-}
-
 type articleDetailWireKeysFile struct {
 	Version     int    `yaml:"version"`
 	DartClass   string `yaml:"wire_keys_class"`
@@ -25,34 +16,6 @@ type articleDetailWireKeysFile struct {
 		ConstName string `yaml:"const_name"`
 		JSONKey   string `yaml:"json_key"`
 	} `yaml:"keys"`
-}
-
-func renderPostReadSurfaceIdDart(yamlBytes []byte) (string, error) {
-	var f readPresentationSurfacesFile
-	if err := yaml.Unmarshal(yamlBytes, &f); err != nil {
-		return "", err
-	}
-	enumName := f.DartEnumName
-	if enumName == "" {
-		enumName = "PostReadSurfaceId"
-	}
-	var b strings.Builder
-	b.WriteString("// GENERATED FILE — DO NOT EDIT BY HAND.\n")
-	b.WriteString("// Source: services/content-service/contracts/content/post/projections/read_presentation_surfaces.yaml\n")
-	b.WriteString("// Regenerate: make codegen-app\n\n")
-	b.WriteString("/// 帖子只读投影所挂靠的 UI 表面（与 post-projection-pipeline-inventory / gap 清单一致）。\n")
-	fmt.Fprintf(&b, "enum %s {\n", enumName)
-	for _, s := range f.Surfaces {
-		if s.DartMember == "" {
-			continue
-		}
-		if s.Description != "" {
-			fmt.Fprintf(&b, "  /// %s\n", strings.TrimSpace(s.Description))
-		}
-		fmt.Fprintf(&b, "  %s,\n", s.DartMember)
-	}
-	b.WriteString("}\n")
-	return b.String(), nil
 }
 
 func renderWireKeysClassDart(yamlBytes []byte, sourceRelPath string) (string, error) {
@@ -190,23 +153,6 @@ func writeContentMediaPostProjectionKeys(
 }
 
 func writePostReadPresentationArtifacts(appDir, postProjectionsDir string) error {
-	surfPath := filepath.Join(postProjectionsDir, "read_presentation_surfaces.yaml")
-	surfBytes, err := readMetadataDocument(surfPath)
-	if err != nil {
-		return err
-	}
-	surfOut, err := renderPostReadSurfaceIdDart(surfBytes)
-	if err != nil {
-		return err
-	}
-	writeFile(
-		contentPostPresentationOutputPath(
-			appDir,
-			"post_read_surface_id.g.dart",
-		),
-		surfOut,
-	)
-
 	if err := writeWireKeysGeneratedFile(
 		appDir,
 		postProjectionsDir,

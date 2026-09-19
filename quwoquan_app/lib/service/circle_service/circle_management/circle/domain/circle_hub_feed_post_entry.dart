@@ -77,8 +77,6 @@ final class CircleHubFeedPostEntry {
   String get postId => post.id;
   String get title => post.normalizedTitle;
   String get bodyText => post.normalizedBody;
-  String get contentIdentity => post.identity;
-  String get displayFormat => post.displayFormat;
   String get articleTemplate => post.articleTemplate;
   String get authorRelationshipId => post.authorId;
   String get authorDisplayName => post.displayName.trim();
@@ -88,8 +86,9 @@ final class CircleHubFeedPostEntry {
   int get shareCount => _shareCount;
   bool get isLiked => _isLiked;
   bool get isFollowingAuthor => _isFollowingAuthor;
-  bool get isArticle => post.isArticleLike;
-  bool get isVideo => post.isVideoLike;
+  ContentType get contentType => post.type;
+  bool get isArticle => post.type == ContentType.article;
+  bool get isVideo => post.type == ContentType.video;
   bool get showsVideoBadge => post.hasVideo;
 
   String get coverUrl {

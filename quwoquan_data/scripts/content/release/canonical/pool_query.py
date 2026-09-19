@@ -14,6 +14,7 @@ from content.release.canonical.effective_admission import effective_source_attri
 from content.release.canonical.object_transaction_contract import ObjectTransactionError, _safe_rel
 from content.release.canonical.pool_record_history import read_pool_record_history
 from core.schema import validate_result
+from core.publish_layout import PublishLayoutError, logical_object_ref
 from content.release.canonical.aggregate_release_closure import object_locations, object_lookup_scope, object_root
 
 _CARRIERS = ("homepage", "article", "image", "video")
@@ -65,6 +66,12 @@ def _dependency_refs(manifest: Mapping[str, Any]) -> list[str]:
     return sorted({_canonical_ref(str(ref)) for ref in manifest.get("entityRefs") or []})
 
 
+def _physical_ref(publish_root: Path, ref: str) -> str:
+    kind, logical = ref.split("/", 1)
+    root = object_root(publish_root, kind, logical)
+    return root.relative_to(publish_root).as_posix() if root.exists() else ref
+
+
 def _record_identity_fact(root: Path, *, homepage: bool) -> tuple[Mapping[str, Any] | None, list[str]]:
     record: Mapping[str, Any] | None = None
     errors: list[str] = []
@@ -89,8 +96,11 @@ def _record_identity_fact(root: Path, *, homepage: bool) -> tuple[Mapping[str, A
 
 def _object_fact(publish_root: Path, ref: str) -> dict[str, Any]:
     kind, logical = ref.split("/", 1)
-    root = object_root(publish_root, kind, logical)
     homepage = ref.startswith("entities/")
+    try:
+        root = object_root(publish_root, kind, logical)
+    except (OSError, ValueError, TypeError, AssertionError):
+        root = publish_root / ref
     occupied = root.exists() or root.is_symlink()
     row: dict[str, Any] = {
         "objectRef": ref, "objectId": None, "objectIds": [], "contentVersion": None,
@@ -112,7 +122,10 @@ def _object_fact(publish_root: Path, ref: str) -> dict[str, Any]:
         identity_key = "entityId" if homepage else "contentId"
         row["manifestIdentity"] = {"objectId": manifest.get(identity_key), "contentVersion": manifest.get("version")}
         row["title"] = manifest.get("title") or manifest.get("publishTitle") or manifest.get("displayName")
-        row["dependencyRefs"] = _dependency_refs(manifest)
+        row["dependencyRefs"] = [
+            _physical_ref(publish_root, dependency)
+            for dependency in _dependency_refs(manifest)
+        ]
     except (OSError, ValueError, ObjectTransactionError) as exc:
         errors.append(_code(exc, "DATA.POOL.MANIFEST_INVALID"))
     record, record_errors = _record_identity_fact(root, homepage=homepage)
@@ -122,7 +135,7 @@ def _object_fact(publish_root: Path, ref: str) -> dict[str, Any]:
     if manifest and (
         not (row["manifestIdentity"] or {}).get("objectId")
         or type(manifest.get("version")) is not int or manifest["version"] < 1
-        or (homepage and manifest.get("entityRef") != "/entity/" + ref.removeprefix("entities/"))
+        or (homepage and (not isinstance(manifest.get("entityRef"), str) or not manifest["entityRef"].startswith("/entity/")))
         or (not homepage and manifest.get("contentType") != row["carrier"])
     ):
         errors.append("DATA.POOL.IDENTITY_INVALID")
@@ -130,8 +143,15 @@ def _object_fact(publish_root: Path, ref: str) -> dict[str, Any]:
     row["objectIds"] = sorted({str(identity["objectId"]) for identity in identities if identity.get("objectId")})
     row["objectId"] = identities[0].get("objectId") if identities else None
     row["contentVersion"] = identities[0].get("contentVersion") if identities else None
+    manifest_logical_ref: str | None = None
+    if manifest:
+        try:
+            manifest_logical_ref = logical_object_ref(manifest, "entities" if homepage else "posts")
+            row["logicalObjectRef"] = manifest_logical_ref
+        except PublishLayoutError:
+            errors.append("DATA.POOL.IDENTITY_INVALID")
     if len(row["objectIds"]) > 1 or (record is not None and (
-        record.get("objectRef") != ref.split("/", 1)[1]
+        record.get("objectRef") != manifest_logical_ref
         or (manifest and record.get("contentVersion") != manifest.get("version"))
     )):
         errors.append("DATA.POOL.IDENTITY_INVALID")
@@ -168,8 +188,19 @@ def _pool_facts(publish_root: Path, refs: Sequence[str]) -> dict[str, dict[str, 
         publish_root=publish_root,
         post_refs=[ref.removeprefix("posts/") for ref, row in facts.items() if ref.startswith("posts/") and row["code"] is None],
     )
-    candidate_refs = {f"posts/{candidate.post_ref}" for candidate in candidates}
-    exclusions = {f"posts/{row.post_ref}": row.code for row in excluded}
+    logical_posts = {
+        str(row.get("logicalObjectRef")): ref
+        for ref, row in facts.items()
+        if ref.startswith("posts/") and row.get("logicalObjectRef")
+    }
+    candidate_refs = {
+        logical_posts.get(candidate.post_ref, f"posts/{candidate.post_ref}")
+        for candidate in candidates
+    }
+    exclusions = {
+        logical_posts.get(row.post_ref, f"posts/{row.post_ref}"): row.code
+        for row in excluded
+    }
     for ref, row in facts.items():
         if row["code"] is None and ref.startswith("entities/"):
             row.update(eligible=True, state="eligible")
@@ -218,8 +249,10 @@ def _query_pool(publish_root: Path, *, target_refs: Sequence[str] | None, candid
                 dependencies = _dependency_refs(manifest)
                 peers = [{"objectRef": _canonical_ref(str(peer["objectRef"])), "manifest": peer["manifest"]}
                     for ordinal, peer in enumerate(candidates) if ordinal != index]
-                kind, logical = ref.split("/", 1)
-                physical = object_root(publish_root, kind, logical).relative_to(publish_root).as_posix() if facts[ref]["occupied"] else ref
+                physical = ref
+                if facts[ref]["occupied"]:
+                    kind, logical = ref.split("/", 1)
+                    physical = object_root(publish_root, kind, logical).relative_to(publish_root).as_posix()
                 conflicts = image_manifest_conflicts(connection, manifest=manifest, excluded_manifest_path=f"{physical}/manifest.json", candidate_peers=peers)
                 for conflict in conflicts:
                     conflict["objectRef"] = ref

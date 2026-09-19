@@ -339,7 +339,6 @@ func (s *CircleService) GetCircleFeed(
 	limit int,
 	cursor string,
 	sort string,
-	identity string,
 	contentType string,
 ) (CircleFeedSlice, error) {
 	ctx, span := rtobs.StartBusinessSpan(ctx, "circle.GetCircleFeed",
@@ -366,11 +365,10 @@ func (s *CircleService) GetCircleFeed(
 		return CircleFeedSlice{}, err
 	}
 	items, nextCursor, readErr := s.feedStore.ListCirclePosts(ctx, circleID, ListCirclePostsQuery{
-		Identity: identity,
-		Type:     contentType,
-		Sort:     sort,
-		Cursor:   cursor,
-		Limit:    limit,
+		Type:   contentType,
+		Sort:   sort,
+		Cursor: cursor,
+		Limit:  limit,
 	})
 	if readErr != nil {
 		if errors.Is(readErr, ErrInvalidCircleFeedCursor) {

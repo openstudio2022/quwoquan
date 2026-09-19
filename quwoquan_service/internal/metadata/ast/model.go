@@ -391,6 +391,8 @@ type RequestBinding struct {
 	Name     string `json:"name"`
 	Field    string `json:"field"`
 	Required *bool  `json:"required,omitempty"`
+	Encoding string `json:"encoding,omitempty"`
+	MaxBytes int    `json:"maxBytes,omitempty"`
 }
 
 // RequestConstants contains operation-owned wire literals. Constants are not
@@ -603,12 +605,16 @@ const (
 )
 
 type EnumDefinition struct {
-	Name       string
-	Values     []string
-	OwnerLevel EnumOwnerLevel
-	Domain     string
-	ObjectID   string
-	SourcePath string
+	Name   string
+	Values []string
+	// RetiredValues are members this enum once persisted and no longer accepts.
+	// They exist only so one-time storage migrations have an exact input; Values
+	// stays the single closed set for wire reads and writes.
+	RetiredValues []string
+	OwnerLevel    EnumOwnerLevel
+	Domain        string
+	ObjectID      string
+	SourcePath    string
 }
 
 type FieldDefinition struct {

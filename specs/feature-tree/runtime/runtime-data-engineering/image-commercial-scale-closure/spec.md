@@ -4,7 +4,7 @@
 >
 > 横切 runtime 工程能力；下游价值证据：[`AppRoot UAT-001`](../../../spec.md#uat-001)
 >
-> 设计归属：[L2 DEC-004](../design.md#dec-004)
+> 设计引用：[L2 DEC-004](../design.md#dec-004)
 
 ## 1. 用户价值
 

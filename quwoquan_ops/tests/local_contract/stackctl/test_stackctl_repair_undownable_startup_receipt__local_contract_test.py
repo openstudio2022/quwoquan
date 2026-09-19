@@ -715,3 +715,64 @@ def test_reconciliation_rejects_other_environment_plan_root(legacy_reconciliatio
     assert _legacy_result(fixture)["exitCode"] == 2
     assert all(path.exists() for path in paths)
     assert not (wrong_report / "worktree-startup-reconciliation-plan.json").exists()
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/multi-environment-instance-isolation/spec.md#gwt-003
+def test_takeover_cli_is_alpha_only_and_requires_explicit_cas_fields():
+    args = stackctl.build_parser().parse_args([
+        "repair", "--target", "alpha-local", "--fix", "reclaim-undownable-startup-receipt",
+        "--worktree-startup-reconciliation", "takeover-plan",
+        "--executor-fence-ref", "/tmp/fence=sha256:" + "a" * 64,
+        "--expected-previous-owner", "owner", "--expected-previous-worktree", "/old",
+        "--expected-previous-lane", "lane/ops", "--candidate-evidence", "candidate.json",
+    ])
+    assert args.worktree_startup_reconciliation == "takeover-plan"
+    assert args.expected_previous_worktree == "/old"
+
+
+@pytest.mark.parametrize("fault", ["", "active", "owner", "worktree", "lane", "digest", "prod"] )
+def test_managed_takeover_is_inactive_alpha_only_cas_with_audit(legacy_reconciliation, monkeypatch, fault):
+    repair, output_paths, args, report, old_paths, _ = legacy_reconciliation
+    if args.target != "alpha-local":
+        pytest.skip("alpha-local-only takeover contract")
+    target = "prod-hosted" if fault == "prod" else "alpha-local"
+    args.target = target
+    for path in old_paths:
+        if path.exists():
+            path.unlink()
+    fence = repair.local_runtime_operation_lock_path("alpha-local").with_suffix(".executor.json")
+    fence.parent.mkdir(parents=True, exist_ok=True)
+    owner = "pid=123456789 target=alpha-local startedAt=2026-09-12T00:00:00Z worktree=/old/ops lane=lane/ops headSha=" + "a" * 40
+    raw = json.dumps({"target": "alpha-local", "executorNonce": "old-generation", "executionClaimId": "", "owner": owner}).encode()
+    fence.write_bytes(raw)
+    args.worktree_startup_reconciliation = "takeover-plan"
+    args.executor_fence_ref = f"{fence}={repair._digest(raw)}"
+    args.expected_previous_owner = owner if fault != "owner" else owner + "-wrong"
+    args.expected_previous_worktree = "/old/ops" if fault != "worktree" else "/wrong"
+    args.expected_previous_lane = "lane/ops" if fault != "lane" else "lane/wrong"
+    args.candidate_evidence = ".qwq_output/current-candidate.json"
+    args.worktree_startup_plan_ref = ""
+    args.confirm_undownable_startup_receipt_reclaim = False
+    monkeypatch.setattr(repair, "_fence_reconciliation_locks", lambda _target: contextlib.nullcontext())
+    monkeypatch.setattr(repair, "list_consumer_leases", lambda _target: [{"releasedAt": ""}])
+    monkeypatch.setattr(repair.os, "kill", lambda *_: None if fault == "active" else (_ for _ in ()).throw(ProcessLookupError()))
+    if fault == "digest":
+        args.executor_fence_ref = f"{fence}=sha256:" + "b" * 64
+    import quwoquan_ops.cli.lib.candidate_evidence as candidate
+    monkeypatch.setattr(candidate, "validate_candidate_ref", lambda *_a, **_k: (args.candidate_evidence, b"candidate", {"lead_lane": "lane/refactor"}, {}))
+    result = repair._reconcile_takeover(args, report_dir=report)
+    if fault:
+        assert result["exitCode"] == 2
+        assert fence.read_bytes() == raw
+        return
+    assert result["exitCode"] == 0
+    args.worktree_startup_reconciliation = "takeover-apply"
+    args.worktree_startup_plan_ref = result["planRef"]
+    args.confirm_undownable_startup_receipt_reclaim = True
+    result = repair._reconcile_takeover(args, report_dir=report)
+    assert result["exitCode"] == 0
+    assert not fence.exists()
+    receipt = json.loads((report / "executor-takeover-receipt.json").read_text())
+    assert receipt["executorInactive"] is True
+    assert receipt["previousFence"]["digest"] == repair._digest(raw)
+    assert receipt["newOwner"]["worktree"] == str(output_paths.ROOT)

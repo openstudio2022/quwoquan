@@ -10,6 +10,8 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:quwoquan_app/runtime/shell/navigation/generated/app_route_paths.g.dart';
+import 'package:quwoquan_app/runtime/shell/navigation/generated/app_ui_surfaces.g.dart';
+import 'package:quwoquan_app/service/content_service/content/content_behavior_fact/application/public/content_behavior_repository.dart';
 import 'package:quwoquan_app/runtime/errors/generated/content/content_errors.g.dart';
 import 'package:quwoquan_app/service/user_service/persona_management/persona/application/public/persona_management_view_data.dart';
 import 'package:quwoquan_app/runtime/errors/cloud_error_mapper.dart';
@@ -35,6 +37,7 @@ import 'package:quwoquan_app/design_system/feedback/error_states/app_error_state
 import 'package:quwoquan_app/l10n/app_localizations.dart';
 import 'package:quwoquan_app/service/content_service/content/post/presentation/work_browser_entry_page.dart';
 import 'package:quwoquan_cloud_contracts/quwoquan_cloud_contracts.dart';
+
 import '../../../../../support/service/content_service/content/post/content_facet_overrides.dart';
 import '../../../../../support/service/content_service/content/post/content_post_test_builder.dart';
 import '../../../../../support/service/content_service/content/post/content_post_typed_doubles.dart';
@@ -60,7 +63,9 @@ InMemoryContentPostStore _suiteStore() {
       for (final post in posts)
         post.id: contentPostDetailPayloadBuilder(
           post: post,
-          articleMarkdown: post.isArticleLike ? '# ${post.title}\n\n正文。' : null,
+          articleMarkdown: post.type == ContentType.article
+              ? '# ${post.title}\n\n正文。'
+              : null,
         ),
     },
   );
@@ -105,10 +110,7 @@ void main() {
           builder: (context, _) => MaterialApp(
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            home: WorkBrowserEntryPage(
-              workId: 'definitely-missing-post-id',
-              source: 'deep-link-test',
-            ),
+            home: WorkBrowserEntryPage(workId: 'definitely-missing-post-id'),
           ),
         ),
       ),
@@ -162,10 +164,7 @@ void main() {
           builder: (context, _) => MaterialApp(
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
-            home: WorkBrowserEntryPage(
-              workId: postId,
-              source: 'deleted-content-test',
-            ),
+            home: WorkBrowserEntryPage(workId: postId),
           ),
         ),
       ),
@@ -261,7 +260,7 @@ void main() {
             supportedLocales: AppLocalizations.supportedLocales,
             home: WorkBrowserEntryPage(
               workId: videoWorkId,
-              source: 'environmentSmoke',
+              referralSource: ReferralSource.deepLink,
             ),
           ),
         ),
@@ -326,7 +325,7 @@ void main() {
                 supportedLocales: AppLocalizations.supportedLocales,
                 home: WorkBrowserEntryPage(
                   workId: workId,
-                  source: 'environmentSmoke',
+                  referralSource: ReferralSource.deepLink,
                 ),
               );
             },
@@ -369,7 +368,7 @@ void main() {
           theme: CupertinoThemeData(brightness: Brightness.dark),
           home: WorkBrowserEntryPage(
             workId: 'definitely-missing-post-id',
-            source: 'home_feed',
+            referralSource: ReferralSource.organicFeed,
             sourceAppearanceMode: UiErrorAppearanceMode.light,
           ),
         ),
@@ -413,10 +412,7 @@ void main() {
             builder: (context, _) => MaterialApp(
               localizationsDelegates: AppLocalizations.localizationsDelegates,
               supportedLocales: AppLocalizations.supportedLocales,
-              home: WorkBrowserEntryPage(
-                workId: postId,
-                source: 'typed-remote-recovery-test',
-              ),
+              home: WorkBrowserEntryPage(workId: postId),
             ),
           ),
         ),
@@ -430,6 +426,11 @@ void main() {
       expect(
         errorState.semantic.sourceCode,
         ContentErrorCode.requiredDependencyUnavailable.code,
+      );
+      expect(errorState.semantic.sourceSurfaceId, AppUiSurfaces.workBrowser.id);
+      expect(
+        errorState.semantic.sourceRouteId,
+        AppUiSurfaces.workBrowser.routeId,
       );
       expect(errorState.semantic.primaryAction?.type, UiErrorActionType.retry);
       expect(reader.calls, 1);
@@ -462,7 +463,7 @@ void main() {
             supportedLocales: AppLocalizations.supportedLocales,
             home: WorkBrowserEntryPage(
               workId: postId,
-              source: 'profile-comments',
+              referralSource: ReferralSource.authorProfile,
               commentContext: const MediaViewerCommentContext(
                 openComments: true,
               ),
@@ -501,7 +502,7 @@ void main() {
           ),
           builder: (context, state) => WorkBrowserEntryPage(
             workId: state.pathParameters['workId'] ?? '',
-            source: state.uri.queryParameters['source'] ?? 'workBrowser',
+            referralSource: ReferralSource.deepLink,
           ),
         ),
       ],

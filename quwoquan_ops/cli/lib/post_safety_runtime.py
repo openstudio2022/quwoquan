@@ -339,9 +339,12 @@ def produce_gamma_local_startup_material(*, current: PostSafetyTarget, source_cu
     source_expected, source_binding: dict, database: MongoOwner, account_material_root: Path,
     connection_factory: ManagedAuthorityConnectionFactory, deployment_owner: FileDeploymentStartupMaterialOwner,
     keyring_path: Path = DEFAULT_KEYRING_PATH, now=None) -> PostSafetyDeploymentStartupMaterial:
-    """gamma-local 唯一 target-owned producer；真实创建/读回 owner 前驱后本地签发。"""
-    if current.environment != "gamma" or current.target != "gamma-local":
-        raise PostSafetyRuntimeError("local Post safety signer is gamma-local only; prod requires external authority")
+    """local nonproduction 唯一 target-owned producer；真实创建/读回 owner 前驱后本地签发。"""
+    env = current.target.removesuffix("-local")
+    if current.target not in {"alpha-local", "beta-local", "gamma-local"} or current.environment != env:
+        raise PostSafetyRuntimeError(
+            f"local Post safety signer does not support {current.target}; prod requires external authority"
+        )
     if source_current.sourceCreation.ref != "source-creation.json" or source_current.allocationAttemptId != Path(source_current.materialRoot.path).name:
         raise PostSafetyRuntimeError("source allocation current is unavailable")
     from quwoquan_ops.cli.lib.content_account_closure_runtime import (

@@ -41,8 +41,6 @@ from lib.evidence_fingerprint import (  # noqa: E402
     normalize_repo_relative_path,
     validate_evidence_fingerprint,
 )
-from lib.feature_context_fingerprint import validate_content_addressed_ref  # noqa: E402
-from lib.review_owner_manifest import read_owner_manifest_exact_bytes  # noqa: E402
 
 PLAN_PATH_ENV = "QWQ_REVIEW_BASELINE_PLAN_PATH"
 PLAN_SHA_ENV = "QWQ_REVIEW_BASELINE_PLAN_SHA256"
@@ -123,35 +121,17 @@ def _load_plan(raw: bytes) -> dict[str, Any]:
     return plan
 
 
-def _validate_owner_and_candidate(plan: dict[str, Any]) -> None:
-    owner = plan["owner_identity"]
+def _validate_candidate(plan: dict[str, Any]) -> None:
     candidate = plan["candidate_evidence_identity"]
-    owner_ref = owner.get("ref")
     candidate_ref = candidate.get("ref")
-    if not isinstance(owner_ref, str) or not owner_ref:
-        raise BaselineError("Review plan 缺 PRE owner identity ref")
     if not isinstance(candidate_ref, str) or not candidate_ref:
         raise BaselineError("Review plan 缺 candidate evidence ref")
-    owner_raw = read_owner_manifest_exact_bytes(owner_ref, repo_root=ROOT)
-    validate_content_addressed_ref(owner_ref, raw_bytes=owner_raw, repo_root=ROOT)
-    if owner.get("canonical_bytes_sha256") != "sha256:" + hashlib.sha256(owner_raw).hexdigest():
-        raise BaselineError("PRE owner identity exact bytes binding 漂移")
     try:
-        ref, candidate_raw, payload, fingerprint = validate_candidate_ref(
-            candidate_ref,
-            repo_root=ROOT,
-            expected_owner_identity_ref=owner_ref,
-            expected_changed_paths=list(plan["changed_paths"]),
-        )
+        ref, raw, payload, fingerprint = validate_candidate_ref(candidate_ref, repo_root=ROOT, expected_changed_paths=list(plan["changed_paths"]))
     except CandidateEvidenceError as exc:
         raise BaselineError(f"{exc.code}: {exc.message}") from exc
-    if candidate_identity(ref, candidate_raw, payload, fingerprint) != candidate:
+    if candidate_identity(ref, raw, payload, fingerprint) != candidate:
         raise BaselineError("candidate evidence exact identity binding 漂移")
-    if payload["target"] != owner.get("target") or payload["resolved_owner"] != owner.get("resolved_owner"):
-        raise BaselineError("PRE owner identity 与 candidate evidence owner facts 漂移")
-    if owner.get("scope") != plan.get("scope"):
-        raise BaselineError("PRE owner identity 与 Review scope 漂移")
-
 
 def _validate_registry_closure(plan: dict[str, Any], registry: dict[str, Any]) -> None:
     review_dispatch._validate_registry_header(registry)
@@ -227,7 +207,7 @@ def verify() -> dict[str, str]:
     registry = yaml.safe_load(REGISTRY_PATH.read_text(encoding="utf-8")) or {}
     if not isinstance(registry, dict):
         raise BaselineError("Review registry 必须为 mapping")
-    _validate_owner_and_candidate(plan)
+    _validate_candidate(plan)
     _validate_registry_closure(plan, registry)
     expected = validate_evidence_fingerprint(plan["fingerprint_receipt"])
     current = review_dispatch.recompute_plan_fingerprint(plan, registry)

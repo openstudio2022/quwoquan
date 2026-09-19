@@ -27,11 +27,12 @@ func TestPostPublicationIntentConcurrentReplayCreatesOnePost(t *testing.T) {
 	body := `{
 		"publishIntentId":"` + publishIntentID + `",
 		"localDraftId":"` + localDraftID + `",
-		"contentType":"micro",
+		"contentType":"article",
 		"body":"并发发布只创建一次",
 		"visibility":"public"
 	}`
 
+	body = completePublicationFixturePrerequisites(t, identity.AnonymousFallbackPersonaID, body)
 	responses := make(chan *httptest.ResponseRecorder, workers)
 	var group sync.WaitGroup
 	for range workers {
@@ -206,7 +207,7 @@ func TestPostPublicationIntentRejectsReuseForAnotherDraft(t *testing.T) {
 	payload, err := json.Marshal(map[string]any{
 		"publishIntentId": publishIntentID,
 		"localDraftId":    "publication-draft-other",
-		"contentType":     "micro",
+		"contentType":     "article",
 		"body":            "同一意图不得发布另一草稿",
 		"visibility":      "public",
 	})
@@ -216,7 +217,7 @@ func TestPostPublicationIntentRejectsReuseForAnotherDraft(t *testing.T) {
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/content/posts:publish",
-		strings.NewReader(string(payload)),
+		strings.NewReader(completePublicationFixturePrerequisites(t, identity.AnonymousFallbackPersonaID, string(payload))),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(
@@ -262,7 +263,7 @@ func submitPostPublicationIntent(
 	payload, err := json.Marshal(map[string]any{
 		"publishIntentId": publishIntentID,
 		"localDraftId":    localDraftID,
-		"contentType":     "micro",
+		"contentType":     "article",
 		"body":            body,
 		"visibility":      "public",
 	})
@@ -272,7 +273,7 @@ func submitPostPublicationIntent(
 	request := httptest.NewRequest(
 		http.MethodPost,
 		"/content/posts:publish",
-		strings.NewReader(string(payload)),
+		strings.NewReader(completePublicationFixturePrerequisites(t, identity.AnonymousFallbackPersonaID, string(payload))),
 	)
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set(

@@ -23,18 +23,18 @@ func TestTextPublicationLifecycleJourneyThroughHTTP(t *testing.T) {
 	author := "persona-journey-author"
 	viewer := "persona-journey-viewer"
 
-	// 第 1 步：发布（底栏加号语义的 micro 文字发布）。
+	// 第 1 步：以 canonical article 发布纯文字作品。
 	publishBody := `{
 		"publishIntentId": "intent-journey-1",
 		"localDraftId": "draft-journey-1",
-		"contentType": "micro",
+		"contentType": "article",
 		"body": "联程验证：从发布到互动的完整旅程",
 		"visibility": "public"
 	}`
 	publishReq := httptest.NewRequest(
 		http.MethodPost,
 		"/content/posts:publish",
-		strings.NewReader(publishBody),
+		strings.NewReader(completePublicationFixturePrerequisites(t, author, publishBody)),
 	)
 	publishReq.Header.Set("Content-Type", "application/json")
 	publishReq.Header.Set("Idempotency-Key", "intent-journey-1")
@@ -139,7 +139,7 @@ func readJourneyFeedItem(
 	t.Helper()
 	request := httptest.NewRequest(
 		http.MethodGet,
-		"/content/feed?identity=moment&limit=20",
+		"/content/feed?type=article&limit=20",
 		nil,
 	)
 	request.Header.Set("X-Client-User-Id", viewerID)

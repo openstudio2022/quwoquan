@@ -15,8 +15,7 @@ const String _testArticleDigest =
 /// 构造一个对象级 Post 展示投影，不维护场景 Map 或 wire 字段副本。
 ContentPostViewData contentPostViewDataBuilder({
   String postId = 'post-1',
-  String contentType = 'micro',
-  String? contentIdentity,
+  String contentType = 'article',
   String authorId = 'author-1',
   String authorDisplayName = '测试作者',
   String authorAvatarUrl = testContentAvatarUrl,
@@ -48,9 +47,10 @@ ContentPostViewData contentPostViewDataBuilder({
   return ContentPostViewData.fromWire(
     ContentPostProjection(
       postId: postId,
-      contentType: contentType,
-      contentIdentity:
-          contentIdentity ?? (contentType == 'micro' ? 'moment' : 'work'),
+      contentType: ContentType.fromWire(
+        contentType,
+        'ContentPostProjection.contentType',
+      ),
       assistantUsePolicy: AssistantUsePolicy.inherit,
       authorId: authorId,
       authorDisplayName: authorDisplayName,
@@ -156,7 +156,6 @@ ContentPostDetailPayload contentPostDetailPayloadBuilder({
     ContentPostDetailSlice(
       postId: post.id,
       contentType: post.type,
-      contentIdentity: post.identity,
       assistantUsePolicy: post.assistantUsePolicy,
       authorId: post.authorId,
       authorDisplayName: post.displayName,

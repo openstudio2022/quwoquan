@@ -835,12 +835,45 @@ func requestFieldInitializer(field fieldDef) (string, error) {
 	return name, nil
 }
 
+func renderRequestExplicitBounds(output *strings.Builder, field fieldDef) error {
+	name := requestFieldDartName(field)
+	access := "this." + name
+	value := access
+	prefix := ""
+	if isRequestFieldNullable(field) {
+		value += "!"
+		prefix = access + " != null && "
+	}
+	if field.Format != "" {
+		if err := validateResponseFieldAdmission(field); err != nil {
+			return err
+		}
+		fmt.Fprintf(output, "    if (%s(%s.length != 71 || !isCanonicalSha256Digest(%s))) throw ArgumentError.value(%s, %q, 'requires canonical sha256 digest');\n", prefix, value, value, access, name)
+	}
+	for _, bound := range []struct {
+		maximum    int
+		expression string
+	}{
+		{field.MaxItems, value + ".length"},
+		{field.MaxUTF8Bytes, "_generatedRequestUTF8Length(" + value + ")"},
+	} {
+		if bound.maximum <= 0 {
+			continue
+		}
+		fmt.Fprintf(output, "    if (%s%s > %d) throw ArgumentError.value(%s, %q, 'exceeds canonical bound');\n", prefix, bound.expression, bound.maximum, access, name)
+	}
+	return nil
+}
+
 func renderRequestFieldValidation(
 	output *strings.Builder,
 	modelName string,
 	field fieldDef,
 	enumValues map[string][]string,
 ) error {
+	if err := renderRequestExplicitBounds(output, field); err != nil {
+		return err
+	}
 	name := requestFieldDartName(field)
 	access := "this." + name
 	nullable := hasRequestConstraint(field, "NULLABLE")
