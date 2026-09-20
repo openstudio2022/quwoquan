@@ -921,9 +921,36 @@ def test_staged_pii_email_pattern_ignores_image_density_suffixes() -> None:
     assert email_pattern.search(email) is not None
 
 
-def test_data_scope_without_affected_tests_fails_closed_instead_of_verify_only() -> None:
+@pytest.mark.parametrize("source", [
+    "quwoquan_data/scripts/generated/semantic_document.py",
+    "quwoquan_data/control_plane/content_workbench/portal/src/generated/semanticDocument.ts",
+])
+@pytest.mark.parametrize("level", ["fast", "scope", "release"])
+def test_shared_semantic_outputs_keep_executable_consumer_tests(source: str, level: str) -> None:
+    plan = build_impact_plan([source], level=level)
+    checks = {check["id"]: check for check in plan["checks"]}
+    assert any(path.startswith("quwoquan_data/tests/local_contract/") for path in checks["focused:python"]["command"])
+    if source.endswith(".ts"):
+        assert checks["focused:data-semantic-portal"]["command"] == ["npm", "test"]
+        assert checks["focused:data-semantic-portal"]["cwd"] == "quwoquan_data/control_plane/content_workbench/portal"
+        assert checks["focused:data-semantic-portal"]["resources"] == ["npm:data-portal"]
+    else:
+        assert "focused:data-semantic-portal" not in checks
+    assert plan["deferred"] == []
+
+
+@pytest.mark.parametrize("source", [
+    "quwoquan_data/schema/unknown.schema.json",
+    "quwoquan_data/scripts/generated/unknown.py",
+    "quwoquan_data/control_plane/content_workbench/portal/src/generated/semanticDocument.ts.unknown",
+])
+@pytest.mark.parametrize("with_ops_focused", [False, True])
+def test_data_scope_without_affected_tests_fails_closed_instead_of_verify_only(source: str, with_ops_focused: bool) -> None:
+    paths = [source]
+    if with_ops_focused:
+        paths.append("quwoquan_ops/tests/local_contract/gate/test_commit_gate_select__local_contract_test.py")
     with pytest.raises(ValueError, match="affected tests"):
-        build_impact_plan(["quwoquan_data/schema/unknown.schema.json"], level="scope")
+        build_impact_plan(paths, level="scope")
 
 
 # spec_ref: specs/feature-tree/runtime/development-workflow-governance/local-continuous-integration/spec.md#gwt-002

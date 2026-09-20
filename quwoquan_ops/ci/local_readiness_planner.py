@@ -23,7 +23,10 @@ from quwoquan_ops.ci.impact_planner_core import (  # noqa: E402
     normalize_changed_paths,
     planner_identity,
 )
-from quwoquan_ops.gate.commit_gate_select import build_plan as build_commit_plan  # noqa: E402
+from quwoquan_ops.gate.commit_gate_select import (  # noqa: E402
+    DATA_SEMANTIC_PORTAL_SOURCE,
+    build_plan as build_commit_plan,
+)
 
 PLAN_SCHEMA = "local-readiness-plan-v2"
 TIMEOUT_POLICY_SCHEMA = "local-readiness-timeouts-v1"
@@ -201,6 +204,17 @@ def _static_check(check_id: str) -> dict[str, Any] | None:
     return _check(f"static:{check_id}", "spec_contract", "static", list(command), cwd=cwd, resources=resources)
 
 
+def _data_semantic_portal_checks(paths: list[str]) -> list[dict[str, Any]]:
+    """TS 生成物必须跑真实 Portal 消费者，Python 交接合同不能替代它。"""
+    if DATA_SEMANTIC_PORTAL_SOURCE not in paths:
+        return []
+    return [_check(
+        "focused:data-semantic-portal", "data", "focused", ["npm", "test"],
+        cwd="quwoquan_data/control_plane/content_workbench/portal",
+        resources=["npm:data-portal"],
+    )]
+
+
 def build_impact_plan(
     paths: list[str],
     *,
@@ -320,6 +334,8 @@ def build_impact_plan(
         if level != "fast":
             checks.append(_check("scope_build:portal-build", "portal", "scope_build", ["python3", "-B", "quwoquan_ops/cli/local_readiness.py", "managed-portal-build"], resources=["npm:portal"]))
 
+    checks.extend(_data_semantic_portal_checks(normalized))
+
     if level != "fast" and "service" in scopes and not go_services:
         checks.append(_check("scope_build:service-compile", "service", "scope_build", ["go", "test", "./...", "-run", "^$", "-count=1", "-p=4"], cwd="quwoquan_service", resources=["go:service-all"]))
         checks.append(_check("scope_build:service-build", "service", "scope_build", ["go", "build", "./..."], cwd="quwoquan_service", resources=["go:service-all"]))
@@ -351,7 +367,7 @@ def build_impact_plan(
         )
         if (
             any(path.startswith("quwoquan_data/") for path in normalized)
-            and not any(check["id"] == "focused:python" for check in checks)
+            and not any(path.startswith("quwoquan_data/tests/local_contract/") for path in pytest_paths)
             and not selector_deferred_data_suite
         ):
             raise ValueError("data scope planner 未能选择 affected tests；拒绝以 verify-only 生成 scope_ready")

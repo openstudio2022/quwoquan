@@ -44,6 +44,20 @@ PYTEST_FILE_ESTIMATE_SECONDS_BY_PREFIX = (
 
 DATA_LOCAL_CONTRACT_ROOT = "quwoquan_data/tests/local_contract"
 
+# 共享协议输出没有 core/ 或 governance/ 路径形状，按真实消费者精确映射。
+# Portal 除 Python 交接合同外，还由 readiness 规划其自身 npm test。
+DATA_SEMANTIC_PORTAL_SOURCE = "quwoquan_data/control_plane/content_workbench/portal/src/generated/semanticDocument.ts"
+DATA_SEMANTIC_CONSUMER_TESTS = {
+    "quwoquan_data/scripts/generated/semantic_document.py": (
+        "quwoquan_data/tests/local_contract/core/test_source_work_fidelity__contract__local_contract_test.py",
+        "quwoquan_data/tests/local_contract/core/test_semantic_quality_gates__req005_gwt007__local_contract_test.py",
+        "quwoquan_data/tests/local_contract/governance/content_workbench/test_workbench__contracts__local_contract_test.py",
+    ),
+    DATA_SEMANTIC_PORTAL_SOURCE: (
+        "quwoquan_data/tests/local_contract/governance/content_workbench/test_workbench__contracts__local_contract_test.py",
+    ),
+}
+
 # 这四处实现面被 data local_contract 的每个子目录引用，影响面就是全域。给它们
 # 编一份「相关目录」清单只会假装收敛：清单外的目录同样会因这里的改动而红。
 DATA_CROSSCUTTING_PREFIXES = (
@@ -354,6 +368,15 @@ def select_go_services(paths: list[str]) -> list[str]:
     return services
 
 
+def _data_semantic_pytest_targets(paths: list[str]) -> list[str]:
+    """只投影已登记输出的现存消费者；缺失测试不伪造 target。"""
+    return list(dict.fromkeys(
+        target for path in sorted(set(paths))
+        for target in DATA_SEMANTIC_CONSUMER_TESTS.get(path, ())
+        if (ROOT / target).is_file()
+    ))
+
+
 def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
     """Build the versioned L0 pytest admission decision.
 
@@ -361,8 +384,8 @@ def _select_pytest_targets(paths: list[str]) -> dict[str, object]:
     File targets are admitted by a conservative configured duration estimate;
     the estimate is explanatory planning data and is not an observed p95.
     """
-    selected: list[str] = []
-    seen: set[str] = set()
+    selected = _data_semantic_pytest_targets(paths)
+    seen = set(selected)
     deferred: list[str] = []
     # worktree 生命周期治理的实现散在 hooks、cli/lib 与 policies 三处，决策表却只有一份。
     # 不显式映射的话，改 hook 或改阈值都不会触发它——最需要回归的两类改动恰好都漏掉。
