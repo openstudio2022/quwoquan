@@ -132,17 +132,18 @@ def _workspace_source_classification(repo_root: Path = ROOT) -> dict[str, Any]:
 
 def _evidence_classification(source: dict[str, Any]) -> tuple[str, bool]:
     eligible = (
-        source.get("mode") == "workspace"
-        and source.get("repository_clean") is True
-        and source.get("immutable") is False
+        source.get("repository_clean") is True
+        and (source.get("mode"), source.get("immutable")) in (("workspace", False), ("commit", True))
     )
     return ("reusable", True) if eligible else ("feedback_only", False)
 
 
 def _validate_source(source: dict[str, Any]) -> None:
     validate_declared_fields(source, "named_evidence_receipt", "source_fields")
-    if source["mode"] != "workspace" or source["immutable"] is not False:
-        raise EvidenceRunnerError("named evidence source 仅支持 mutable workspace")
+    if (source["mode"], source["immutable"]) not in (("workspace", False), ("commit", True)):
+        raise EvidenceRunnerError("named evidence source 执行模式与 immutable 不一致")
+    if source["mode"] == "commit" and source["repository_clean"] is not True:
+        raise EvidenceRunnerError("commit evidence 必须来自 clean capsule")
     if type(source["repository_clean"]) is not bool:
         raise EvidenceRunnerError("named evidence source.repository_clean 必须为 bool")
     import re
@@ -170,6 +171,8 @@ def require_admission_eligible(
     """Reject development feedback at any formal admission/reuse boundary."""
 
     validate_named_evidence_receipt(receipt)
+    if receipt.get("terminal", {}).get("status") != "PASS":
+        raise EvidenceRunnerError("REVIEW.EVIDENCE_FAILED: 失败命令不可用于正式准入")
     if (
         receipt.get("evidence_class") != "reusable"
         or receipt.get("admission_eligible") is not True
@@ -351,6 +354,71 @@ def _assert_plan_source_range(
         )
 
 
+def _put_dependency(root: Path, ref: str, raw: bytes) -> None:
+    """只发布忽略输出中的 exact 依赖，不向被审源码注入任何字节。"""
+    ref = normalize_repo_relative_path(ref, root)
+    if not ref.startswith(".qwq_output/"):
+        raise EvidenceRunnerError("commit Review dependency 必须位于 .qwq_output")
+    from lib.local_readiness.core import _reject_symlink_components
+    destination = root / ref
+    _reject_symlink_components(destination.parent, label="Review dependency")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fd = os.open(destination, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(raw)
+
+
+def _run_commit_plan(plan: dict, *, cwd: Path, registry: dict, plan_bytes: bytes,
+                     plan_ref: str, run_id: str | None, captured_by: str, head_tree: str) -> dict:
+    from lib.local_readiness.source_inputs import source_execution_root
+    identity = {"base_sha": plan["merge_base_sha"], "head_sha": plan["head_sha"], "head_tree": head_tree}
+    validate_git_range(identity, repo_root=cwd)
+    if json.loads(plan_bytes) != plan:
+        raise EvidenceRunnerError("exact plan bytes 与 plan 不一致")
+    actual_paths = _git_text(cwd, "diff", "--name-only", "--no-renames", identity["base_sha"], identity["head_sha"]).splitlines()
+    if sorted(actual_paths) != sorted(plan["changed_paths"]):
+        raise EvidenceRunnerError("commit Review 必须覆盖完整 candidate range")
+    # 执行器自身也必须来自待审 commit，禁止用未提交工具补丁签发其证据。
+    runner_ref = "quwoquan_ops/cli/evidence_runner.py"
+    committed_runner = subprocess.check_output(["git", "show", f"{identity['head_sha']}:{runner_ref}"], cwd=cwd)
+    if (cwd / runner_ref).read_bytes() != committed_runner:
+        raise EvidenceRunnerError("commit Review runner 必须先提交，不能注入未提交实现")
+    closure = read_candidate_closure(plan["candidate_evidence_identity"]["ref"], repo_root=cwd)
+    updates = [{"local_ref": identity["head_sha"], "local_sha": identity["head_sha"],
+                "remote_ref": "refs/heads/dev1.0", "remote_sha": identity["base_sha"]}]
+    source = {"mode": "commit", "head_sha": identity["head_sha"], "merge_base_sha": identity["base_sha"],
+              "repository_clean": True, "immutable": True}
+    with source_execution_root(repo_root=cwd, mode="push", state_root=cwd / ".qwq_output/env/repo/local/local-readiness",
+                               fingerprint={"digest": canonical_digest(identity)}, push_updates=updates) as (capsule, execution_env, _entries):
+        lane = _git_text(cwd, "symbolic-ref", "--short", "HEAD")
+        _git_text(capsule, "update-ref", f"refs/heads/{lane}", identity["head_sha"])
+        _git_text(capsule, "symbolic-ref", "HEAD", f"refs/heads/{lane}")
+        _git_text(capsule, "update-ref", "refs/remotes/origin/dev1.0", identity["base_sha"])
+        _git_text(capsule, "update-ref", "refs/heads/dev1.0", identity["base_sha"])
+        _put_dependency(capsule, plan_ref, plan_bytes)
+        for member in closure:
+            _put_dependency(capsule, member["ref"], member["canonical_json"].encode())
+        receipt = run_plan(plan, run_id=run_id, captured_by=captured_by, cwd=capsule, registry=registry,
+                           plan_bytes=plan_bytes, plan_ref=plan_ref, source_repository=capsule,
+                           dependency_root=capsule, execution_source=source, execution_env=execution_env)
+        validate_git_range(identity, repo_root=cwd)
+        # artifact 已经按 exact descriptor 验真；复制回原输出根，cleanup 不丢失证据。
+        for result in receipt["evidence"]:
+            artifact = result.get("artifact")
+            if artifact is not None:
+                from lib.descriptor_safe_io import read_repo_relative_regular_single_link
+                raw = read_repo_relative_regular_single_link(capsule, artifact["ref"])
+                if _sha256_bytes(raw) != artifact["canonical_bytes_sha256"]:
+                    raise EvidenceRunnerError("commit artifact readback drift")
+                destination = cwd / artifact["ref"]
+                if destination.exists():
+                    if destination.read_bytes() != raw:
+                        raise EvidenceRunnerError("commit artifact create-once conflict")
+                else:
+                    _put_dependency(cwd, artifact["ref"], raw)
+        return receipt
+
+
 @repository_inputs
 def run_plan(
     plan: dict[str, Any],
@@ -361,8 +429,17 @@ def run_plan(
     registry: dict[str, Any] | None = None,
     plan_bytes: bytes | None = None,
     plan_ref: str | None = None,
+    source_mode: str = "workspace",
+    head_tree: str = "",
+    execution_source: dict | None = None,
+    execution_env: dict | None = None,
 ) -> dict[str, Any]:
     cwd = source_root(cwd)
+    if source_mode == "commit":
+        return _run_commit_plan(plan, cwd=cwd, registry=registry, plan_bytes=plan_bytes,
+                                plan_ref=plan_ref, run_id=run_id, captured_by=captured_by, head_tree=head_tree)
+    if source_mode != "workspace":
+        raise EvidenceRunnerError("未知 evidence source mode")
     if registry is None:
         raise EvidenceRunnerError("registry 为 canonical evidence 执行必填输入")
     if plan_bytes is None or plan_ref is None:
@@ -459,7 +536,10 @@ def run_plan(
 
     started_at = _now()
     repo_root = cwd.resolve()
-    source = _plan_source(plan, repo_root)
+    source = execution_source or _plan_source(plan, repo_root)
+    if execution_source is not None:
+        _validate_source(source)
+        _assert_source_head(source, repo_root)
     _assert_plan_source_range(plan, source)
     evidence_class, admission_eligible = _evidence_classification(source)
     execution_fingerprint = _fingerprint(
@@ -474,6 +554,10 @@ def run_plan(
         plan_input.write_bytes(exact_plan_bytes)
         plan_input.chmod(0o400)
         command_env = os.environ.copy()
+        if execution_env:
+            for name in _git_text(cwd, "rev-parse", "--local-env-vars").splitlines():
+                command_env.pop(name, None)
+        command_env.update(execution_env or {})
         for reserved in (
             BASELINE_PLAN_ENV,
             BASELINE_PLAN_SHA_ENV,
@@ -676,7 +760,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--plan", required=True)
     parser.add_argument("--run-id", required=True)
-    parser.add_argument("--source-mode", choices=("workspace",), default="workspace")
+    parser.add_argument("--source-mode", choices=("workspace", "commit"), default="workspace")
+    parser.add_argument("--head-tree", default="", help="commit 模式要求 exact candidate tree")
     args = parser.parse_args(argv)
     try:
         try:
@@ -696,6 +781,7 @@ def main(argv: list[str] | None = None) -> int:
         receipt = run_plan(
             plan, registry=registry, run_id=args.run_id,
             plan_bytes=plan_bytes, plan_ref=plan_ref,
+            source_mode=args.source_mode, head_tree=args.head_tree,
         )
         path = _write_receipt_create_once(args.run_id, receipt)
     except (OSError, json.JSONDecodeError, EvidenceRunnerError, ReadinessCaseResultError, TypeError, ValueError) as exc:

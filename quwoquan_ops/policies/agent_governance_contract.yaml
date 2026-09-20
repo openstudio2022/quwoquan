@@ -153,6 +153,8 @@ named_evidence_receipt:
     - started_at
     - finished_at
   source_fields: [mode, head_sha, merge_base_sha, repository_clean, immutable]
+  execution_modes: [workspace, commit]
+  commit_execution: exact_git_tree_via_local_readiness_capsule_with_clean_pre_post_readback
   evidence_classes: [feedback_only, reusable]
   evidence_result_fields:
     - id

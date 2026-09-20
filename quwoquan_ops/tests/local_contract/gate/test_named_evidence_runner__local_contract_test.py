@@ -814,5 +814,60 @@ class NamedEvidenceRunnerTest(unittest.TestCase):
         self.assertEqual(7, receipt["evidence"][0]["exit_code"])
 
 
+class CommitCapsuleEvidenceTest(unittest.TestCase):
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-007
+    def test_commit_capsule_excludes_foreign_wip_and_preserves_index(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            def git(*args):
+                return subprocess.check_output(["git", *args], cwd=repo, text=True).strip()
+            git("init", "-b", "lane/engineering")
+            git("config", "user.name", "Contract Test")
+            git("config", "user.email", "contract@example.invalid")
+            (repo / ".gitignore").write_text(".qwq_output/\n")
+            target = repo / "quwoquan_ops/cli/evidence_runner.py"
+            target.parent.mkdir(parents=True)
+            target.write_bytes((ROOT / "quwoquan_ops/cli/evidence_runner.py").read_bytes())
+            (repo / "owned.txt").write_text("before")
+            (repo / "foreign.txt").write_text("baseline")
+            git("add", "."); git("commit", "-m", "base")
+            base = git("rev-parse", "HEAD")
+            (repo / "owned.txt").write_text("candidate")
+            git("add", "owned.txt"); git("commit", "-m", "candidate")
+            head, tree = git("rev-parse", "HEAD"), git("rev-parse", "HEAD^{tree}")
+            (repo / "foreign.txt").write_text("foreign WIP")
+            git("add", "foreign.txt")
+            index = (repo / ".git/index").read_bytes()
+            plan = {"head_sha": head, "merge_base_sha": base, "changed_paths": ["owned.txt"],
+                    "candidate_evidence_identity": {"ref": ".qwq_output/candidate.json"}}
+            def execute(_plan, **kwargs):
+                capsule = kwargs["cwd"]
+                self.assertEqual("candidate", (capsule / "owned.txt").read_text())
+                self.assertEqual("baseline", (capsule / "foreign.txt").read_text())
+                self.assertEqual(b"", subprocess.check_output(["git", "status", "--porcelain"], cwd=capsule))
+                self.assertTrue(kwargs["execution_source"]["immutable"])
+                runner._assert_source_head(kwargs["execution_source"], capsule)
+                return {"evidence": [], "source": kwargs["execution_source"]}
+            arguments = dict(cwd=repo, registry={}, plan_bytes=json.dumps(plan).encode(),
+                             plan_ref=".qwq_output/plan.json", run_id="test", captured_by="test", head_tree=tree)
+            with mock.patch.object(runner, "read_candidate_closure", return_value=[]), mock.patch.object(runner, "run_plan", side_effect=execute):
+                receipt = runner._run_commit_plan(plan, **arguments)
+            self.assertEqual(("reusable", True), runner._evidence_classification(receipt["source"]))
+            self.assertEqual(index, (repo / ".git/index").read_bytes())
+            self.assertEqual("foreign WIP", (repo / "foreign.txt").read_text())
+            for field in ("head_sha", "merge_base_sha"):
+                wrong = {**plan, field: "f" * 40}
+                with self.assertRaises(ValueError):
+                    runner._run_commit_plan(wrong, **{**arguments, "plan_bytes": json.dumps(wrong).encode()})
+            with self.assertRaises(ValueError):
+                runner._run_commit_plan(plan, **{**arguments, "head_tree": "f" * 40})
+            def drift(_plan, **kwargs):
+                (kwargs["cwd"] / "foreign.txt").write_text("forged")
+                runner._assert_source_head(kwargs["execution_source"], kwargs["cwd"])
+            with mock.patch.object(runner, "read_candidate_closure", return_value=[]), mock.patch.object(runner, "run_plan", side_effect=drift), self.assertRaisesRegex(runner.EvidenceRunnerError, "变脏"):
+                runner._run_commit_plan(plan, **arguments)
+            self.assertEqual(index, (repo / ".git/index").read_bytes())
+
+
 if __name__ == "__main__":
     sys.exit(0 if unittest.main(exit=False).result.wasSuccessful() else 1)
