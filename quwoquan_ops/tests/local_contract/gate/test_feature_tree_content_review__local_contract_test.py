@@ -518,6 +518,36 @@ def test_changes_only_blocks_dirty_specs_and_keeps_unrelated_failures_in_report(
         gitio.git_changed_paths = previous
 
 
+def test_git_changed_paths_uses_staged_when_private_index(monkeypatch) -> None:
+    from quwoquan_ops.cli.lib.feature_tree import gitio
+
+    recorded: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):  # noqa: ANN001
+        recorded.append(list(cmd))
+
+        class Result:
+            stdout = b"specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md\0"
+
+        return Result()
+
+    monkeypatch.setenv("GIT_INDEX_FILE", "/tmp/qwq-private-index")
+    monkeypatch.setattr(gitio.subprocess, "run", fake_run)
+    assert gitio.git_changed_paths() == [
+        "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md"
+    ]
+    assert "--cached" in recorded[0]
+
+
+def test_candidate_range_blocks_only_range_specs() -> None:
+    dirty = reviewer.Review(path="specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md", kind="L3 Story")
+    dirty.issues.append("使用会话或历史时间口径")
+    stale = reviewer.Review(path="specs/feature-tree/discovery-content/feed-orchestration-recommendation/spec.md", kind="L1 Domain Service")
+    stale.issues.append("使用历史状态或阶段性计划口径")
+    assert reviewer.blocking_reviews([dirty, stale], changed_paths={dirty.path}) == [dirty]
+    assert reviewer.blocking_reviews([dirty, stale], changed_paths=set()) == []
+
+
 def test_committed_feature_tree_templates_follow_the_same_section_contract() -> None:
     reviews = reviewer.review_templates()
 

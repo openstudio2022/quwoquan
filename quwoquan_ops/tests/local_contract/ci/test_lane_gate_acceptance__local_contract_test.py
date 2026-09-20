@@ -28,6 +28,12 @@ def test_push_includes_all_hosted_governance_and_four_exact_ops_shards():
     for scope in ("app", "service", "ops", "data"):
         assert "static:python_script_governance_" + scope in checks
     assert "lane_gate:feature-tree" in checks
+    feature_tree = checks["lane_gate:feature-tree"]
+    assert feature_tree["command"] == [
+        "make",
+        "verify-feature-tree",
+        f"CONTENT_REVIEW_ARGS=--base {BASE} --head {HEAD}",
+    ]
     generated = {
         check["id"]: check
         for check in planner._lane_gate_checks(
@@ -197,3 +203,17 @@ def test_exact_impact_boundary_rejects_incomplete_range_before_scan():
     with mock.patch("quwoquan_ops.ci.detect_ci_impacted_scopes.git_changed_files", return_value=["Makefile", "README.md"]):
         with pytest.raises(ValueError, match="exact candidate range"):
             planner.validate_lane_impact(base=BASE, head=HEAD, paths=["Makefile"])
+
+
+def test_bundle_stale_detail_names_accept_publish_recovery() -> None:
+    from quwoquan_ops.cli.integration_run_bundle import IntegrationRunError, validate_bundle_identity
+
+    with pytest.raises(IntegrationRunError) as raised:
+        validate_bundle_identity(
+            {"commit": "a" * 40, "tree": "b" * 40, "expectedParent": "c" * 40},
+            commit="a" * 40,
+            tree="b" * 40,
+            parent="d" * 40,
+        )
+    assert raised.value.code == "INTEGRATION_RUN.BUNDLE_STALE"
+    assert "make accept PUBLISH=1 SYNC=1" in raised.value.detail

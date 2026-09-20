@@ -1335,6 +1335,8 @@ feature-tree-change-report:
 feature-tree-content-review:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree_content_review.py
 
+# lane_gate 传入 --base <expectedParent> --head <candidate>；缺省扫全树。
+CONTENT_REVIEW_ARGS ?=
 verify-feature-tree:
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree.py verify --changes
 	@PYTHONDONTWRITEBYTECODE=1 python3 quwoquan_ops/cli/feature_tree_content_review.py $(CONTENT_REVIEW_ARGS)

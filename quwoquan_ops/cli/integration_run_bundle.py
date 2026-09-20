@@ -171,7 +171,10 @@ def validate_bundle_identity(manifest: Mapping[str, Any], *, commit: str, tree: 
     if manifest["commit"] != commit or manifest["tree"] != tree:
         raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_CANDIDATE_MISMATCH", f"bundle candidate differs from {commit}")
     if manifest["expectedParent"] != parent:
-        raise IntegrationRunError("INTEGRATION_RUN.BUNDLE_STALE", f"bundle parent differs from remote dev1.0 {parent}; re-run make accept")
+        raise IntegrationRunError(
+            "INTEGRATION_RUN.BUNDLE_STALE",
+            f"bundle parent differs from remote dev1.0 {parent}; recover with make accept PUBLISH=1 SYNC=1",
+        )
 
 
 def validate_manifest_candidate(manifest: Mapping[str, Any], candidate: Mapping[str, Any]) -> None:

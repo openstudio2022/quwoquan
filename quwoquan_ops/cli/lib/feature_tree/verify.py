@@ -219,6 +219,7 @@ def validate_policy_governance() -> list[str]:
 
 
 def command_verify(args: argparse.Namespace) -> int:
+    gitio.use_private_index_documents()
     errors: list[str] = []
     nodes = discover_nodes()
     for required in (context.TREE_ROOT / "README.md", context.TREE_ROOT / "spec.md", context.TREE_ROOT / "design.md"):

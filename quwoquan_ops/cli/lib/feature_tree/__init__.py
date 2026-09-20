@@ -35,7 +35,14 @@ from .evidence import (  # noqa: F401
     iter_test_files,
     test_spec_refs,
 )
-from .gitio import git_changed_paths, git_head_text  # noqa: F401
+from .gitio import (  # noqa: F401
+    git_changed_paths,
+    git_head_text,
+    git_index_text,
+    git_range_paths,
+    git_staged_paths,
+    use_private_index_documents,
+)
 from .nodes import Node, discover_nodes, node_for_spec, parent_chain  # noqa: F401
 from .parsing import (  # noqa: F401
     acceptance_clause_counts,

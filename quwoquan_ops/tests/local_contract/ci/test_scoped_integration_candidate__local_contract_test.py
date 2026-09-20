@@ -247,6 +247,7 @@ def test_distinct_admissions_compete_at_atomic_git_cas(competing_admissions, mon
     winner = winners[0]
     assert winner == {"before": parent, "after": winner["after"], "readback": winner["after"], "terminal": "published"}
     assert losers[0].code == "SCOPED_CANDIDATE.CAS_CONFLICT"
+    assert "make accept PUBLISH=1 SYNC=1" in losers[0].detail
     assert len(updates) == 2
     assert updates[winner["after"]].returncode == 0
     loser_commit = next(commit for commit in updates if commit != winner["after"])

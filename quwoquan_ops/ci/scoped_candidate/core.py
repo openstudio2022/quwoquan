@@ -31,6 +31,7 @@ _DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
 _SCHEMA = "quwoquan_ops.exact_integration_candidate.v1"
 _ADMISSION_SCHEMA = "quwoquan_ops.integration_publish_admission.v1"
 _PUBLISH_RESULT_SCHEMA = "quwoquan_ops.integration_publish_result.v1"
+_PUBLISH_RECOVERY = "recover with make accept PUBLISH=1 SYNC=1"
 
 
 class ScopedCandidateError(ValueError):
@@ -387,7 +388,10 @@ def build_head_candidate(
         ["git", "merge-base", "--is-ancestor", parent, commit], cwd=repository, text=True, capture_output=True, check=False,
     )
     if ancestry.returncode != 0:
-        raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "expected parent is not an ancestor of the candidate commit")
+        raise ScopedCandidateError(
+            "SCOPED_CANDIDATE.CAS_CONFLICT",
+            f"expected parent is not an ancestor of the candidate commit; {_PUBLISH_RECOVERY}",
+        )
     tree = _sha(_git(repository, "show", "-s", "--format=%T", commit).stdout.strip(), "tree")
     changed = _changed_paths(repository, parent, tree)
     if not changed:
@@ -616,7 +620,10 @@ def _validate_candidate_binding(repository: Path, root: Path, admission: dict[st
     before = _sha(admission.get("expectedRemoteOid"), "expectedRemoteOid")
     after = _sha(admission.get("commit"), "commit")
     if before == after:
-        raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "candidate must advance remote-before")
+        raise ScopedCandidateError(
+            "SCOPED_CANDIDATE.CAS_CONFLICT",
+            f"candidate must advance remote-before; {_PUBLISH_RECOVERY}",
+        )
     _git(repository, "merge-base", "--is-ancestor", before, after)
     if _git(repository, "rev-parse", f"{after}^{{tree}}").stdout.strip() != candidate.get("tree"):
         raise ScopedCandidateError("SCOPED_CANDIDATE.STALE", "candidate Git tree drifted")
@@ -775,7 +782,7 @@ def local_ref_cas_publish(
     if current != before:
         raise ScopedCandidateError(
             "SCOPED_CANDIDATE.CAS_CONFLICT",
-            f"ref readback is {_terminal_readback(before=before, after=after, readback=current)}",
+            f"ref readback is {_terminal_readback(before=before, after=after, readback=current)}; {_PUBLISH_RECOVERY}",
         )
     _git(repository, "merge-base", "--is-ancestor", before, after)
     completed = subprocess.run(
@@ -786,7 +793,7 @@ def local_ref_cas_publish(
     if completed.returncode != 0 or readback != after:
         raise ScopedCandidateError(
             "SCOPED_CANDIDATE.CAS_CONFLICT",
-            f"CAS terminal readback is {_terminal_readback(before=before, after=after, readback=readback)}",
+            f"CAS terminal readback is {_terminal_readback(before=before, after=after, readback=readback)}; {_PUBLISH_RECOVERY}",
         )
     return {"before": before, "after": after, "readback": readback, "terminal": "published"}
 
@@ -863,7 +870,7 @@ def hosted_broker_cas_publish(
     state = _terminal_readback(before=before, after=after, readback=observed)
     if state != "after":
         code = "SCOPED_CANDIDATE.CAS_CONFLICT" if state == "other" else "SCOPED_CANDIDATE.PUBLISHER_UNAVAILABLE"
-        raise ScopedCandidateError(code, f"publisher terminal readback is {state}")
+        raise ScopedCandidateError(code, f"publisher terminal readback is {state}; {_PUBLISH_RECOVERY}")
     _validate_publisher_readback_identity(readback_payload, admission)
     if response_payload is not None and (
         not isinstance(response_payload, dict)
@@ -942,13 +949,16 @@ def local_git_cas_publish(
     if remote_before != before:
         state = _terminal_readback(before=before, after=after, readback=remote_before or "")
         code = "SCOPED_CANDIDATE.STALE" if state == "after" else "SCOPED_CANDIDATE.CAS_CONFLICT"
-        raise ScopedCandidateError(code, f"remote readback before publish is {state}")
+        raise ScopedCandidateError(code, f"remote readback before publish is {state}; {_PUBLISH_RECOVERY}")
     ancestry = subprocess.run(
         ["git", "merge-base", "--is-ancestor", before, after], cwd=repository,
         text=True, capture_output=True, check=False,
     )
     if ancestry.returncode != 0:
-        raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "candidate is not a fast-forward of the expected remote parent")
+        raise ScopedCandidateError(
+            "SCOPED_CANDIDATE.CAS_CONFLICT",
+            f"candidate is not a fast-forward of the expected remote parent; {_PUBLISH_RECOVERY}",
+        )
     _validated_admission(repository, admission_ref, policy_path, admission_digest)
     validate_publish_worktree_origin(repository, remote)
     publish_env = os.environ.copy()
@@ -965,7 +975,7 @@ def local_git_cas_publish(
     if state != "after":
         detail = " ".join((push.stderr or push.stdout).split())[:400]
         code = "SCOPED_CANDIDATE.CAS_CONFLICT" if state == "other" else "SCOPED_CANDIDATE.PUBLISHER_UNAVAILABLE"
-        raise ScopedCandidateError(code, f"publish terminal readback is {state}: {detail}")
+        raise ScopedCandidateError(code, f"publish terminal readback is {state}: {detail}; {_PUBLISH_RECOVERY}")
     result: dict[str, Any] = {
         "schema": _PUBLISH_RESULT_SCHEMA,
         "admission": {"ref": admission_ref.resolve().relative_to(root).as_posix(), "digest": exact_digest(admission_ref)},

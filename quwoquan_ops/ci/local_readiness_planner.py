@@ -445,8 +445,16 @@ def _lane_gate_checks(*, base: str, head: str, paths: list[str]) -> list[dict[st
     ]
     for scope in contract["python_governance_scopes"]:
         checks.append(_static_check("python_script_governance_" + scope))
-    checks.append(_check("lane_gate:feature-tree", "spec_contract", "static",
-                         contract["feature_tree_command"], resources=["feature-tree"]))
+    checks.append(_check(
+        "lane_gate:feature-tree",
+        "spec_contract",
+        "static",
+        [
+            *contract["feature_tree_command"],
+            f"CONTENT_REVIEW_ARGS=--base {base} --head {head}",
+        ],
+        resources=["feature-tree"],
+    ))
     boundary = ["python3", "-B", "quwoquan_ops/ci/local_readiness_planner.py",
                 "--validate-lane-impact", "--base", base, "--head", head]
     for path in paths:

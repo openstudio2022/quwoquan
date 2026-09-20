@@ -32,7 +32,7 @@
 <a id="req-001"></a>
 ### REQ-001 分支角色与 scoped candidate
 
-- 执行与保证边界：日常 dev 合入由本地 `accept → bundle → integrate` 与 hook 强制验收和 admission；下述缺证据零写约束指受管本地入口，不是 GitHub 对任意凭据的保证。dev 的旧 `04. Lane Gate` required check 按授权撤除，远端 lane 在权威读回证明其 exact tip 已可达已发布 dev 且未发布增量已保全后可删除，不以专用 publisher/broker 或 hosted 替代门先到位为条件。服务端必须保留 dev 禁删/禁 non-FF 与 main promotion 强制；普通已授权写凭据仍可能绕过本地流程直接 FF dev，服务端不能保证每次 dev 更新均经过 Alpha。该缺口保持 OPEN-004 `track`，不阻塞本地有效验收后的日常 dev 合入，也不产生任何环境/生产资格。
+- 执行与保证边界：日常 dev 合入由产出 candidate 的规范 lane 工作树一条 `make accept PUBLISH=1` 与 hook 强制验收和 admission；`make integrate … PUBLISH=1` 是消费他树 bundle 的同一 admission/CAS 等价形态，不是第二通道。下述缺证据零写约束指受管本地入口，不是 GitHub 对任意凭据的保证。dev 的旧 `04. Lane Gate` required check 按授权撤除，远端 lane 在权威读回证明其 exact tip 已可达已发布 dev 且未发布增量已保全后可删除，不以专用 publisher/broker 或 hosted 替代门先到位为条件。服务端必须保留 dev 禁删/禁 non-FF 与 main promotion 强制；普通已授权写凭据仍可能绕过本地流程直接 FF dev，服务端不能保证每次 dev 更新均经过 Alpha。该缺口保持 OPEN-004 `track`，不阻塞本地有效验收后的日常 dev 合入，也不产生任何环境/生产资格。
 
 - 本地允许 `dev1.0`、`main` 与六条长期 `lane/*`。远端闭集只允许 `origin/dev1.0` 与 `origin/main`；存量 `origin/lane/*` 只是 leftover，不得作为写入目标。lane 是长期来源工作面与本地检出/验收 identity（Git 禁止同分支多工作树），不是独立远端交付线；六条本地 lane 的 upstream 统一指向 `origin/dev1.0`。integration 是已验候选的集成消费工作面；源码 writer 必须在现有 lane 按不重叠整文件 scope 交付最终 candidate，不能因 integration/dev 是合法环境 consumer 就把它当 lane acceptance producer。lane 不推远端 `lane/*`；更新远端 `dev1.0` 的座位不是某个目录，而是「规范 linked worktree（政策声明的六条 lane 或唯一 `integration/`，`git-common-dir` 等于政策 bare hub、`origin` push 身份与 hub 一致）持同一 candidate 的验真 publish admission」，只允许 expected-old non-force fast-forward。lane 完成本树验收后可在同一工作树直接发布，不需要把 HEAD 放到 `dev1.0` 或换工作区；外来 clone、非规范 hub/origin 与无 admission 一律零写。`QWQ_ACCEPTANCE_PUBLISH=1` 等布尔环境变量不构成 admission 或授权，裸 `git push` 零写。
 - `dev1.0` 是唯一集成 ref，接受 `trusted_integration_publisher_cas`、`integration_worktree_fast_forward` 与 `system_fast_forward_backsync` 三条通道；`integration_worktree_fast_forward` 指规范 linked worktree 持 admission 的 fast-forward，不限定该 worktree 是 `integration/`。后两条都必须绑定已验收 admission 或受管 system actor，裸源码直推不是 writer。`main` 是最新 source-admitted 源码，只接受 `dev1.0 -> main` promotion PR，不是 Prod source selector。
@@ -63,6 +63,7 @@
 - Beta 在包含 Data milestone 的整条链均显式 opt-in：未选时只以绑定同 candidate/release 的既有政策 `not_required` 与 Alpha/内容前驱进入 Gamma，Gamma 自身完整内容、UAT、恢复/cleanup 检查不省略；不得冒充 Beta passed。选中失败阻断本次 accepted，不能自动降为未选；opt-out 是留存历史的新显式请求。由未选改选 Beta 时，只在完整 exact runtime 前驱仍可恢复时复用 Alpha 并补跑 Beta，否则重新验收，不把复用不可用当成功。
 - 默认可发布 source 检查、full required 与 admission 前纯预检遵循 [`local-continuous-integration` REQ-005](../../development-workflow-governance/local-continuous-integration/spec.md#req-005)；`no_live` 不产生 accepted/bundle。任何完整输入漂移拒绝旧事实，旧签名事实字节保持不变；自动 reuse 与显式 candidate 对 caller owner/claim 漂移作相同拒绝。
 - producer source provenance 与当前 consumer candidate/environment 身份独立验真；沿用 Data sealed reader 与 Ops handoff 原入口，不将 producer baseline/当前源码 HEAD 相等作为跨工作树内容消费前提，也不关闭 currentness。Data 独占来源原件、审核成品与版本化渲染投影，本 Story 不改来源 schema 或新增映射；所选 release、投影 schema/构建输入、API/Alpha/App 版本与媒体摘要是验收输入，任一变化使受影响事实失效。
+- 发布后真实环境验收使用既有 integration 编排器的显式 `published-validation` 模式：消费同一 candidate/publish-result exact refs，验真 admission、远端 after/HEAD/tree/ImpactPlan；不再申请 source candidate、不重新 publish，也不放宽普通 accept 的空增量拒绝。按 Alpha → Beta → Gamma 串行执行真实 package/verify/data/readback/owned cleanup/lease 闭包；此模式三者必须 executed 且 passed，source admission 的 not_required 不计入。每个阶段 mutation 前与签发前重新读回远端；漂移或失败保留首个 typed blocker，未通过阶段不得签 passed。scheduler 用显式 attempt 身份隔离 live request/EAF 与既有 source EAF，不改 candidate identity、不覆盖旧事实；执行 claim/fence 贯穿真实命令与 cleanup。
 - Gamma 启动、签 IQF 与 promotion 前均对账已发布远端 dev exact head，不以本地未发布 dev 为基线。dev 前移后旧运行仅留诊断，不为新 head 签资格；仅重跑新 head 的 Gamma，不重复其已有效的 Alpha/可选 Beta。晋级窗口只串行共享 publish ref/环境/设备，不暂停六工作树编辑；MainSourceSeal 受管 backsync 不伪造 lane Alpha。
 - 服务端正式发布与 App 正式分发解耦、单机正式生产与首发恢复由集成/release owner 在现有合同同轨实现；服务闭包完整时不以无关 App 商店物料阻塞，模拟器仅提供真实 AUT 业务证据、不授予 App 分发资格。保留 main/stable、签名、selected Provider、法务、账号/数据隔离、容量、健康、备份恢复与灰度技术门；不要求额外第二主机、不声称 HA。内容首次无恢复基线与服务首次无 `ProdReleasedFact` 分别验真，不以封装 ID 不同证明不同内容恢复，不伪造 previous released；合同与真实证据未闭合前保持对应 OPEN。
 
@@ -130,6 +131,8 @@
 - THEN A/B bundle 均不能代表 C；C Alpha 执行一次，未选 Beta 执行零次且只产生匹配政策事实，选中则真跑一次、失败不 accepted；integration 环境调用零次。冻结后来源 lane 前移不改变本批 SHA，远端 lane fallback 不可达。
 - AND merge/rebase/squash 即使 tree 相同仍使旧 Alpha 不可复用；同候选完整输入匹配可复用，内容/投影/config/测试/工具链/恢复基线或有效期漂移拒绝旧事实，旧字节不变。Beta 从未选改选不把旧 not_required 当 passed，完整 runtime 前驱不可恢复时明确重验。
 - AND 两个不同 candidate/admission 竞争同 parent 的真实 CAS 只有一个成功，另一方 stale/parent 漂移拒绝且远端不被覆盖；重验只针对同步后的新候选。Gamma 期间 dev 前移使旧 IQF 不可签发或用于新 head；新 head 有效 Alpha/Beta 不重复。
+
+- AND 对已发布且 source Alpha/Beta 为 not_required 的 exact candidate，显式 published-validation 能保持原 candidateId/commit/tree 顺序执行三环境并形成连续 passed 前驱；伪造 publish-result、过期 before/after、远端中途推进、错误 candidate/ImpactPlan、缺 Data/设备输入或外部 lease 占用均在相应 mutation 前拒绝。中间 verify/cleanup 失败不签该阶段 passed、不推进后继，清理只针对本次取得的 generation；原 source EAF 保持原字节。普通 accept 的 candidate==baseline 仍拒绝。
 
 <a id="gwt-007"></a>
 ### GWT-007 内容 provenance 与当前消费身份独立成立
@@ -209,14 +212,14 @@
 - 依赖：Data producer handoff/release attestation owner、Ops handoff authority/current consumer owner、目标环境成功 activation/发布记录与原恢复入口；仅首次无基线的合法 empty-baseline 输入仍由现有 owner 提供，不新增总控或 receipt。
 
 <a id="open-008"></a>
-### OPEN-008 lane acceptance bundle → integration admit/publish 尚缺一次真实 hosted 发布回执
+### OPEN-008 lane 一条命令 CAS 已接线，hosted 发布回执仍缺
 
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：[L2 DEC-014](../design.md#dec-014) 的两段式已有部分源码与历史 local contract 证据，不能据此宣称 current admission 加固、Lane Gate 左移或真实发布已完成：`make accept` 在 lane 工作树终态 `accepted` 并写出 portable acceptance bundle；`make integrate ACCEPTANCE_BUNDLE=…` 只导入 bundle（create-once、digest 复核、keyring 验签、`expectedParent == 远端 before`）后 admit → publish，不再自己跑环境，也不再需要 Data release 输入，因此不会在 `dev1.0` 分支上撞到 ship handoff admission 的 `CANDIDATE.STALE`。local contract 已覆盖 bundle round-trip、digest/manifest/commit/parent 漂移、缺 bundle 与 acceptance 专用输入的 typed 拒绝、integrate 相位闭集。当前新增的默认 scope/pure prevalidate、no_live 非发布终态、真实多 lane 合并/双候选 CAS、Beta 全链可选与远端 Gamma fencing 仍需 current 证据，GWT-006/GWT-007 与 local CI GWT-008 未取证不称完成；尚缺的是一次真实闭环：同一 candidate 在 lane 工作树 `make accept` 产出 bundle，再由 integration 工作区消费并 fast-forward 发布到远端 `dev1.0`、读回 `after`。
-- 完成判定：`GWT-001.t6..t12`——真实 lane `make accept` 的 summary（终态 `accepted`、`acceptanceBundle` 路径）与 integration `make integrate ACCEPTANCE_BUNDLE=… PUBLISH=1` 的 summary（相位 preflight → import-bundle → admit → publish，publish result 读回 `after`，`acceptanceBundle.bundleId` 等于 lane bundle）各一份，且远端 `dev1.0` 读回等于该 candidate。
-- 依赖：[L2 DEC-014](../design.md#dec-014)；[`OPEN-006`](#open-006) 的 Alpha 真实签发。
+- 影响或价值：仍缺 hosted CI 对 `origin/dev1.0` expected-old non-force FF 与 publish admission 验真的 current 发布回执；不得把本树 `make accept PUBLISH=1` 读回 `after`、或 local contract 已覆盖的 bundle/digest/parent 漂移拒绝与 integrate 相位闭集，写成 hosted 保护已闭合。[L2 DEC-014](../design.md#dec-014) 的默认通道是产出 candidate 的规范 lane 工作树一条 `make accept PUBLISH=1`；`make integrate ACCEPTANCE_BUNDLE=… PUBLISH=1` 是同一 admission/CAS 的等价两段形态，不是完成该 GWT 的第二必要条件。GWT-006/GWT-007 与 local CI GWT-008 缺少 current 取证不称完成；hosted 回执仍归 OPEN-004。
+- 完成判定：`GWT-001.t6..t12`——真实 lane `make accept PUBLISH=1` 的 summary（终态 `published`，publish result 读回 `after`，远端 `dev1.0` 等于该 candidate）。等价两段式 `make integrate ACCEPTANCE_BUNDLE=… PUBLISH=1` 可选用同一事实，但不是默认完成条件。hosted 回执未取证前本 OPEN 保持开放，不把一次本地 CAS 写成 hosted 保护已闭合。
+- 依赖：[L2 DEC-014](../design.md#dec-014)；[`OPEN-004`](#open-004) 的 hosted 回执；[`OPEN-006`](#open-006) 的 Alpha 真实签发。
 <a id="open-007"></a>
 ### OPEN-007 `promotion_hosted.ruleset_fact` 把只读 token 下不可见的 `bypass_actors` 折成空并判 `passed`
 

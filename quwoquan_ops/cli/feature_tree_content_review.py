@@ -815,9 +815,16 @@ def render(reviews: list[Review]) -> tuple[str, dict[str, object]]:
     return "\n".join(lines), payload
 
 
-def blocking_reviews(reviews: list[Review], *, changes_only: bool) -> list[Review]:
-    """L0 只阻断本次 Git 变更里的 spec/design；全树问题留在报告里。"""
+def blocking_reviews(
+    reviews: list[Review],
+    *,
+    changes_only: bool = False,
+    changed_paths: set[str] | None = None,
+) -> list[Review]:
+    """只阻断指定路径集合里的 spec/design；全树问题仍写入报告。"""
     failures = [item for item in reviews if not item.ok]
+    if changed_paths is not None:
+        return [item for item in failures if item.path in changed_paths]
     if not changes_only:
         return failures
     from quwoquan_ops.cli.lib.feature_tree import gitio
@@ -831,9 +838,19 @@ def main() -> int:
     parser.add_argument(
         "--changes",
         action="store_true",
-        help="只对 git 变更中的 spec/design 以内容问题返回失败",
+        help="只对 porcelain WIP 中的 spec/design 以内容问题返回失败",
     )
+    parser.add_argument("--base", default="", help="candidate range 起点（expectedParent SHA）")
+    parser.add_argument("--head", default="", help="candidate range 终点（candidate SHA）")
     args = parser.parse_args()
+    base = str(args.base or "").strip()
+    head = str(args.head or "").strip()
+    if bool(base) ^ bool(head):
+        print("GATE_BLOCK: --base and --head must be provided together", file=sys.stderr)
+        return 2
+    if args.changes and (base or head):
+        print("GATE_BLOCK: --changes is porcelain WIP; candidate range uses --base/--head", file=sys.stderr)
+        return 2
     nodes = feature_tree.discover_nodes()
     refs = feature_tree.test_spec_refs()
     reviews: list[Review] = []
@@ -851,12 +868,18 @@ def main() -> int:
     machine.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(markdown.relative_to(REPO_ROOT))
     print(machine.relative_to(REPO_ROOT))
-    failures = blocking_reviews(reviews, changes_only=args.changes)
+    if base:
+        from quwoquan_ops.cli.lib.feature_tree import gitio
+        failures = blocking_reviews(reviews, changed_paths=set(gitio.git_range_paths(base, head)))
+    else:
+        failures = blocking_reviews(reviews, changes_only=args.changes)
     blocked = len(failures)
     issues = sum(len(item.issues) for item in failures)
     if blocked:
         message = f"GATE_BLOCK: {blocked} files / {issues} content issues"
-        if args.changes:
+        if base:
+            message += " (candidate-range)"
+        elif args.changes:
             message += " (changes-only)"
         if not args.report_only:
             print(message, file=sys.stderr)
