@@ -596,3 +596,24 @@ def test_inspect_exposes_backlog_oldest_and_failure_summaries(monkeypatch: pytes
             ("exact-pending", "failed.txt"),
             ("foreign-pending", "source.txt"),
         }
+
+
+def test_managed_portal_cleanup_removes_only_borrowed_capsule_link(tmp_path, monkeypatch):
+    from quwoquan_ops.cli import local_readiness as cli
+    source = tmp_path / "source"
+    modules = source / "quwoquan_ops/portal/node_modules"
+    modules.mkdir(parents=True)
+    (modules / "owned.txt").write_text("keep")
+    capsule = tmp_path / "capsule"
+    portal = capsule / "quwoquan_ops/portal"
+    portal.mkdir(parents=True)
+    monkeypatch.setattr(cli, "ROOT", capsule)
+    monkeypatch.setenv("QWQ_LOCAL_READINESS_REPO_ROOT", str(source))
+    cli._link_portal_dependencies(portal)
+    assert (portal / "node_modules").is_symlink()
+    cli._cleanup_portal_outputs(portal)
+    assert not (portal / "node_modules").exists()
+    assert (modules / "owned.txt").read_text() == "keep"
+    monkeypatch.setattr(cli, "ROOT", source)
+    cli._cleanup_portal_outputs(source / "quwoquan_ops/portal")
+    assert (modules / "owned.txt").read_text() == "keep"

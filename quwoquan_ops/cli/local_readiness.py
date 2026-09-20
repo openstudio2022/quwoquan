@@ -394,6 +394,13 @@ def _cleanup_portal_outputs(portal: Path) -> None:
         candidate.unlink(missing_ok=True)
     for name in ("vite.config.js", "vite.config.d.ts"):
         (portal / name).unlink(missing_ok=True)
+    # capsule 自己借用的安装链接必须回收；node_modules/ 忽略规则不覆盖符号链接。
+    source_root = os.environ.get("QWQ_LOCAL_READINESS_REPO_ROOT", "").strip()
+    link = portal / "node_modules"
+    if source_root and Path(source_root).resolve() != ROOT.resolve() and link.is_symlink():
+        expected = Path(source_root) / "quwoquan_ops/portal/node_modules"
+        if link.resolve() == expected.resolve():
+            link.unlink()
 
 
 def _link_portal_dependencies(portal: Path) -> None:
