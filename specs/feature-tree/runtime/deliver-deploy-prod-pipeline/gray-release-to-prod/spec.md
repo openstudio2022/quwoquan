@@ -148,3 +148,13 @@
 - 准出影响：`track`
 - 影响或价值：尚缺能够证明当前 GWT 全部结果子句的职责匹配证据，尤其是 release-manifest CLI 拒绝、formal snapshot 拒绝与 terminal predecessor 单轨。
 - 完成判定：`GWT-001` 全部结果子句分别由 current local_contract/api_integration/user_acceptance 直接绑定并通过；真实 hosted rollout 仍以 `OPEN-003` 的外部证据关闭。
+
+<a id="open-007"></a>
+### OPEN-007 验证环裁决与策略校验结构复杂度
+
+- 类型：`risk`
+- 优先级：`P2`
+- 准出影响：`track`
+- 影响或价值：`verify_gray_routing_policy.py::_validate_validation_ring/validate_policy` 与 API Edge `Evaluator.Decide`、`Policy.Validate` 的多条件分支超过 Code Health advisory，增加空配置、可信 IP、版本和 route 绑定的审计成本；结构债不代偿任何访问控制或缓存验真 blocker。
+- 完成判定：按已有对象边界分离名单匹配、版本/route 静态校验与正式 sticky 裁决，在 `GWT-002` 的可选名单矩阵、撤销后同 store、非法 CIDR/摘要及未知可信 IP 负例保持通过时，使上述 symbol 的 fresh Code Health advisory 消失；不得增 allowlist、提高阈值或绕过 hosted readback。
+- 依赖：对应 policy/evaluator 的对象 local_contract 与 canonical Code Health delta。

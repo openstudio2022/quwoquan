@@ -257,6 +257,15 @@ def _load_acceptance(
     return fact, normalized
 
 
+def qualification_environment_allowed(environment: str, fact: Mapping[str, Any]) -> bool:
+    """资格阶段 Alpha/Gamma 必须通过，Beta 只接受现役 EAF 政策跳过。"""
+    from quwoquan_ops.cli.lib.environment_acceptance_fact_contract import not_required_allowed
+    return fact.get("status") == "passed" or (
+        environment == "beta" and fact.get("status") == "not_required"
+        and not_required_allowed(environment, str(fact.get("reasonCode", "")))
+    )
+
+
 def _load_environment_chain(
     *,
     root: Path,
@@ -293,6 +302,8 @@ def _load_environment_chain(
             "INTEGRATION_QUALIFICATION.ENVIRONMENT_INVALID",
             "Alpha/Beta/Gamma predecessor chain drifted",
         )
+    if any(not qualification_environment_allowed(environment, facts[environment]) for environment in _ENVIRONMENTS):
+        raise IntegrationQualificationError("INTEGRATION_QUALIFICATION.ENVIRONMENT_INVALID", "Alpha/Gamma must pass; Beta requires passed or a valid policy skip")
     return facts, exacts
 
 
@@ -566,14 +577,6 @@ def issue_integration_qualification(
         signature_verifier=environment_signature_verifier,
         expected_signer_identities=expected_environment_signers,
     )
-    if any(
-        environment_facts[environment].get("status") != "passed"
-        for environment in _ENVIRONMENTS
-    ):
-        raise IntegrationQualificationError(
-            "INTEGRATION_QUALIFICATION.ENVIRONMENT_INVALID",
-            "current Alpha/Beta/Gamma chain must contain passed facts",
-        )
     alpha = environment_facts["alpha"]
     beta = environment_facts["beta"]
     gamma = environment_facts["gamma"]

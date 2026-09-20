@@ -308,6 +308,32 @@ def test_same_tree_digest_skips_capsule_rematerialize(tmp_path: Path, monkeypatc
         assert (capsule / "source.txt").read_text(encoding="utf-8") == "two\n"
 
 
+@pytest.mark.parametrize("tamper", ["bytes", "mode", "symlink"])
+def test_capsule_cache_tamper_blocks_before_execution(tmp_path, tamper):
+    # spec_ref: specs/feature-tree/runtime/development-workflow-governance/agent-skill-review-context-organization/spec.md#gwt-007
+    repo = tmp_path / "repo"
+    repo.mkdir(); _init(repo)
+    os.symlink("source.txt", repo / "link.txt")
+    _commit_all(repo, "cache fixture")
+    plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="commit")
+    state = _state_root(tmp_path / "state")
+    with source_execution_root(repo_root=repo, mode="commit", state_root=state, fingerprint=plan["fingerprint"]):
+        pass
+    cache = next((state / "process/capsules").iterdir()) / "files"
+    if tamper == "bytes":
+        (cache / "source.txt").write_text("tampered")
+    elif tamper == "mode":
+        (cache / "source.txt").chmod(0o700)
+    else:
+        (cache / "link.txt").unlink()
+        os.symlink("../../outside", cache / "link.txt")
+    executed = False
+    with pytest.raises(LocalReadinessError, match="CAPSULE_CONTENT_MISMATCH"):
+        with source_execution_root(repo_root=repo, mode="commit", state_root=state, fingerprint=plan["fingerprint"]):
+            executed = True
+    assert not executed
+
+
 def test_capsule_rejects_symlink_escape_and_cleans_process_root() -> None:
     with _repo() as directory:
         repo = Path(directory)

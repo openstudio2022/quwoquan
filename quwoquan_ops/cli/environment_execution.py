@@ -35,6 +35,7 @@ from quwoquan_ops.ci.environment_scheduler import (  # noqa: E402
 from quwoquan_ops.ci.integration_qualification import (  # noqa: E402
     IntegrationQualificationError,
     issue_integration_qualification,
+    qualification_environment_allowed,
 )
 from quwoquan_ops.cli.lib.evidence_signing import (  # noqa: E402
     DEFAULT_KEYRING_PATH,
@@ -643,7 +644,7 @@ def _handle_qualify(args: argparse.Namespace) -> dict[str, object]:
     if (
         any(
             fact.get("environment") != environment
-            or fact.get("status") != "passed"
+            or not qualification_environment_allowed(environment, fact)
             for environment, fact in (("alpha", alpha), ("beta", beta), ("gamma", gamma))
         )
         or not isinstance(candidate, Mapping)
@@ -659,7 +660,7 @@ def _handle_qualify(args: argparse.Namespace) -> dict[str, object]:
     ):
         raise EnvironmentExecutionError(
             "ENVIRONMENT_EXECUTION.GAMMA_IDENTITY_DRIFT",
-            "Alpha/Beta/Gamma acceptances are not the current exact passed chain",
+            "Alpha/Beta/Gamma acceptances are not the current exact policy-valid chain",
         )
     signer, environment_verifier, expected_environment_signers = _qualification_crypto(
         args

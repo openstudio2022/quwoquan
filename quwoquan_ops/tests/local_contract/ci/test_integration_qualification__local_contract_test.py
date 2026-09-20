@@ -288,8 +288,21 @@ def fixture(tmp_path: Path) -> tuple[Path, Path, dict[str, str], dict[str, str],
     return repo, store, publish_result, alpha, live_beta, gamma
 
 
-def test_qualification_binds_current_dev_head_abg_and_dsse(tmp_path: Path) -> None:
+@pytest.mark.parametrize("policy_skip", [False, True])
+def test_qualification_binds_current_dev_head_abg_and_dsse(tmp_path: Path, policy_skip: bool) -> None:
     repo, store, publish_result, alpha, beta, gamma = fixture(tmp_path)
+    if policy_skip:
+        admission = json.loads((store / publish_result["ref"]).read_text())["admission"]
+        beta = json.loads((store / admission["ref"]).read_text())["environmentFacts"]["beta"]
+        body = json.loads((store / gamma["ref"]).read_text())
+        body.pop("factId"); body.pop("signer")
+        body["predecessor"] = beta
+        raw = canonical_json_bytes(body)
+        payload_type = "application/vnd.quwoquan.environment-acceptance-fact.v2+json"
+        body["signer"] = {"identity": ENVIRONMENT_SIGNER, "payloadType": payload_type,
+                          "payload": base64.b64encode(raw).decode(), "signature": environment_sign(dsse_pae(payload_type, raw))}
+        body["factId"] = canonical_digest(body)
+        gamma = write(store, "acceptance/gamma-policy-skip.json", body)
     path = issue_integration_qualification(
         repository=repo,
         store_root=store,
@@ -313,13 +326,29 @@ def test_qualification_binds_current_dev_head_abg_and_dsse(tmp_path: Path) -> No
     admission = json.loads((store / publish_result["ref"]).read_text())["admission"]
     admission_beta = admission["ref"]
     admission_payload = json.loads((store / admission_beta).read_text())
-    assert fact["environmentChain"]["beta"] != admission_payload["environmentFacts"]["beta"]
+    assert (fact["environmentChain"]["beta"] == admission_payload["environmentFacts"]["beta"]) is policy_skip
     assert fact["environmentChain"]["gamma"] == gamma
-    assert json.loads((store / fact["environmentChain"]["beta"]["ref"]).read_text())["status"] == "passed"
+    assert json.loads((store / fact["environmentChain"]["beta"]["ref"]).read_text())["status"] == ("not_required" if policy_skip else "passed")
     payload = base64.b64decode(fact["signer"]["payload"])
     assert fact["signer"]["signature"] == qualification_sign(
         dsse_pae(fact["signer"]["payloadType"], payload)
     )
+
+
+@pytest.mark.parametrize("environment,status,reason,allowed", [
+    ("alpha", "passed", "", True),
+    ("gamma", "passed", "", True),
+    ("beta", "passed", "", True),
+    ("beta", "not_required", "ACCEPTANCE.BETA_OPTIONAL_BY_POLICY", True),
+    ("beta", "not_required", "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED", True),
+    ("beta", "not_required", "ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV", False),
+    ("beta", "failed", "ACCEPTANCE.BETA_OPTIONAL_BY_POLICY", False),
+    ("alpha", "not_required", "ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV", False),
+    ("gamma", "not_required", "IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED", False),
+])
+def test_qualification_uses_environment_specific_policy(environment, status, reason, allowed):
+    from quwoquan_ops.ci.integration_qualification import qualification_environment_allowed
+    assert qualification_environment_allowed(environment, {"status": status, "reasonCode": reason}) is allowed
 
 
 @pytest.mark.parametrize("environment", ["alpha", "beta", "gamma"])

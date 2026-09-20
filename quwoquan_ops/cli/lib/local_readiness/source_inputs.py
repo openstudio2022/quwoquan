@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
+import hashlib
 import json
 import os
 import posixpath
@@ -411,14 +412,24 @@ def _capsule_tree_digest(entries: list[dict[str, str]]) -> str:
     return _core.canonical_digest({"schema": "local-readiness-capsule-tree-v1", "entries": payload}).removeprefix("sha256:")
 
 
+def _verify_capsule_blob(raw: bytes, entry: dict[str, str]) -> None:
+    encoded = b"blob " + str(len(raw)).encode() + b"\0" + raw
+    digest = hashlib.sha256(encoded).hexdigest() if len(entry["blob"]) == 64 else hashlib.sha1(encoded).hexdigest()
+    if digest != entry["blob"]:
+        raise _core.LocalReadinessError(f"CAPSULE_CONTENT_MISMATCH: {entry['path']}")
+
+
 def _copy_capsule_tree(source_root: Path, dest_root: Path, entries: list[dict[str, str]]) -> None:
-    """把已物化的 capsule 文件拷到另一棵树；不走 git cat-file。"""
+    """按实际读取字节校验 Git blob/mode 后复制，返回前不执行任何 capsule 源码。"""
     for entry in entries:
         relative, mode = entry["path"], entry["mode"]
         destination = _core._safe_capsule_destination(dest_root, relative)
         source = source_root / relative
+        _core._reject_symlink_components(source.parent, label="capsule cached source")
         if mode == "120000":
-            os.symlink(os.readlink(source), destination)
+            target = os.readlink(source)
+            _verify_capsule_blob(target.encode(), entry)
+            os.symlink(_capsule_symlink_target(relative, target), destination)
             continue
         flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
         src_fd = os.open(source, flags)
@@ -429,7 +440,12 @@ def _copy_capsule_tree(source_root: Path, dest_root: Path, entries: list[dict[st
                 with os.fdopen(dest_fd, "wb") as handle, os.fdopen(src_fd, "rb") as reader:
                     dest_fd = -1
                     src_fd = -1
-                    handle.write(reader.read())
+                    metadata = os.fstat(reader.fileno())
+                    if not stat.S_ISREG(metadata.st_mode) or bool(metadata.st_mode & 0o111) != (mode == "100755"):
+                        raise _core.LocalReadinessError("CAPSULE_CONTENT_MISMATCH: cache file mode drift")
+                    raw = reader.read()
+                    _verify_capsule_blob(raw, entry)
+                    handle.write(raw)
                     handle.flush()
                     os.fsync(handle.fileno())
             finally:

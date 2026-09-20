@@ -252,6 +252,6 @@
 - 类型：`risk`
 - 优先级：`P2`
 - 准出影响：`track`
-- 影响或价值：双端离线页面与服务/API 独立证据轴接入后，`quwoquan_ops/cli/integration_run.py` 的环境执行、exact 输入复用和 CLI 分派仍集中在同一入口。增量 Code Health 报 `_run_environment`、`_find_reusable_candidate`、`main` 复杂度与超千行 advisory，尚未超过硬阻断阈值；职责拆分必须保留完整失败与资源清理语义，不为降低指标扩大成验收框架重写。
-- 完成判定：在原 CLI 入口不变、无第二调度轨道的前提下按现有职责提取上述边界；`GWT-001.t6..t12` 与 `GWT-005.t2` 的 exact candidate、release/rollback/handoff、双端 raw、签名、复用和 cleanup 负向合同保持通过，增量复杂度不再恶化且入口回到文件 advisory 阈值以内。
+- 影响或价值：双端离线页面与服务/API 独立证据轴接入后，`quwoquan_ops/cli/integration_run.py` 的环境执行、exact 输入复用和 CLI 分派仍集中在同一入口。增量 Code Health 报 `_run_environment`、`_find_reusable_candidate`、`_prepare_signing`、`main` 复杂度与超千行 advisory；同一发布边界的 `integration_qualification.py::issue_integration_qualification` 与 `lane_worktree_commands.py::align_published` 也存在分支复杂度 advisory，尚未超过硬阻断阈值；职责拆分必须保留完整失败与资源清理语义，不为降低指标扩大成验收框架重写。
+- 完成判定：在原 CLI 入口不变、无第二调度轨道的前提下按现有职责提取上述签名、EAF资格、同步与调度边界；`GWT-005` 的零写/冲突保护与 `GWT-006` 的签名/可选 Beta 前驱不得削弱；`GWT-001.t6..t12` 与 `GWT-005.t2` 的 exact candidate、release/rollback/handoff、双端 raw、签名、复用和 cleanup 负向合同保持通过，增量复杂度不再恶化且入口回到文件 advisory 阈值以内。
 - 依赖：`quwoquan_ops/cli/integration_run.py`、`quwoquan_ops/cli/lib/integration_app_launch.py` 及现役 acceptance bundle/reuse local contract；仅源码健康后续项，不代替 required Alpha 或发布证据。
