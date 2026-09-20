@@ -840,17 +840,16 @@ class CommitCapsuleEvidenceTest(unittest.TestCase):
             index = (repo / ".git/index").read_bytes()
             plan = {"head_sha": head, "merge_base_sha": base, "changed_paths": ["owned.txt"],
                     "candidate_evidence_identity": {"ref": ".qwq_output/candidate.json"}}
-            def execute(_plan, **kwargs):
-                capsule = kwargs["cwd"]
+            def execute(capsule, _plan_ref, source, _env, _run_id, _captured_by):
                 self.assertEqual("candidate", (capsule / "owned.txt").read_text())
                 self.assertEqual("baseline", (capsule / "foreign.txt").read_text())
                 self.assertEqual(b"", subprocess.check_output(["git", "status", "--porcelain"], cwd=capsule))
-                self.assertTrue(kwargs["execution_source"]["immutable"])
-                runner._assert_source_head(kwargs["execution_source"], capsule)
-                return {"evidence": [], "source": kwargs["execution_source"]}
+                self.assertTrue(source["immutable"])
+                runner._assert_source_head(source, capsule)
+                return {"evidence": [], "source": source}
             arguments = dict(cwd=repo, registry={}, plan_bytes=json.dumps(plan).encode(),
                              plan_ref=".qwq_output/plan.json", run_id="test", captured_by="test", head_tree=tree)
-            with mock.patch.object(runner, "read_candidate_closure", return_value=[]), mock.patch.object(runner, "run_plan", side_effect=execute):
+            with mock.patch.dict(runner._run_commit_plan.__globals__, {"read_candidate_closure": lambda *a, **k: [], "_execute_commit_capsule": execute}):
                 receipt = runner._run_commit_plan(plan, **arguments)
             self.assertEqual(("reusable", True), runner._evidence_classification(receipt["source"]))
             self.assertEqual(index, (repo / ".git/index").read_bytes())
@@ -861,10 +860,10 @@ class CommitCapsuleEvidenceTest(unittest.TestCase):
                     runner._run_commit_plan(wrong, **{**arguments, "plan_bytes": json.dumps(wrong).encode()})
             with self.assertRaises(ValueError):
                 runner._run_commit_plan(plan, **{**arguments, "head_tree": "f" * 40})
-            def drift(_plan, **kwargs):
-                (kwargs["cwd"] / "foreign.txt").write_text("forged")
-                runner._assert_source_head(kwargs["execution_source"], kwargs["cwd"])
-            with mock.patch.object(runner, "read_candidate_closure", return_value=[]), mock.patch.object(runner, "run_plan", side_effect=drift), self.assertRaisesRegex(runner.EvidenceRunnerError, "变脏"):
+            def drift(capsule, _plan_ref, source, *_args):
+                (capsule / "foreign.txt").write_text("forged")
+                runner._assert_source_head(source, capsule)
+            with mock.patch.dict(runner._run_commit_plan.__globals__, {"read_candidate_closure": lambda *a, **k: [], "_execute_commit_capsule": drift}), self.assertRaisesRegex(runner.EvidenceRunnerError, "变脏"):
                 runner._run_commit_plan(plan, **arguments)
             self.assertEqual(index, (repo / ".git/index").read_bytes())
 

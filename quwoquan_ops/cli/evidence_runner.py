@@ -368,6 +368,29 @@ def _put_dependency(root: Path, ref: str, raw: bytes) -> None:
         stream.write(raw)
 
 
+def _execute_commit_capsule(capsule: Path, plan_ref: str, source: dict, execution_env: dict,
+                            run_id: str | None, captured_by: str) -> dict:
+    """从被审 commit 的模块根执行，避免 planner 的源码根被父进程污染。"""
+    script = (
+        "import json,sys,pathlib,yaml; sys.path.insert(0,'quwoquan_ops/cli'); "
+        "import evidence_runner as r; p=pathlib.Path(sys.argv[1]); raw=p.read_bytes(); "
+        "plan=json.loads(raw); registry=yaml.safe_load(pathlib.Path('.agents/skills/review/references/registry.yaml').read_text()); "
+        "receipt=r.run_plan(plan,cwd=pathlib.Path.cwd(),registry=registry,plan_bytes=raw,plan_ref=sys.argv[1],"
+        "run_id=sys.argv[2],captured_by=sys.argv[3],execution_source=json.loads(sys.argv[4])); "
+        "r._write_receipt_create_once(sys.argv[2],receipt)"
+    )
+    execution_id = run_id or uuid.uuid4().hex
+    env = {**os.environ, **execution_env, "PYTHONDONTWRITEBYTECODE": "1"}
+    for key in _git_text(capsule, "rev-parse", "--local-env-vars").splitlines():
+        env.pop(key, None)
+    completed = subprocess.run([sys.executable, "-B", "-c", script, plan_ref, execution_id, captured_by,
+                                json.dumps(source)], cwd=capsule, env=env, capture_output=True, check=False)
+    if completed.returncode:
+        raise EvidenceRunnerError("commit evidence subprocess failed: " + completed.stderr.decode(errors="replace")[-1200:])
+    receipt_path = capsule / ".qwq_output/env/repo/runs/review-evidence" / execution_id / "receipt.json"
+    return json.loads(receipt_path.read_bytes())
+
+
 def _run_commit_plan(plan: dict, *, cwd: Path, registry: dict, plan_bytes: bytes,
                      plan_ref: str, run_id: str | None, captured_by: str, head_tree: str) -> dict:
     from lib.local_readiness.source_inputs import source_execution_root
@@ -398,9 +421,7 @@ def _run_commit_plan(plan: dict, *, cwd: Path, registry: dict, plan_bytes: bytes
         _put_dependency(capsule, plan_ref, plan_bytes)
         for member in closure:
             _put_dependency(capsule, member["ref"], member["canonical_json"].encode())
-        receipt = run_plan(plan, run_id=run_id, captured_by=captured_by, cwd=capsule, registry=registry,
-                           plan_bytes=plan_bytes, plan_ref=plan_ref, source_repository=capsule,
-                           dependency_root=capsule, execution_source=source, execution_env=execution_env)
+        receipt = _execute_commit_capsule(capsule, plan_ref, source, execution_env, run_id, captured_by)
         validate_git_range(identity, repo_root=cwd)
         # artifact 已经按 exact descriptor 验真；复制回原输出根，cleanup 不丢失证据。
         for result in receipt["evidence"]:
