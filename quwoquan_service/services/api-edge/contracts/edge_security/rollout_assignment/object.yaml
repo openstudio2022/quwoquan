@@ -23,6 +23,10 @@ business_rules:
 - 原始 deviceActorId 不得持久化或进入日志，subjectDigest 必须使用 allocation key 做 HMAC-SHA256。
 - 同一 campaign 的 candidate assignment 只能建立，不得删除或改回 stable；仅 campaign rollback 可使全量流量返回 stable。
 - assignment store 不可用或数据丢失时 campaign 必须回滚，不得使用请求随机或账号/IP fallback。
+- prod-hosted/prevalidate 验证环使用 validationRing.enabled 与 requireIp 显式启用；route 必须绑定 target=candidate、deploymentInstance=prevalidate、等于 candidateDigest 的 candidateId、canonical artifactDigest/runtimeConfigDigest 及 publicExposure=false，缺失 hosted exact readback 时保持禁用。
+- 验证环 appVersions 绑定 platform/displayVersion/buildNumber 到已验真 artifactDigest；displayVersion 为无 RC 后缀三段版本，buildNumber 为正整数字符串。用户或设备名单内部 OR，用户与 trustedIpCidrs 两类限制均可省略，已配置的限制与精确版本匹配 AND；省略为 nil、显式空列表为拒绝所有请求，不能把空配置视为未配置。两类均省略时验证环默认拒绝。只有 IP 限制已配置或部署 requireIp=true 时才要求可信 IP；requireIp=true 且未配置 IP 列表也拒绝，requireIp=false 允许仅用户白名单。
+- REST 与 GraphQL 只消费已验签 principal 和可信代理覆盖的源 IP，不从 RemoteAddr 或客户端转发头回退；客户端不提供受信制品身份。每次验证环请求重新裁决，不读取或写入正式 campaign sticky assignment。
+- validationRing 禁用时保持普通百分比灰度语义；其可选 appVersions 表为空不限制普通灰度。验证环 route 与版本制品摘要必须一致，公开流量和正式百分比 campaign 不得共享启用中的验证环 candidate 池。
 lifecycle:
   ttl_seconds: 2592000
   ttl_seconds_after_campaign: 2592000

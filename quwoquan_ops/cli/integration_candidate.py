@@ -108,7 +108,9 @@ def _build_parser() -> argparse.ArgumentParser:
     publish.add_argument("--broker-url")
     publish.add_argument("--token-env", default="QWQ_INTEGRATION_PUBLISHER_TOKEN")
 
-    qualify = sub.add_parser("qualify", help="以 publish result + Gamma EAF 签发 IntegrationQualificationFact")
+    qualify = sub.add_parser("qualify", help="以 publish result + Alpha/Beta/Gamma EAF 签发 IntegrationQualificationFact")
+    qualify.add_argument("--alpha-fact", required=True)
+    qualify.add_argument("--beta-fact", required=True)
     qualify.add_argument("--publish-result", required=True, help="<store-relative ref>=<digest>")
     qualify.add_argument("--gamma-fact", required=True, help="<store-relative ref>=<digest>")
     qualify.add_argument("--qualification-signer-identity", required=True)
@@ -216,6 +218,8 @@ impact_plan_digest=args.impact_plan_digest,
             path = issue_integration_qualification(
                 repository=ROOT, store_root=root,
                 publish_result_ref=_exact(args.publish_result, "--publish-result"),
+                alpha_acceptance_ref=_exact(args.alpha_fact, "--alpha-fact"),
+                beta_acceptance_ref=_exact(args.beta_fact, "--beta-fact"),
                 gamma_acceptance_ref=_exact(args.gamma_fact, "--gamma-fact"),
                 signer_identity=args.qualification_signer_identity,
                 signer=qualification_signer,

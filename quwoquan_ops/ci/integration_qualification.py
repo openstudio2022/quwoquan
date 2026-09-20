@@ -480,6 +480,8 @@ def issue_integration_qualification(
     repository: Path,
     store_root: Path,
     publish_result_ref: Mapping[str, str],
+    alpha_acceptance_ref: Mapping[str, str],
+    beta_acceptance_ref: Mapping[str, str],
     gamma_acceptance_ref: Mapping[str, str],
     signer_identity: str,
     signer: Callable[[bytes], str],
@@ -547,19 +549,31 @@ def issue_integration_qualification(
     }:
         raise IntegrationQualificationError(
             "INTEGRATION_QUALIFICATION.ENVIRONMENT_INVALID",
-            "publish admission lacks Alpha/Beta",
+            "publish admission lacks source Alpha/Beta; current live refs are required",
         )
+    # Source admission may intentionally carry typed not_required facts.  IQF is a
+    # separate post-publish qualification and must receive the current round's
+    # explicit Alpha/Beta/Gamma refs; never promote source refs implicitly.
+    live_environment_refs = {
+        "alpha": alpha_acceptance_ref,
+        "beta": beta_acceptance_ref,
+        "gamma": gamma_acceptance_ref,
+    }
     environment_facts, environment_exacts = _load_environment_chain(
         root=root,
-        environment_refs={
-            "alpha": environment_refs["alpha"],
-            "beta": environment_refs["beta"],
-            "gamma": gamma_acceptance_ref,
-        },
+        environment_refs=live_environment_refs,
         accepted_at=issued_time,
         signature_verifier=environment_signature_verifier,
         expected_signer_identities=expected_environment_signers,
     )
+    if any(
+        environment_facts[environment].get("status") != "passed"
+        for environment in _ENVIRONMENTS
+    ):
+        raise IntegrationQualificationError(
+            "INTEGRATION_QUALIFICATION.ENVIRONMENT_INVALID",
+            "current Alpha/Beta/Gamma chain must contain passed facts",
+        )
     alpha = environment_facts["alpha"]
     beta = environment_facts["beta"]
     gamma = environment_facts["gamma"]

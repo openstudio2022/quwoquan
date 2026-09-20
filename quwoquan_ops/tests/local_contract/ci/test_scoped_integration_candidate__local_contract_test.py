@@ -29,6 +29,7 @@ from quwoquan_ops.ci.scoped_candidate import (
     create_source_fact,
     exact_digest,
     hosted_broker_cas_publish,
+    inspect_claims,
     local_git_cas_publish,
     local_ref_cas_publish,
     release_claim,
@@ -39,8 +40,6 @@ from quwoquan_ops.ci.scoped_candidate import (
 ROOT = Path(__file__).resolve().parents[4]
 POLICY = ROOT / "quwoquan_ops/policies/scoped_candidate_policy.yaml"
 DIGEST = "sha256:" + "a" * 64
-OWNER = "evidence-fingerprint-v1:sha256:" + "b" * 64
-
 
 def git(repo: Path, *args: str) -> str:
     completed = subprocess.run(["git", *args], cwd=repo, text=True, capture_output=True, check=True)
@@ -339,7 +338,6 @@ def test_source_admitted_alpha_deferred_can_create_admission(tmp_path: Path, sou
     (target / "owned.txt").write_text("candidate\n")
     candidate_ref = build_candidate(
         repository=target, policy_path=POLICY, claim_ref=claim_ref,
-        owner_identity_ref="evidence-fingerprint-v1:sha256:" + "b" * 64,
         impact_plan_digest=DIGEST, message="deferred-alpha", author_name="Candidate", author_email="candidate@example.com",
     )
     candidate = json.loads(candidate_ref.read_text())
@@ -593,7 +591,7 @@ def test_direct_cli_cannot_bypass_admission_validation(tmp_path: Path, source_re
     target, path = admitted_fixture(tmp_path)
     monkeypatch.setattr(cli, "ROOT", target)
     monkeypatch.setattr(cli, "POLICY", POLICY)
-    monkeypatch.setattr(core, "validate_integration_publish_origin", lambda *args: None)
+    monkeypatch.setattr(core, "validate_publish_worktree_origin", lambda *args: None)
     body = json.loads(path.read_text())
     (target / ".qwq_output/receipt.json").write_text('{"status":"FAIL"}\n')
     if entry == "admit":
@@ -615,7 +613,7 @@ def test_hook_uses_same_exact_admission_chain(tmp_path: Path, source_receipt_bou
     target, path = admitted_fixture(tmp_path)
     body = json.loads(path.read_text())
     monkeypatch.setattr(gate, "ROOT", target)
-    monkeypatch.setattr(core, "validate_integration_publish_origin", lambda *args: None)
+    monkeypatch.setattr(core, "validate_publish_worktree_origin", lambda *args: None)
     # 临时仓库仅缺 policy 文件，不改变验证器。
     policy = target / "quwoquan_ops/policies/scoped_candidate_policy.yaml"
     policy.write_bytes(POLICY.read_bytes())
@@ -643,14 +641,14 @@ def test_origin_identity_rejects_alias_url_and_multiple_targets(tmp_path: Path, 
         return subprocess.CompletedProcess(args, 0, value + "\n", "")
     monkeypatch.setattr(core, "_git", fake_git)
     with pytest.raises(ScopedCandidateError):
-        core.validate_integration_publish_origin(target, remote, url)
+        core.validate_publish_worktree_origin(target, remote, url)
 
 
 def test_local_publisher_rejects_noncanonical_worktree_before_network(tmp_path: Path, source_receipt_boundary, monkeypatch) -> None:
     from quwoquan_ops.ci.scoped_candidate import core
     target, path = admitted_fixture(tmp_path)
     monkeypatch.setattr(core, "_remote_ref_oid", lambda *args: pytest.fail("no network before identity validation"))
-    with pytest.raises(ScopedCandidateError, match="canonical integration"):
+    with pytest.raises(ScopedCandidateError, match="canonical lane or integration worktree"):
         local_git_cas_publish(repository=target, policy_path=POLICY, admission_ref=path)
 
 
@@ -668,7 +666,7 @@ def test_final_publish_checks_ff_even_when_local_branch_already_is_candidate(tmp
     candidate_path.write_text(json.dumps(candidate, sort_keys=True, separators=(",", ":")) + "\n")
     body.update(expectedRemoteOid=orphan, candidateId=candidate["candidateId"], candidate=candidate_exact(target, candidate_path))
     rewrite_admission(path, body)
-    monkeypatch.setattr(core, "validate_integration_publish_origin", lambda *args: None)
+    monkeypatch.setattr(core, "validate_publish_worktree_origin", lambda *args: None)
     monkeypatch.setattr(core, "_remote_ref_oid", lambda *args: pytest.fail("FF must be checked before remote readback"))
     with pytest.raises(ScopedCandidateError, match="merge-base"):
         local_git_cas_publish(repository=target, policy_path=POLICY, admission_ref=path)
@@ -753,7 +751,7 @@ def test_source_fact_rejects_false_passed_wrapper(tmp_path: Path, payload: dict[
 def test_local_git_publish_is_expected_old_cas_with_readback(tmp_path: Path, source_receipt_boundary, monkeypatch: pytest.MonkeyPatch) -> None:
     from quwoquan_ops.ci.scoped_candidate import core
     # 本测试只覆盖 transport CAS；规范路径另有独立负向用例。
-    monkeypatch.setattr(core, "validate_integration_publish_origin", lambda *args: None)
+    monkeypatch.setattr(core, "validate_publish_worktree_origin", lambda *args: None)
     target, _ = repo(tmp_path)
     remote = tmp_path / "hub.git"
     git(tmp_path, "init", "--bare", "-b", "dev1.0", str(remote))
@@ -794,3 +792,196 @@ def test_local_git_publish_is_expected_old_cas_with_readback(tmp_path: Path, sou
     git(other, "push", "-q", "origin", "dev1.0")
     with pytest.raises(ScopedCandidateError, match="CAS_CONFLICT"):
         local_git_cas_publish(repository=target, policy_path=POLICY, admission_ref=admission_ref)
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001
+def test_publish_allows_non_overlapping_dirty_and_blocks_overlap(
+    tmp_path: Path, source_receipt_boundary, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from quwoquan_ops.ci.scoped_candidate import core
+    monkeypatch.setattr(core, "validate_publish_worktree_origin", lambda *args: None)
+    target, _ = repo(tmp_path)
+    remote = tmp_path / "hub.git"
+    git(tmp_path, "init", "--bare", "-b", "dev1.0", str(remote))
+    git(target, "remote", "add", "origin", str(remote))
+    git(target, "push", "-q", "origin", "dev1.0")
+    parent, commit = committed_candidate(target)
+    candidate_ref = build_head_candidate(
+        repository=target, policy_path=POLICY, commit=commit, expected_parent=parent,
+impact_plan_digest=DIGEST, writer_id="integration",
+        expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+    )
+    candidate = json.loads(candidate_ref.read_text())
+    # lane 发布形态：HEAD 就是 candidate，脏树判定必须落在 expectedParent...candidate 上。
+    source = source_fact(target, candidate, candidate_ref)
+    alpha = write_fact(target, "alpha.json", environment_fact(target, candidate, "alpha", "passed"))
+    beta = write_fact(target, "beta.json", environment_fact(target, candidate, "beta", "not_required"))
+    admission_ref = create_publish_admission(
+        repository=target, policy_path=POLICY, candidate_ref=candidate_exact(target, candidate_ref),
+        source_fact_refs=[source], alpha_fact_ref=alpha, beta_fact_ref=beta, expected_remote_oid=parent,
+    )
+    (target / "owned.txt").write_text("dirty overlap\n")
+    with pytest.raises(ScopedCandidateError, match="DIRTY_WORKTREE"):
+        local_git_cas_publish(repository=target, policy_path=POLICY, admission_ref=admission_ref)
+    git(target, "checkout", "--", "owned.txt")
+    (target / "foreign.txt").write_text("gamma wip\n")
+    (target / "unrelated.wip").write_text("untracked\n")
+    result_ref = local_git_cas_publish(repository=target, policy_path=POLICY, admission_ref=admission_ref)
+    assert json.loads(result_ref.read_text())["afterOid"] == commit
+    assert (target / "foreign.txt").read_text() == "gamma wip\n"
+    assert (target / "unrelated.wip").read_text() == "untracked\n"
+
+
+def canonical_layout(tmp_path: Path) -> tuple[Path, Path, Path, str]:
+    """搭出规范布局：bare hub + 同源 lane linked worktree + 独立 origin 远端。"""
+    project = tmp_path / "project"
+    seed = project / "seed"
+    seed.mkdir(parents=True)
+    git(seed, "init", "-b", "dev1.0")
+    git(seed, "config", "user.name", "Test")
+    git(seed, "config", "user.email", "test@example.com")
+    (seed / "owned.txt").write_text("before\n")
+    (seed / "foreign.txt").write_text("before\n")
+    git(seed, "add", ".")
+    git(seed, "commit", "-m", "initial")
+    remote = project / "remote.git"
+    git(project, "init", "--bare", "-b", "dev1.0", str(remote))
+    git(seed, "remote", "add", "origin", str(remote))
+    git(seed, "push", "-q", "origin", "dev1.0")
+    hub = project / "quwoquan.git"
+    git(project, "clone", "--bare", "-q", str(seed), str(hub))
+    git(hub, "remote", "set-url", "origin", str(remote))
+    git(hub, "config", "user.name", "Test")
+    git(hub, "config", "user.email", "test@example.com")
+    return project, hub, remote, git(hub, "rev-parse", "refs/heads/dev1.0")
+
+
+def lane_candidate(hub: Path, project: Path, branch: str, parent: str, content: str) -> tuple[Path, str]:
+    lane = project / branch.removeprefix("lane/")
+    git(hub, "worktree", "add", "-q", "-b", branch, str(lane), parent)
+    (lane / "owned.txt").write_text(content)
+    git(lane, "add", "owned.txt")
+    git(lane, "commit", "-m", f"{branch} candidate")
+    return lane, git(lane, "rev-parse", "HEAD")
+
+
+def lane_admission(lane: Path, parent: str, commit: str) -> Path:
+    candidate_ref = build_head_candidate(
+        repository=lane, policy_path=POLICY, commit=commit, expected_parent=parent,
+impact_plan_digest=DIGEST, writer_id=lane.name,
+        expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+    )
+    candidate = json.loads(candidate_ref.read_text())
+    return create_publish_admission(
+        repository=lane, policy_path=POLICY, candidate_ref=candidate_exact(lane, candidate_ref),
+        source_fact_refs=[source_fact(lane, candidate, candidate_ref)],
+        # 默认 source-admitted：两份 typed not_required，live Alpha 延后到已发布 dev。
+        alpha_fact_ref=write_fact(lane, "alpha.json", environment_fact(
+            lane, candidate, "alpha", "not_required", reason_code="ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV")),
+        beta_fact_ref=write_fact(lane, "beta.json", environment_fact(
+            lane, candidate, "beta", "not_required", reason_code="ACCEPTANCE.BETA_OPTIONAL_BY_POLICY")),
+        expected_remote_oid=parent,
+    )
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t3
+def test_lane_worktree_publishes_without_moving_its_own_head(tmp_path: Path, source_receipt_boundary) -> None:
+    project, hub, remote, parent = canonical_layout(tmp_path)
+    lane, commit = lane_candidate(hub, project, "lane/engineering", parent, "engineering candidate\n")
+    admission_ref = lane_admission(lane, parent, commit)
+
+    result = json.loads(local_git_cas_publish(repository=lane, policy_path=POLICY, admission_ref=admission_ref).read_text())
+    assert (result["terminal"], result["beforeOid"], result["afterOid"], result["readbackOid"]) == ("published", parent, commit, commit)
+    assert git(project, "--git-dir", str(remote), "rev-parse", "refs/heads/dev1.0") == commit
+    # 发布不移动本 lane 的分支名/HEAD，也不移动 hub 的本地 dev1.0。
+    assert git(lane, "symbolic-ref", "--short", "HEAD") == "lane/engineering"
+    assert git(lane, "rev-parse", "HEAD") == commit
+    assert git(hub, "rev-parse", "refs/heads/dev1.0") == parent
+    assert result["publisherReceipt"]["sourceBranch"] == "refs/heads/lane/engineering"
+
+    # 同 parent 的第二条 lane 是 CAS loser：零写、零自动 merge/stash。
+    loser, loser_commit = lane_candidate(hub, project, "lane/ops", parent, "ops candidate\n")
+    loser_admission = lane_admission(loser, parent, loser_commit)
+    with pytest.raises(ScopedCandidateError, match="CAS_CONFLICT"):
+        local_git_cas_publish(repository=loser, policy_path=POLICY, admission_ref=loser_admission)
+    assert git(project, "--git-dir", str(remote), "rev-parse", "refs/heads/dev1.0") == commit
+    assert git(loser, "rev-parse", "HEAD") == loser_commit
+    assert git(loser, "stash", "list") == ""
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001.t3
+def test_seat_named_foreign_clone_cannot_publish(tmp_path: Path, source_receipt_boundary, monkeypatch) -> None:
+    project, hub, remote, parent = canonical_layout(tmp_path)
+    lane, commit = lane_candidate(hub, project, "lane/engineering", parent, "engineering candidate\n")
+    admission_ref = lane_admission(lane, parent, commit)
+    # 目录名看起来是规范座位，但 git-common-dir 不是政策 bare hub：外来 clone 零写。
+    foreign = project / "ops"
+    git(project, "clone", "-q", "-b", "dev1.0", str(remote), str(foreign))
+    shutil.copytree(lane / ".qwq_output", foreign / ".qwq_output", dirs_exist_ok=True)
+    shutil.copytree(lane / "quwoquan_ops", foreign / "quwoquan_ops", dirs_exist_ok=True)
+    monkeypatch.setattr(core_module(), "_remote_ref_oid", lambda *args: pytest.fail("no network before identity validation"))
+    with pytest.raises(ScopedCandidateError, match="canonical lane or integration worktree"):
+        local_git_cas_publish(repository=foreign, policy_path=POLICY,
+                              admission_ref=foreign / ".qwq_output" / admission_ref.relative_to(lane / ".qwq_output"))
+    assert git(project, "--git-dir", str(remote), "rev-parse", "refs/heads/dev1.0") == parent
+
+
+def core_module():
+    from quwoquan_ops.ci.scoped_candidate import core
+    return core
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-005.t2
+def test_head_candidate_supersedes_unpublished_same_worktree_claim(tmp_path: Path) -> None:
+    target, parent = repo(tmp_path)
+    _parent, first_commit = committed_candidate(target)
+    leftover = claim(target, parent, ["owned.txt", "foreign.txt"], writer="old-accept")
+    first_ref = build_head_candidate(
+        repository=target, policy_path=POLICY, commit=first_commit, expected_parent=parent,
+impact_plan_digest=DIGEST, writer_id="integration",
+        expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+    )
+    first = json.loads(first_ref.read_text())
+    (target / "unrelated.txt").write_text("receipt note\n")
+    git(target, "add", "unrelated.txt")
+    git(target, "commit", "-m", "unrelated head")
+    second_commit = git(target, "rev-parse", "HEAD")
+    second_ref = build_head_candidate(
+        repository=target, policy_path=POLICY, commit=second_commit, expected_parent=parent,
+impact_plan_digest=DIGEST, writer_id="integration",
+        expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+    )
+    second = json.loads(second_ref.read_text())
+    claims = {item["claimId"]: item for item in inspect_claims(repository=target, policy_path=POLICY)}
+    leftover_id = json.loads(leftover.read_text())["claimId"]
+    first_id = Path(first["claimRef"]).stem
+    second_id = Path(second["claimRef"]).stem
+    assert claims[leftover_id]["active"] is False
+    assert claims[first_id]["active"] is False
+    assert claims[second_id]["active"] is True
+    assert second["paths"] == ["owned.txt", "unrelated.txt"]
+    release = store_root(repository=target, policy_path=POLICY) / "releases" / f"{first_id}.json"
+    assert json.loads(release.read_text())["reason"] == "superseded_by_new_head"
+    with pytest.raises(ScopedCandidateError, match="CLAIM_CONFLICT"):
+        claim(target, parent, ["owned.txt"], writer="writer-2")
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-005.t2
+def test_head_candidate_does_not_supersede_different_parent_claim(tmp_path: Path) -> None:
+    target, parent = repo(tmp_path)
+    claim(target, parent, ["owned.txt"], writer="other-parent-writer")
+    git(target, "checkout", "-q", "-b", "side", parent)
+    (target / "side.txt").write_text("side\n")
+    git(target, "add", ".")
+    git(target, "commit", "-m", "side parent")
+    side_parent = git(target, "rev-parse", "HEAD")
+    (target / "owned.txt").write_text("side candidate\n")
+    git(target, "add", ".")
+    git(target, "commit", "-m", "side candidate")
+    side_commit = git(target, "rev-parse", "HEAD")
+    with pytest.raises(ScopedCandidateError, match="CLAIM_CONFLICT"):
+        build_head_candidate(
+            repository=target, policy_path=POLICY, commit=side_commit, expected_parent=side_parent,
+impact_plan_digest=DIGEST, writer_id="integration",
+            expires_at=(datetime.now(timezone.utc) + timedelta(hours=1)).isoformat(),
+        )

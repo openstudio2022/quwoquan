@@ -1871,12 +1871,16 @@ evidence-signing-bootstrap:
 		$$( [ "$${ROTATE:-0}" = "1" ] && printf -- '--rotate' ) $(EVIDENCE_SIGNING_ARGS)
 
 # lane 工作树验收：对 exact candidate（默认 HEAD，必须是当前 lane 分支 head）做本地 readiness，并签发
-# typed Alpha/Beta EnvironmentAcceptanceFact，终态 accepted 并产出 portable acceptance bundle；不 admit、不 publish。
+# typed Alpha/Beta EnvironmentAcceptanceFact，终态 accepted 并产出 portable acceptance bundle。
+# PUBLISH=1 在同一 run 继续 admit 并以 expected-old lease 把该 candidate non-force fast-forward 到远端
+# dev1.0、按 before|after|other 读回，终态 published；发布不移动本 lane HEAD，也不需要换工作区。
+# SYNC=1 在验收前 fetch 并把本 lane 对齐到已发布 origin/dev1.0 exact SHA：可 --ff-only 就 FF，已分叉时
+# 视本次显式请求为合并授权、只在本工作树 merge 同一 SHA，冲突或脏树重叠零写阻断，不 reset/stash/clean。
 # 默认不启 live：Alpha=ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV，Beta=ACCEPTANCE.BETA_OPTIONAL_BY_POLICY。
 # ALPHA=1 / BETA=1 才真跑对应环境；此时必填 RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION /
 # RELEASE_HANDOFF_REF。私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT。
 # 验收在产出 Data handoff 的 lane 工作树完成，release 不携带类别或命名就绪轨道。
-# 可选：BASELINE=<sha>、ALPHA=1、BETA=1、MERGED_LANES="lane/a lane/b"、CANDIDATE、
+# 可选：PUBLISH=1、SYNC=1、BASELINE=<sha>、ALPHA=1、BETA=1、MERGED_LANES="lane/a lane/b"、CANDIDATE、
 # READINESS_LEVEL=fast|scope、PROFILE=integration|smoke、INTEGRATE_ARGS 透传。
 # APP_PLATFORM / 设备 ID 只在 live Alpha 时使用；默认源码合入不要求设备。
 # CANDIDATE_REF=store-ref=sha256:digest 复用预先冻结候选，不再申请 claim。
@@ -1889,8 +1893,12 @@ accept:
 		if [ -z "$(RELEASE_HANDOFF_REF)" ]; then \
 			echo "[accept] GATE_BLOCK: live Alpha/Beta 时 RELEASE_HANDOFF_REF 必填" >&2; exit 2; fi; \
 	fi
+	@if [ "$${SYNC:-0}" = "1" ]; then \
+		PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/lane_worktree_commands.py align-published --merge-authorized; \
+	fi
 	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/integration_run.py \
 		--mode acceptance \
+		$$( [ "$${PUBLISH:-0}" = "1" ] && printf -- '--publish' ) \
 		--candidate "$(or $(CANDIDATE),HEAD)" \
 		$(if $(CANDIDATE_REF),--candidate-ref "$(CANDIDATE_REF)",) \
 		--app-platform "$(or $(APP_PLATFORM),all)" \
@@ -1908,7 +1916,10 @@ accept:
 		$$( [ "$${REUSE:-0}" = "1" ] && printf -- '--reuse' ) \
 		$(INTEGRATE_ARGS)
 
-# integration 工作区（分支 dev1.0，HEAD 已 ff 到 candidate）消费 lane 的 acceptance bundle：exact bytes 导入本工作树 store、
+# 等价两段形态：integration 工作区（分支 dev1.0，HEAD 已 ff 到 candidate）消费他树 acceptance bundle。
+# 日常默认路径是在产出 candidate 的 lane 直接 `make accept PUBLISH=1`，不必换工作区。
+# 本入口与 accept 的发布尾段共用同一 admission/CAS/readback；同一 candidate 任一时刻只允许一个 publisher。
+# exact bytes 导入本工作树 store、
 # 验签并复核 candidate 绑定与 expectedParent == 远端 dev1.0，然后 admit 并（PUBLISH=1 时）以 expected-old lease fast-forward
 # 发布到远端 dev1.0、按 before|after|other 读回。这里不启动任何环境、不需要 Data release 输入；Gamma 与 prod canary 在 publish 之后推进。
 # 必填：ACCEPTANCE_BUNDLE=<lane make accept 产出的 acceptance-bundle 目录>。可选：CANDIDATE=<sha>（默认 HEAD）、PUBLISH=1、INTEGRATE_ARGS 透传。

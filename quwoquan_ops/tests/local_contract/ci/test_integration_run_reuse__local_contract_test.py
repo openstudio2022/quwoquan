@@ -332,7 +332,7 @@ def acceptance_main(store: Path, monkeypatch: pytest.MonkeyPatch):
     lane = "refs/heads/lane/product-mainline"
     merged_lanes = [{"branch": lane, "commit": COMMIT}, {"branch": "refs/heads/lane/engineering", "commit": PARENT}]
     git_answers = {
-        "status": "", "rev-parse": COMMIT, "ls-remote": f"{PARENT}\trefs/heads/dev1.0", "show": TREE,
+        "status": "", "diff": "", "rev-parse": COMMIT, "ls-remote": f"{PARENT}\trefs/heads/dev1.0", "show": TREE,
     }
     monkeypatch.setattr(integration_run, "_git", lambda *args: git_answers[args[0]])
     monkeypatch.setattr(integration_run.subprocess, "run", lambda *args, **kwargs: SimpleNamespace(returncode=0))
@@ -701,7 +701,7 @@ def test_bundle_prevalidation_rejects_exact_binding_damage(signed_release_case, 
 def test_prevalidation_allows_candidate_before_head_ff_but_final_import_does_not(acceptance_main, monkeypatch, validate_only):
     setup = acceptance_main
     from quwoquan_ops.ci.scoped_candidate import core
-    monkeypatch.setattr(core, "validate_integration_publish_origin", mock.Mock())
+    monkeypatch.setattr(core, "validate_publish_worktree_origin", mock.Mock())
     def git(*args):
         if args[0] == "status":
             return ""

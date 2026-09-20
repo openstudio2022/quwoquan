@@ -12,7 +12,7 @@
 
 ### In Scope
 
-- `dev1.0 -> main` 五分钟源码 promotion、受信 publisher CAS、integration worktree 验真 acceptance bundle 后 non-force fast-forward 发布、不可变环境/资格/标签证据与 OCI digest-only 发布
+- `dev1.0 -> main` 五分钟源码 promotion、受信 publisher CAS、规范 linked worktree 持验真 admission 的 non-force fast-forward 发布、不可变环境/资格/标签证据与 OCI digest-only 发布
 - prod-hosted ssh-hosted + rootless Podman 单一执行面，modular-monolith-first 工作负载图谱，托管数据面
 - 同一 `prod-hosted` 内 `cluster member × deployment instance × replica` 可重复部署与聚合 CAS
 - Strangler split-ready 拆分与契约不变
@@ -33,7 +33,7 @@
 
 
 
-- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：lane 与 integration 都可构造 exact candidate；lane 在 Alpha（Beta 显式 opt-in）与 required 本地门禁通过后产出 bundle，唯一 integration worktree 验真 admission 后以受信 non-force fast-forward 通道发布 `origin/dev1.0`，不依赖远端 lane 或 lane PR；`main` 只接收 `dev1.0 -> main` 可用源码 promotion。
+- [`daily-merge-release-strategy`](./daily-merge-release-strategy/spec.md)：lane 与 integration 都可构造 exact candidate；lane 在 source-admitted required 本地门禁与 typed Alpha/Beta（默认 `not_required`，仅显式 opt-in 真跑）通过后产出 bundle，并可在同一工作树验真 admission 后以受信 non-force fast-forward 通道一条命令发布 `origin/dev1.0`，不依赖远端 lane、lane PR 或换工作区；`main` 只接收 `dev1.0 -> main` 可用源码 promotion。
 - [`gray-release-to-prod`](./gray-release-to-prod/spec.md)：**统一入口**：workflow 与人工命令最终都收敛到 `stackctl deploy --target prod-hosted ...`。
 - [`local-gamma-mirror`](./local-gamma-mirror/spec.md)：Gamma 只对精确 current `dev1.0` head 生产 IntegrationQualificationFact；不由 GitHub 执行，也不被 Alpha/Beta 或历史回执替代。
 - [`multi-environment-instance-isolation`](./multi-environment-instance-isolation/spec.md)：beta 云侧本地集成栈始终只允许**一套**，启动新实例前必须先停止旧实例再重启。
@@ -49,7 +49,7 @@
 ### REQ-001 本地质量、托管验真与标签驱动发布
 
 - Source writer 只生产绑定 exact candidate 的源码事实；不重叠文件可并行编辑，默认 Git index/commit/ref 与共享生成物仍独占串行。环境、设备、package 与外部 mutation 按各自实际资源授予唯一执行权，不使用跨环境全局互斥：云侧按 host-target 单实例，设备按 device/application 独占，构建只锁私有输出，独立 target 可持续并行。租约、executor fence、容量及 owned cleanup 由 [`multi-environment-instance-isolation` REQ-001/004](./multi-environment-instance-isolation/spec.md#req-004) 拥有；资格前驱与 Prod 授权顺序不变。
-- lane `make accept` 必须在远端 `dev1.0` 移动前对 exact candidate 完成去重后的 required 本地检查（含 Lane Gate 检查集合）、Alpha 与显式 opt-in Beta，产出 portable acceptance bundle；缺 required 检查或事实不得 accepted。唯一 `integration/dev1.0` 工作区在移动 HEAD 前校验 bundle 与远端 parent，通过后才本地 FF、admit/publish。最终 publisher 独立验证 admission 自摘要、exact 前驱/签名/有效期、candidate/tree、before/after、规范路径/remote 与 ancestry，以 expected-old non-force FF 发布并读回；无 bundle、伪造/漂移 admission、仅 `QWQ_ACCEPTANCE_PUBLISH=1` 或非快进均零远端写入。`integrationEligibility` 仅由 exact admission 建立，push 不重新签发环境及后续资格。日常 dev 合入只要求本地 accept/bundle/integrate/hook 强制验真，不重跑完整套件；专用 publisher/broker 与 hosted 资格强制保持 daily-merge OPEN-004 `track`，不阻塞该本地通道。按授权撤除 dev 旧 `04. Lane Gate` required check，已可达已发布 dev 且未发布增量已保全的远端 lane 可删除，无需等待替代门。服务端普通授权凭据仍可 FF，不能保证 Alpha；dev 禁删/禁 non-FF 和 main promotion 强制继续保留。晋级仍须已发布 current dev head 的 Gamma/IQF → `dev1.0 -> main` PR/Delivery Gate → MainSourceSeal → 受管 system backsync → 已发布 dev exact SHA → 本地 lane，同步不得传播本地未发布 dev。
+- lane `make accept` 必须在远端 `dev1.0` 移动前对 exact candidate 完成去重后的 required 本地检查（source-admitted Lane Gate 闭集：静态治理、ImpactPlan/changed boundary、canonical Code Health Delta；不含 `lane_gate:ops-local-contract:*`、`focused:dart`、`focused:go:*`、`scope_build:*`）与 typed Alpha/Beta（默认 `not_required`：Alpha=`ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV`，Beta=`ACCEPTANCE.BETA_OPTIONAL_BY_POLICY`；仅显式 `--alpha`/`--beta` 真跑），产出 portable acceptance bundle；缺 required 源码检查或 typed 环境事实不得 accepted。显式 `PUBLISH=1` 时同一 run 在同一 lane 工作树继续 admit 并发布，不换工作区、不移动 lane HEAD；`integration/dev1.0` 消费他树 bundle 的两段式是同一 admission/CAS 通道的等价形态，不是第二真相源。最终 publisher 独立验证 admission 自摘要、exact 前驱/签名/有效期、candidate/tree、before/after、规范 linked worktree 与 hub origin/remote 及 ancestry，以 expected-old non-force FF 发布并读回；缺/伪造/漂移 admission、外来 clone 或非规范 hub/origin、仅 `QWQ_ACCEPTANCE_PUBLISH=1` 或非快进均零远端写入。`integrationEligibility` 仅由 exact admission 建立，push 不重新签发环境及后续资格。日常 dev 合入只要求本地 accept/bundle/integrate/hook 强制验真，不重跑完整套件；专用 publisher/broker 与 hosted 资格强制保持 daily-merge OPEN-004 `track`，不阻塞该本地通道。按授权撤除 dev 旧 `04. Lane Gate` required check，已可达已发布 dev 且未发布增量已保全的远端 lane 可删除，无需等待替代门。服务端普通授权凭据仍可 FF，不能保证 Alpha；dev 禁删/禁 non-FF 和 main promotion 强制继续保留。晋级仍须已发布 current dev head 的 Gamma/IQF → `dev1.0 -> main` PR/Delivery Gate → MainSourceSeal → 受管 system backsync → 已发布 dev exact SHA → 本地 lane，同步不得传播本地未发布 dev。
 - integration scheduler 只对 current exact `dev1.0` head 执行 Gamma，封存 `IntegrationQualificationFact`；Gamma 必须绑定同一 candidate/tree 和 Alpha/Beta exact-byte predecessor，不得无差别重跑相同 CaseResult。新 head 使旧事实不再适用于当前 promotion。
 - `dev1.0 -> main` 的唯一 required context 只验证 branch/head/base/merge tree、审批、ruleset、IntegrationQualificationFact、签名、时效、policy/workflow pin 与 secret/generated 边界；不得安装语言工具链、构建、运行源码测试、ABG、Provider live、设备或环境命令。合入后 `MainSourceSeal` 只授予 `source-admitted`，不授予发布资格。
 - promotion 的 required evidence 必须包含当前 `main baseSha → dev1.0 headSha/tree` 完整差异的 canonical `full` Code Health Delta；与 canonical ImpactPlan、policy、implementation 和 evidence fingerprint 精确绑定。包装层 `status=passed`、最后一次 push 健康事实或仅 IQF 均不能替代完整 promotion range。健康报告缺失、字节漂移、错误 range/tree、`fast` 或 `GATE_BLOCK` 必须在 admission 前拒绝；`PR_WARN` 只消费既有 Review health disposition contract 对当前 report/finding 的裁决，缺失裁决时 fail closed，不建立第二评分或裁决 schema。
@@ -81,7 +81,7 @@
 ### REQ-003 验证执行面与证据分层
 
 - Alpha/Beta/Gamma 的正式 producer 必须位于受控本地 Environment Ops 执行面；GitHub-hosted 与 GitHub self-hosted workflow 均不得执行 ABG、Data mutation、设备 Journey 或环境 cleanup。
-- Alpha 是默认真实依赖最小闭包，也是 lane 合入 `dev1.0` 的唯一必跑环境；Beta 只在 lane 验收显式 opt-in 时真跑，否则不按集成深度分流，统一以政策原因码 `ACCEPTANCE.BETA_OPTIONAL_BY_POLICY` 签绑定 candidate 与 ImpactPlan 的 typed `not_required` fact，不能从 skipped 推导；Gamma 只对 exact current `dev1.0` head 执行，与可选 prod canary 一起构成 integration 侧仅有的两级集成验证（见 [L2 DEC-014](./design.md#dec-014)）。
+- 写入 `origin/dev1.0` 是 source-admitted：默认不跑 live Alpha，只签 typed `not_required`（`ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV`）；live Alpha 仅显式 opt-in，证明已发布源码能装能起，不是日常合入必跑门。Beta 只在 lane 验收显式 opt-in 时真跑，否则不按集成深度分流，统一以政策原因码 `ACCEPTANCE.BETA_OPTIONAL_BY_POLICY` 签绑定 candidate 与 ImpactPlan 的 typed `not_required` fact，不能从 skipped 推导；Gamma 只对 exact current `dev1.0` head 执行，与可选 prod canary 一起构成 integration 侧仅有的两级集成验证（见 [L2 DEC-014](./design.md#dec-014)）。
 - 环境 PASS 仅在 package identity、startup、full health、受影响 CaseResult、readback、inspect/doctor 与本次 owned cleanup/lease closure 全部闭合后封存唯一 EnvironmentAcceptanceFact；新建资源按授权 teardown 并证明端口释放，复用的健康 runtime 保持运行且只释放本次 exact lease，不为签发事实 down 其他 target。Beta/Gamma 仍引用前驱 exact bytes；Alpha 离线 App 结果不能替代 Alpha 服务 gate 或环境资格。
 - 模拟器或仿真器只支持本地集成事实并显式 `nonPromotable`；iOS Simulator 验收不产生真机或分发资格。最终签名包的 Android/iOS 物理设备接受属于含 App 移动包交付目标的 RC qualification，不进入五分钟 promotion，不因服务资格通过而补写，也不重跑 ABG 业务矩阵。
 - GitHub 只验证不可变证据并承担 RC build/sign/attest、资格归约、正式 tag admission 和 Prod approval/transaction。普通 source push、lane PR、promotion PR 不得触发 packaging、coverage 全量、设备矩阵、Provider live 或 environment workflow。
@@ -128,7 +128,7 @@
 
 - GIVEN exact candidate、当前 refs、ImpactPlan、产品版本目标及其 owner evidence 均有效。
 - WHEN writer 请求集成、promotion、RC qualification、正式标签选择或 Prod 发布。
-- THEN lane 在远端 ref 移动前对同一 exact candidate 完成 required 检查与 Alpha（Beta 显式 opt-in）并产出 bundle；integration 在本地 FF 前验真 bundle/parent，最终 publisher 独立验真 admission 后才 expected-old FF 发布 `dev1.0`。缺 bundle、仅 env=1、前驱/身份漂移或 non-FF 均零写；这些拒绝由本地受管入口执行，不推导服务端 Alpha 强制；hosted broker 缺口为 OPEN-track，撤 dev 旧 required check 后仍须保留禁删/禁 non-FF 与 main promotion。Gamma 仅对已发布 current exact dev head 封存资格。promotion 后 MainSourceSeal 由受管 system backsync 消费，读回 dev `after` 才回同步本地 lane。
+- THEN lane 在远端 ref 移动前对同一 exact candidate 完成 source-admitted required 检查与 typed Alpha/Beta（默认 `not_required`；仅显式 opt-in 真跑）并产出 bundle；integration 在本地 FF 前验真 bundle/parent，最终 publisher 独立验真 admission 后才 expected-old FF 发布 `dev1.0`。缺 bundle、仅 env=1、前驱/身份漂移或 non-FF 均零写；这些拒绝由本地受管入口执行，不推导服务端 Alpha 强制；hosted broker 缺口为 OPEN-track，撤 dev 旧 required check 后仍须保留禁删/禁 non-FF 与 main promotion。Gamma 仅对已发布 current exact dev head 封存资格。promotion 后 MainSourceSeal 由受管 system backsync 消费，读回 dev `after` 才回同步本地 lane。
 - THEN promotion admission 读取 required evidence 内部 exact bytes 并验证完整 base/head/tree 的 canonical full 健康报告：缺失、stale、wrong-range、只覆盖最后 push、fast、blocker 或未裁决 PR_WARN 均拒绝；current full PASS 或按既有 Review contract 裁决通过的 PR_WARN 才可继续。
 - THEN promotion workflow 只验不可变事实并在预算内生成 `MainSourceSeal`；main 前移既不启动资格构建，也不改变既有 RC、stable tag 或 Prod active digest。
 - THEN RC 对精确 main 提交按请求声明交付目标及真实依赖只构建和签名一次；资格归约者物化并验证适用的 factory canonical bytes 及 Service Prod runtime config/deployment bundle 闭包，生成唯一 `CandidateMaterialManifest` 后，才以对应目标的真实证据生成限定范围的 `QualificationFact`；含 App 移动包目标时最终签名包与物理设备事实仍必需。

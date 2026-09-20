@@ -188,6 +188,8 @@ def _build_parser() -> argparse.ArgumentParser:
 
     qualify = commands.add_parser("qualify")
     _add_exact(qualify, "--publish-result", required=True)
+    _add_exact(qualify, "--alpha-acceptance", required=True)
+    _add_exact(qualify, "--beta-acceptance", required=True)
     _add_exact(qualify, "--gamma-acceptance", required=True)
     qualify.add_argument("--expected-dev-head", required=True)
     qualify.add_argument("--expected-dev-tree", required=True)
@@ -634,18 +636,30 @@ def _handle_qualify(args: argparse.Namespace) -> dict[str, object]:
         expected_head=args.expected_dev_head,
         expected_tree=args.expected_dev_tree,
     )
+    alpha = _load_json_exact(args.store_root, args.alpha_acceptance)
+    beta = _load_json_exact(args.store_root, args.beta_acceptance)
     gamma = _load_json_exact(args.store_root, args.gamma_acceptance)
     candidate = gamma.get("candidate")
     if (
-        gamma.get("environment") != "gamma"
-        or gamma.get("status") != "passed"
+        any(
+            fact.get("environment") != environment
+            or fact.get("status") != "passed"
+            for environment, fact in (("alpha", alpha), ("beta", beta), ("gamma", gamma))
+        )
         or not isinstance(candidate, Mapping)
+        or any(
+            fact.get("candidate") != candidate
+            for fact in (alpha, beta, gamma)
+        )
         or candidate.get("commit") != current["head"]
         or candidate.get("tree") != current["tree"]
+        or alpha.get("predecessor") is not None
+        or beta.get("predecessor") != args.alpha_acceptance
+        or gamma.get("predecessor") != args.beta_acceptance
     ):
         raise EnvironmentExecutionError(
             "ENVIRONMENT_EXECUTION.GAMMA_IDENTITY_DRIFT",
-            "Gamma acceptance is not for current exact dev1.0 identity",
+            "Alpha/Beta/Gamma acceptances are not the current exact passed chain",
         )
     signer, environment_verifier, expected_environment_signers = _qualification_crypto(
         args
@@ -654,6 +668,8 @@ def _handle_qualify(args: argparse.Namespace) -> dict[str, object]:
         repository=args.repository,
         store_root=args.store_root,
         publish_result_ref=args.publish_result,
+        alpha_acceptance_ref=args.alpha_acceptance,
+        beta_acceptance_ref=args.beta_acceptance,
         gamma_acceptance_ref=args.gamma_acceptance,
         signer_identity=args.qualification_signer_identity,
         signer=_published_dev_signer(args.repository, current, signer),

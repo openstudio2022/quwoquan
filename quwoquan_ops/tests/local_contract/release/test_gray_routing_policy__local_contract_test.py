@@ -42,6 +42,35 @@ class RolloutPolicyContractTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    # spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod/spec.md#gwt-002
+    def test_validation_ring_disabled_without_hosted_binding(self) -> None:
+        self.assertIs(self.policy["validationRing"]["enabled"], False)
+        self.assertNotIn("route", self.policy["validationRing"])
+
+    def test_validation_ring_rejects_binding_and_version_drift(self) -> None:
+        policy = deepcopy(self.policy)
+        artifact = "sha256:" + "a" * 64
+        policy["validationRing"] = {"enabled": True, "requireIp": True, "route": {
+            "target": "candidate", "deploymentInstance": "prevalidate", "candidateId": policy["candidateDigest"],
+            "artifactDigest": artifact, "runtimeConfigDigest": "sha256:" + "c" * 64, "publicExposure": False,
+        }}
+        policy["appVersions"] = [{"platform": "ios", "displayVersion": "1.9.0", "buildNumber": "19001", "artifactDigest": artifact}]
+        policy["internalCanary"]["trustedIpCidrs"] = ["203.0.113.0/24"]
+        self.assertEqual(self.verify.validate_policy(policy), [])
+        for whitelist in ({"accountIds": ["allowed"]}, {"trustedIpCidrs": ["203.0.113.0/24"]}, {}, {"accountIds": [], "trustedIpCidrs": []}):
+            configured = deepcopy(policy)
+            configured["validationRing"]["requireIp"] = False
+            configured["internalCanary"] = whitelist
+            # 省略/空配置合法性与运行态拒绝是不同边界，matcher 测试覆盖实际裁决。
+            self.assertEqual(self.verify.validate_policy(configured), [])
+        for field, value in (("candidateId", "sha256:" + "b" * 64), ("publicExposure", True), ("deploymentInstance", "stable")):
+            with self.subTest(field=field):
+                changed = deepcopy(policy)
+                changed["validationRing"]["route"][field] = value
+                self.assertTrue(self.verify.validate_policy(changed))
+        policy["appVersions"][0]["displayVersion"] = "1.9.0-rc.1"
+        self.assertTrue(self.verify.validate_policy(policy))
+
     def test_fixed_platform_percentages_and_terminal_audience(self) -> None:
         self.assertEqual(
             [self.policy["stages"][stage]["basisPoints"] for stage in ("canary", "5", "20", "50", "100")],

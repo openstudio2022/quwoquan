@@ -8,6 +8,7 @@ transport-only; stable/candidate allocation belongs to API Edge.
 from __future__ import annotations
 
 import re
+import ipaddress
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
@@ -91,11 +92,57 @@ def _selector_is_subset(
     return previous_values.issubset(current_values)
 
 
+def _validate_validation_ring(policy: dict, failures: list[str]) -> None:
+    ring = policy.get("validationRing")
+    if ring is None:
+        return
+    if not isinstance(ring, dict) or not isinstance(ring.get("enabled"), bool):
+        failures.append("policy.validationRing.enabled must be a boolean")
+        return
+    if not ring["enabled"]:
+        return
+    if policy.get("stage") != "canary" or not isinstance(ring.get("requireIp"), bool):
+        failures.append("validation ring requires canary stage and explicit requireIp policy")
+    route = ring.get("route")
+    if not isinstance(route, dict):
+        failures.append("validation ring route binding is required")
+        return
+    if route.get("target") != "candidate" or route.get("deploymentInstance") != "prevalidate" or route.get("publicExposure") is not False:
+        failures.append("validation ring must be private candidate/prevalidate")
+    if route.get("candidateId") != policy.get("candidateDigest"):
+        failures.append("validation ring candidate digest differs from campaign")
+    for key in ("candidateId", "artifactDigest", "runtimeConfigDigest"):
+        if not isinstance(route.get(key), str) or SHA256_PATTERN.fullmatch(route[key]) is None:
+            failures.append(f"validation ring route.{key} must be canonical sha256")
+    versions = policy.get("appVersions")
+    if not isinstance(versions, list) or not versions:
+        failures.append("validation ring appVersions must be non-empty")
+        versions = []
+    seen: set[tuple[str, str, str]] = set()
+    for version in versions:
+        if not isinstance(version, dict):
+            failures.append("validation ring app version must be an object")
+            continue
+        identity = tuple(str(version.get(key, "")) for key in ("platform", "displayVersion", "buildNumber"))
+        if identity[0] not in ALLOWED_PLATFORMS or re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", identity[1]) is None or re.fullmatch(r"[1-9][0-9]*", identity[2]) is None:
+            failures.append("validation ring app version identity is invalid")
+        if identity in seen or version.get("artifactDigest") != route.get("artifactDigest"):
+            failures.append("validation ring app identity duplicate or artifact drift")
+        seen.add(identity)
+    canary = policy.get("internalCanary") or {}
+    for raw in _as_strings(canary.get("trustedIpCidrs", []), "policy.internalCanary.trustedIpCidrs", failures):
+        try:
+            ipaddress.ip_network(raw, strict=False)
+        except ValueError:
+            failures.append("validation ring trusted IP CIDR is invalid")
+
+
 def validate_policy(policy: object) -> list[str]:
     failures: list[str] = []
     if not isinstance(policy, dict):
         return ["policy must be an object"]
 
+    _validate_validation_ring(policy, failures)
     if not isinstance(policy.get("enabled"), bool):
         failures.append("policy.enabled must be a boolean")
     for field in ("campaignId", "allocationKeyId"):
@@ -122,14 +169,14 @@ def validate_policy(policy: object) -> list[str]:
         failures.append("policy.internalCanary must be an object")
         canary = {}
     account_ids = _as_strings(
-        canary.get("accountIds"), "policy.internalCanary.accountIds", failures
+        canary.get("accountIds", []), "policy.internalCanary.accountIds", failures
     )
     device_ids = _as_strings(
-        canary.get("deviceActorIds"),
+        canary.get("deviceActorIds", []),
         "policy.internalCanary.deviceActorIds",
         failures,
     )
-    if not account_ids and not device_ids:
+    if not account_ids and not device_ids and not (isinstance(policy.get("validationRing"), dict) and policy["validationRing"].get("enabled") is True):
         failures.append("policy.internalCanary requires at least one trusted subject")
 
     stages = policy.get("stages")
@@ -231,9 +278,11 @@ def validate_policy(policy: object) -> list[str]:
         if not str(synthetic.get("path") or "").startswith("/"):
             failures.append("policy.syntheticCanary.path must be absolute")
         headers = synthetic.get("headers")
-        if not isinstance(headers, dict) or str(
+        ring_enabled = isinstance(policy.get("validationRing"), dict) and policy["validationRing"].get("enabled") is True
+        # 正式 canary 的合成身份约束不能强迫可选验证环配置账号白名单。
+        if not ring_enabled and (not isinstance(headers, dict) or str(
             headers.get("X-Release-Canary-Actor") or ""
-        ) not in account_ids:
+        ) not in account_ids):
             failures.append(
                 "synthetic canary actor must match internalCanary.accountIds"
             )

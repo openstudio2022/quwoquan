@@ -14,9 +14,17 @@ policy:
   candidateUpstream: http://host.containers.internal:29000
   assignmentTtlDaysAfterCampaign: 30
 
+  # prod-sim 是 prod-hosted/prevalidate 的 non-promotable validation ring。
+  # 只有同时满足版本、用户、可信 IP 与 candidate route 绑定时才允许进入。
+  appVersions: []
   internalCanary:
     accountIds: [ops-release-canary]
     deviceActorIds: []
+    trustedIpCidrs: []
+  # 缺少 hosted route/readback 与真实版本物料，保持关闭；不得用占位摘要开启。
+  validationRing:
+    enabled: false
+    requireIp: true
 
   stages:
     canary:

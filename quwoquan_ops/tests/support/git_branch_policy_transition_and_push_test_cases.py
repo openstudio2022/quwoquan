@@ -278,6 +278,30 @@ def test_pre_push_allows_matching_integration_worktree_fast_forward(
     assert calls == [(before, after)]
 
 
+def test_pre_push_allows_exact_candidate_sha_from_a_lane_worktree(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # 一条命令发布推的是 `<candidate-sha>:refs/heads/dev1.0`；座位由 admission 验真承担。
+    import quwoquan_ops.gate.verify_git_branch_policy as module
+    monkeypatch.setattr(module, "_verify_acceptance_update", lambda *args: None)
+    monkeypatch.setattr(module, "_git_is_ancestor", lambda ancestor, descendant: True)
+
+    before, after = "b" * 40, "a" * 40
+    assert pre_push_issues(
+        policy=_repository_policy(),
+        current_branch="lane/engineering",
+        update_lines=[f"{after} {after} refs/heads/dev1.0 {before}\n"],
+        environment={"QWQ_ACCEPTANCE_PUBLISH": "1"},
+    ) == []
+    # 同一 lane 用分支名推 dev1.0 仍是 direct push，不因发布座位放宽而合法。
+    assert any("active integration branch 'dev1.0'" in issue for issue in pre_push_issues(
+        policy=_repository_policy(),
+        current_branch="lane/engineering",
+        update_lines=[_update(local_branch="lane/engineering", remote_branch="dev1.0")],
+        environment={},
+    ))
+
+
 def test_pre_push_preserves_parse_issue_order_before_update_decisions() -> None:
     issues = pre_push_issues(
         policy=_repository_policy(), current_branch="lane/engineering",

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ type Subject struct {
 	Platform      string
 	AppVersion    string
 	AppBuild      string
+	ClientIP      string
 	Region        string
 	Carrier       string
 }
@@ -97,6 +99,21 @@ func (evaluator *Evaluator) Decide(ctx context.Context, subject Subject) (Decisi
 	if err != nil {
 		return Decision{}, err
 	}
+	if evaluator.policy.ValidationRing.Enabled && !evaluator.subjectMatchesInternalCanary(subject) {
+		return Decision{
+			Target: domain.TargetStable, Reason: "internal_canary_conditions_not_met", SubjectDigest: subjectDigest,
+		}, nil
+	}
+	if evaluator.policy.ValidationRing.Enabled {
+		if !evaluator.appVersionMatches(subject) {
+			return Decision{
+				Target: domain.TargetStable, Reason: "app_version_not_allowed", SubjectDigest: subjectDigest,
+			}, nil
+		}
+		return Decision{
+			Target: domain.TargetCandidate, Reason: "validation_ring_match", SubjectDigest: subjectDigest,
+		}, nil
+	}
 	existing, err := evaluator.store.IsCandidate(
 		ctx, evaluator.policy.CampaignID, subjectDigest,
 	)
@@ -122,10 +139,13 @@ func (evaluator *Evaluator) Decide(ctx context.Context, subject Subject) (Decisi
 		strings.TrimSpace(subject.Platform), strings.TrimSpace(subject.AppVersion),
 		strings.TrimSpace(subject.Region), strings.TrimSpace(subject.Carrier),
 	)
-	candidate := whitelisted || (eligible && bucket < stage.BasisPoints)
+	versionMatch := evaluator.appVersionMatches(subject)
+	candidate := versionMatch && (whitelisted || (eligible && bucket < stage.BasisPoints))
 	if !candidate {
 		reason := "bucket_outside_threshold"
-		if !eligible {
+		if !versionMatch {
+			reason = "app_version_not_allowed"
+		} else if !eligible {
 			reason = "audience_not_eligible"
 		}
 		return Decision{
@@ -144,6 +164,47 @@ func (evaluator *Evaluator) Decide(ctx context.Context, subject Subject) (Decisi
 	return Decision{
 		Target: domain.TargetCandidate, Bucket: bucket, Reason: reason, SubjectDigest: subjectDigest,
 	}, nil
+}
+
+func (evaluator *Evaluator) subjectMatchesInternalCanary(subject Subject) bool {
+	accounts := evaluator.policy.InternalCanary.AccountIDs
+	devices := evaluator.policy.InternalCanary.DeviceActorIDs
+	ips := evaluator.policy.InternalCanary.TrustedIPCidrs
+	// nil 表示未配置；显式空列表表示拒绝全部，不与省略混同。
+	userConfigured := accounts != nil || devices != nil
+	ipConfigured := ips != nil
+	if !userConfigured && !ipConfigured {
+		return false
+	}
+	if evaluator.policy.ValidationRing.RequireIP && !ipConfigured {
+		return false
+	}
+	userMatch := contains(accounts, subject.AccountID) || contains(devices, subject.DeviceActorID)
+	ipMatch := false
+	if parsed, err := netip.ParseAddr(strings.TrimSpace(subject.ClientIP)); err == nil {
+		for _, raw := range ips {
+			prefix, prefixErr := netip.ParsePrefix(strings.TrimSpace(raw))
+			if prefixErr == nil && prefix.Contains(parsed) {
+				ipMatch = true
+				break
+			}
+		}
+	}
+	return (!userConfigured || userMatch) && (!ipConfigured || ipMatch)
+}
+
+func (evaluator *Evaluator) appVersionMatches(subject Subject) bool {
+	if !evaluator.policy.ValidationRing.Enabled && len(evaluator.policy.AppVersions) == 0 {
+		return true
+	}
+	for _, version := range evaluator.policy.AppVersions {
+		if version.Platform == strings.TrimSpace(subject.Platform) &&
+			version.DisplayVersion == strings.TrimSpace(subject.AppVersion) &&
+			version.BuildNumber == strings.TrimSpace(subject.AppBuild) {
+			return true
+		}
+	}
+	return false
 }
 
 func (evaluator *Evaluator) Ready(ctx context.Context) error {

@@ -41,7 +41,12 @@ def test_local_accept_checks_remain_independent_of_hosted_readback():
     plan = bind_source_health_plan(build_impact_plan(["quwoquan_ops/cli/integration_run.py"], level="fast"),
                                   mode="push", base="a" * 40, head="b" * 40)
     assert not any("verify_hosted_integration_ruleset.py" in argument for check in plan["checks"] for argument in check["command"])
-    assert len([check for check in plan["checks"] if check["id"].startswith("lane_gate:ops-local-contract:")]) == 4
+    # 四片仍由 generator 产出供 hosted 消费，但不进入 source-admitted 冻结闭集（见 REQ-002 与
+    # test_lane_gate_acceptance 的闭集断言）。
+    from quwoquan_ops.ci.local_readiness_planner import _lane_gate_checks
+    generated = _lane_gate_checks(base="a" * 40, head="b" * 40, paths=["quwoquan_ops/cli/integration_run.py"])
+    assert len([check for check in generated if check["id"].startswith("lane_gate:ops-local-contract:")]) == 4
+    assert not any(check["id"].startswith("lane_gate:ops-local-contract:") for check in plan["checks"])
 
 
 def test_branch_policy_retires_only_dev_hosted_required_checks():

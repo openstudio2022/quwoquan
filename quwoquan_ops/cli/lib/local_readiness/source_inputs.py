@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import contextlib
+import fcntl
+import json
 import os
 import posixpath
 import re
@@ -404,6 +406,115 @@ def _capsule_entries(repo_root: Path, *, mode: str, push_updates: list[dict[str,
     raise _core.LocalReadinessError(f"mode={mode} 不使用 immutable capsule")
 
 
+def _capsule_tree_digest(entries: list[dict[str, str]]) -> str:
+    payload = [[entry["path"], entry["mode"], entry["blob"]] for entry in entries]
+    return _core.canonical_digest({"schema": "local-readiness-capsule-tree-v1", "entries": payload}).removeprefix("sha256:")
+
+
+def _copy_capsule_tree(source_root: Path, dest_root: Path, entries: list[dict[str, str]]) -> None:
+    """把已物化的 capsule 文件拷到另一棵树；不走 git cat-file。"""
+    for entry in entries:
+        relative, mode = entry["path"], entry["mode"]
+        destination = _core._safe_capsule_destination(dest_root, relative)
+        source = source_root / relative
+        if mode == "120000":
+            os.symlink(os.readlink(source), destination)
+            continue
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        src_fd = os.open(source, flags)
+        try:
+            dest_flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+            dest_fd = os.open(destination, dest_flags, 0o700 if mode == "100755" else 0o600)
+            try:
+                with os.fdopen(dest_fd, "wb") as handle, os.fdopen(src_fd, "rb") as reader:
+                    dest_fd = -1
+                    src_fd = -1
+                    handle.write(reader.read())
+                    handle.flush()
+                    os.fsync(handle.fileno())
+            finally:
+                if dest_fd >= 0:
+                    os.close(dest_fd)
+        finally:
+            if src_fd >= 0:
+                os.close(src_fd)
+
+
+def _valid_capsule_cache(cache_root: Path, entries: list[dict[str, str]]) -> bool:
+    manifest = cache_root / "manifest.json"
+    files = cache_root / "files"
+    if not manifest.is_file() or manifest.is_symlink() or not files.is_dir() or files.is_symlink():
+        return False
+    try:
+        body = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    expected = [[entry["path"], entry["mode"], entry["blob"]] for entry in entries]
+    if body.get("entries") != expected:
+        return False
+    for path, mode, _blob in expected:
+        item = files / path
+        try:
+            metadata = item.lstat()
+        except FileNotFoundError:
+            return False
+        if mode == "120000":
+            if not stat.S_ISLNK(metadata.st_mode):
+                return False
+        elif not stat.S_ISREG(metadata.st_mode):
+            return False
+    return True
+
+
+def _populate_capsule_worktree(
+    *,
+    repo_root: Path,
+    capsule: Path,
+    entries: list[dict[str, str]],
+    state_root: Path,
+) -> None:
+    cache_root = _core._ensure_secure_directory(
+        state_root / "process/capsules" / _capsule_tree_digest(entries),
+        label="local readiness capsule cache",
+    )
+    lock_path = cache_root / "lock"
+    lock_fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+        files = cache_root / "files"
+        if _valid_capsule_cache(cache_root, entries):
+            _copy_capsule_tree(files, capsule, entries)
+            return
+        if files.exists():
+            shutil.rmtree(files)
+        files.mkdir(mode=0o700)
+        for entry in entries:
+            _core._materialize_capsule_entry(repo_root, files, entry)
+        manifest = {
+            "schema": "local-readiness-capsule-tree-v1",
+            "entries": [[entry["path"], entry["mode"], entry["blob"]] for entry in entries],
+        }
+        encoded = json.dumps(manifest, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+        manifest_path = cache_root / "manifest.json"
+        if manifest_path.exists() or manifest_path.is_symlink():
+            manifest_path.unlink()
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        fd = os.open(manifest_path, flags, 0o600)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as handle:
+                fd = -1
+                handle.write(encoded)
+                handle.flush()
+                os.fsync(handle.fileno())
+        finally:
+            if fd >= 0:
+                os.close(fd)
+        _copy_capsule_tree(files, capsule, entries)
+    finally:
+        fcntl.flock(lock_fd, fcntl.LOCK_UN)
+        os.close(lock_fd)
+
+
 @contextlib.contextmanager
 def source_execution_root(
     *,
@@ -427,8 +538,7 @@ def source_execution_root(
     try:
         os.chmod(container, 0o700)
         capsule.mkdir(mode=0o700)
-        for entry in entries:
-            _core._materialize_capsule_entry(repo_root, capsule, entry)
+        _populate_capsule_worktree(repo_root=repo_root, capsule=capsule, entries=entries, state_root=state_root)
 
         initialized = subprocess.run(
             ["git", "init", "--bare", str(git_dir)],

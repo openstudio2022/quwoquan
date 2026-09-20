@@ -73,6 +73,15 @@ func TestValidateAndLoadRolloutConfigFailsClosedInProd(t *testing.T) {
 	}
 }
 
+// spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod/spec.md#gwt-002
+func TestValidationRingRuntimeRejectsUnverifiedHostedRouteReadback(t *testing.T) {
+	path, digest := writeRolloutPolicyDocument(t, validationPolicy())
+	config := validEnabledRolloutConfig(path, digest)
+	if err := rolloutapp.ValidateAndLoadRuntimeConfig(&config, "prod", "/release/config.yaml", rolloutRequiredUpstreams); err == nil || !strings.Contains(err.Error(), "verified hosted route readback") {
+		t.Fatalf("unverified route activation accepted: %v", err)
+	}
+}
+
 func TestDisabledNonProdRolloutRejectsCandidateRoutes(t *testing.T) {
 	config := rolloutapp.RuntimeConfig{
 		CandidateUpstreams: map[string]string{"content": "http://candidate:18080"},

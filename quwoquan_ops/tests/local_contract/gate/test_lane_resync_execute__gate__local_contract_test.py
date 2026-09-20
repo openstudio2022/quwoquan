@@ -122,6 +122,48 @@ def test_skipped_lane_keeps_head_index_and_all_worktree_bytes(hub, state, expect
         assert result.overlap == ("shared.txt",)
 
 
+def _align(hub, lane: Path, *, merge_authorized: bool = False) -> dict[str, object]:
+    return lane_worktree_commands.align_published(
+        worktree=lane, merge_authorized=merge_authorized, policy=_policy(hub),
+        project_root=hub["bare"].parent, fetch=False,
+    )
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-005.t1
+def test_align_published_covers_behind_ahead_and_diverged(hub) -> None:
+    lane, target = hub["lane"], _git(hub["bare"], "rev-parse", PUBLISHED)
+    behind = _align(hub, lane)
+    assert (behind["outcome"], behind["after"]) == ("ff_done", target)
+    # 已含已发布 SHA 是常态，不是错误，也不再移动 ref。
+    ahead_head = _commit(lane, "lane-only.txt", "lane\n", "new lane commit")
+    ahead = _align(hub, lane)
+    assert (ahead["outcome"], ahead["after"]) == ("ahead", ahead_head)
+    assert _git(lane, "rev-parse", "HEAD") == ahead_head
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-005.t1
+@pytest.mark.parametrize("authorized", [False, True])
+def test_align_published_diverged_requires_authorization_and_stays_zero_write_on_conflict(hub, authorized) -> None:
+    lane = hub["lane"]
+    _commit(lane, "shared.txt", "lane conflicting\n", "lane touches the same path")
+    before = _snapshot(lane)
+    result = _align(hub, lane, merge_authorized=authorized)
+    assert result["outcome"] == ("merge_conflict" if authorized else "skipped_diverged")
+    assert _snapshot(lane) == before
+
+
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-005.t1
+def test_align_published_merges_authorized_divergence_without_touching_other_lanes(hub) -> None:
+    lane = hub["lane"]
+    lane_head = _commit(lane, "lane-only.txt", "lane\n", "unpublished lane work")
+    integration_before = _snapshot(hub["integration"])
+    result = _align(hub, lane, merge_authorized=True)
+    assert result["outcome"] == "merged"
+    assert _git(lane, "rev-parse", "HEAD") not in {lane_head, result["target"]}
+    assert _git(lane, "merge-base", "--is-ancestor", str(result["target"]), "HEAD") == ""
+    assert _snapshot(hub["integration"]) == integration_before
+
+
 @pytest.mark.parametrize("name", ["空 格.txt", " leading.txt", "new\nline.txt", "shared.txt/nested.txt"])
 def test_untracked_overlap_handles_exact_names_and_parent_paths(hub, name) -> None:
     if "/" not in name:
@@ -274,11 +316,15 @@ def test_skill_metadata_body_and_execution_share_published_baseline() -> None:
         assert "git merge --ff-only dev1.0" not in text
         assert "git diff --name-only HEAD dev1.0" not in text
     integrate = (skills / "integrate-lane-to-dev/SKILL.md").read_text(encoding="utf-8")
-    assert integrate.index("本地 dev 移动前验证 bundle/parent") < integrate.index("验证通过后")
-    assert "仅 readback 为 after 后" in integrate
-    assert "CANDIDATE=<exact-candidate-sha> ACCEPTANCE_BUNDLE=… PUBLISH=0 INTEGRATE_ARGS=--validate-bundle-only" in integrate
-    assert integrate.index("INTEGRATE_ARGS=--validate-bundle-only") < integrate.index("执行 `git merge --ff-only <exact-candidate-sha>`")
-    assert "bundle_validated" in integrate and "candidate.parent" in integrate
+    # 一次任务闭环：PRE 身份在前，一条 make accept PUBLISH=1 发布，不再有换工作区与二次入口停点。
+    assert integrate.index("make feature-context TARGET=<exact-path>") < integrate.index("make accept PUBLISH=1")
+    assert "仅 readback 为 `after` 后" in integrate
+    assert "expectedParent...candidate" in integrate
+    # 同步不是发布的隐式前置；保留显式 bundle 消费的等价受管入口。
+    assert "make accept PUBLISH=1 SYNC=1" not in integrate
+    assert "INTEGRATE_ARGS=--validate-bundle-only" in integrate
+    assert "git merge --ff-only <exact-candidate-sha>" in integrate
+    assert "消费他树 bundle" in integrate
     assert "Gamma → `IntegrationQualificationFact` → `dev1.0 → main`" in integrate
     assert "可选报告" in integrate and "skipped_*" in integrate
     assert "source-admitted" in integrate

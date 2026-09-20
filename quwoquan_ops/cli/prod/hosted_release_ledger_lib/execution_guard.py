@@ -1,6 +1,8 @@
 """Plane-local DEC-015 guard：验签、单调消费、durable journal 与显式 reconcile。"""
 from __future__ import annotations
 
+import sys
+
 sys.dont_write_bytecode = True
 
 import argparse

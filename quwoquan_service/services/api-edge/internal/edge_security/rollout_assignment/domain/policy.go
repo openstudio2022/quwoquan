@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"net/netip"
 	"regexp"
 	"strings"
 )
@@ -22,6 +23,8 @@ var stageOrder = []string{"canary", "5", "20", "50", "100"}
 
 var (
 	candidateDigestPattern   = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+	versionPattern           = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$`)
+	buildNumberPattern       = regexp.MustCompile(`^[1-9][0-9]*$`)
 	networkAttributePattern  = regexp.MustCompile(`^[a-z0-9][a-z0-9._-]{0,31}$`)
 	expectedStageBasisPoints = map[string]int{
 		"canary": 0,
@@ -45,9 +48,35 @@ type Stage struct {
 	Carriers    Selector `yaml:"carriers" json:"carriers"`
 }
 
+type AppVersion struct {
+	Platform       string `yaml:"platform" json:"platform"`
+	DisplayVersion string `yaml:"displayVersion" json:"displayVersion"`
+	BuildNumber    string `yaml:"buildNumber" json:"buildNumber"`
+	ArtifactDigest string `yaml:"artifactDigest" json:"artifactDigest"`
+}
+
 type InternalCanary struct {
 	AccountIDs     []string `yaml:"accountIds" json:"accountIds"`
 	DeviceActorIDs []string `yaml:"deviceActorIds" json:"deviceActorIds"`
+	TrustedIPCidrs []string `yaml:"trustedIpCidrs" json:"trustedIpCidrs"`
+}
+
+type RouteBinding struct {
+	Target              Target `yaml:"target" json:"target"`
+	DeploymentInstance  string `yaml:"deploymentInstance" json:"deploymentInstance"`
+	CandidateID         string `yaml:"candidateId" json:"candidateId"`
+	ArtifactDigest      string `yaml:"artifactDigest" json:"artifactDigest"`
+	RuntimeConfigDigest string `yaml:"runtimeConfigDigest" json:"runtimeConfigDigest"`
+	PublicExposure      bool   `yaml:"publicExposure" json:"publicExposure"`
+}
+
+// ValidationRing is an optional, fail-closed route restriction for an internal
+// hosted validation ring. The ordinary percentage rollout remains compatible
+// when this section is absent or disabled.
+type ValidationRing struct {
+	Enabled   bool         `yaml:"enabled" json:"enabled"`
+	Route     RouteBinding `yaml:"route" json:"route"`
+	RequireIP bool         `yaml:"requireIp" json:"requireIp"`
 }
 
 type Policy struct {
@@ -61,12 +90,22 @@ type Policy struct {
 	CandidateUpstream              string           `yaml:"candidateUpstream" json:"candidateUpstream"`
 	AssignmentTTLDaysAfterCampaign int              `yaml:"assignmentTtlDaysAfterCampaign" json:"assignmentTtlDaysAfterCampaign"`
 	InternalCanary                 InternalCanary   `yaml:"internalCanary" json:"internalCanary"`
+	AppVersions                    []AppVersion     `yaml:"appVersions" json:"appVersions"`
+	ValidationRing                 ValidationRing   `yaml:"validationRing" json:"validationRing"`
 	Stages                         map[string]Stage `yaml:"stages" json:"stages"`
 }
 
 func (policy Policy) Validate() error {
 	if !policy.Enabled {
 		return nil
+	}
+	if len(policy.AppVersions) > 0 {
+		if err := validateAppVersions(policy.AppVersions); err != nil {
+			return err
+		}
+	}
+	if err := validateValidationRing(policy); err != nil {
+		return err
 	}
 	if strings.TrimSpace(policy.CampaignID) == "" ||
 		strings.TrimSpace(policy.CandidateDigest) == "" ||
@@ -122,6 +161,80 @@ func (policy Policy) Validate() error {
 		terminal.Regions.Mode != "all" || terminal.Carriers.Mode != "all" ||
 		!sameSet(terminal.Platforms.Values, []string{"android", "ios", "web"}) {
 		return errors.New("rollout stage 100 must restore all supported platforms and network audiences")
+	}
+	return nil
+}
+
+func validateAppVersions(versions []AppVersion) error {
+	if len(versions) == 0 {
+		return errors.New("rollout appVersions must not be empty")
+	}
+	seen := make(map[string]struct{}, len(versions))
+	for _, version := range versions {
+		platform := strings.TrimSpace(version.Platform)
+		displayVersion := strings.TrimSpace(version.DisplayVersion)
+		buildNumber := strings.TrimSpace(version.BuildNumber)
+		artifactDigest := strings.ToLower(strings.TrimSpace(version.ArtifactDigest))
+		if platform != "ios" && platform != "android" && platform != "web" {
+			return fmt.Errorf("rollout appVersion platform %q is invalid", platform)
+		}
+		if !versionPattern.MatchString(displayVersion) {
+			return fmt.Errorf("rollout appVersion %q displayVersion is invalid", displayVersion)
+		}
+		if !buildNumberPattern.MatchString(buildNumber) {
+			return fmt.Errorf("rollout appVersion %q buildNumber is invalid", displayVersion)
+		}
+		if !candidateDigestPattern.MatchString(artifactDigest) {
+			return fmt.Errorf("rollout appVersion %q artifactDigest is invalid", displayVersion)
+		}
+		key := platform + "\x00" + displayVersion + "\x00" + buildNumber
+		if _, exists := seen[key]; exists {
+			return fmt.Errorf("rollout appVersion %q/%s is duplicated", displayVersion, buildNumber)
+		}
+		seen[key] = struct{}{}
+	}
+	return nil
+}
+
+func validateValidationRing(policy Policy) error {
+	if !policy.ValidationRing.Enabled {
+		return nil
+	}
+	ring := policy.ValidationRing
+	if policy.Stage != "canary" {
+		return errors.New("validation ring cannot share percentage rollout stages")
+	}
+	if ring.Route.CandidateID != policy.CandidateDigest {
+		return errors.New("validation ring candidate digest differs from campaign")
+	}
+	if err := validateAppVersions(policy.AppVersions); err != nil {
+		return err
+	}
+	for _, version := range policy.AppVersions {
+		if version.ArtifactDigest != ring.Route.ArtifactDigest {
+			return errors.New("validation ring app artifact differs from route binding")
+		}
+	}
+	if ring.Route.Target != TargetCandidate {
+		return errors.New("validation ring route target must be candidate")
+	}
+	if strings.TrimSpace(ring.Route.DeploymentInstance) != "prevalidate" {
+		return errors.New("validation ring deployment instance must be prevalidate")
+	}
+	if !candidateDigestPattern.MatchString(strings.ToLower(strings.TrimSpace(ring.Route.CandidateID))) ||
+		!candidateDigestPattern.MatchString(strings.ToLower(strings.TrimSpace(ring.Route.ArtifactDigest))) {
+		return errors.New("validation ring candidate and artifact digests must be canonical sha256")
+	}
+	if !candidateDigestPattern.MatchString(strings.ToLower(strings.TrimSpace(ring.Route.RuntimeConfigDigest))) {
+		return errors.New("validation ring runtimeConfigDigest must be canonical sha256")
+	}
+	if ring.Route.PublicExposure {
+		return errors.New("validation ring must not be publicly exposed")
+	}
+	for _, raw := range policy.InternalCanary.TrustedIPCidrs {
+		if _, err := netip.ParsePrefix(strings.TrimSpace(raw)); err != nil {
+			return fmt.Errorf("validation ring trusted IP CIDR %q is invalid", raw)
+		}
 	}
 	return nil
 }

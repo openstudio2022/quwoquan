@@ -14,6 +14,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import shutil
 import subprocess
@@ -31,6 +32,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from quwoquan_ops.cli import integration_run  # noqa: E402
+from quwoquan_ops.cli import integration_run_acceptance  # noqa: E402
 from quwoquan_ops.tests.support.deployment_candidate_manifest_test_support import (  # noqa: E402
     release_attestation_payload,
 )
@@ -250,9 +252,9 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertEqual(payload["terminal"], "GATE_BLOCK")
         return payload["blocker"]["code"]
 
-    def test_acceptance_mode_is_lane_side_and_never_publishes(self) -> None:
+    def test_acceptance_mode_is_lane_side_and_ships_in_one_command(self) -> None:
         # Alpha（可选 Beta）只能在产出 handoff 的 lane 工作树完成（ship admission 重算当前工作树的
-        # candidate evidence）；integration 工作区只消费 bundle 做 admit/publish 与 gamma/prod。
+        # candidate evidence）；PUBLISH=1 让同一 run 继续 admit/CAS，不必换到 integration 工作区。
         parser = integration_run._parser()
         base = ["--release-attestation", "a", "--rollback-release-attestation", "b", "--release-handoff-ref", VALID_REF]
         self.assertEqual(parser.parse_args([]).mode, "integrate")
@@ -271,11 +273,15 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         self.assertIn("'--alpha'", accept_block)
         self.assertIn("'--beta'", accept_block)
         self.assertIn("MERGED_LANES", accept_block)
-        self.assertNotIn("--publish", accept_block)
+        # 一条命令发布：PUBLISH=1 透传 --publish；SYNC=1 先把本工作树对齐已发布 SHA。
+        self.assertIn('[ "$${PUBLISH:-0}" = "1" ] && printf -- \'--publish\'', accept_block)
+        self.assertIn("align-published --merge-authorized", accept_block)
+        self.assertIsNone(integration_run_acceptance.validate_mode_inputs(
+            argparse.Namespace(mode="acceptance", publish=True, acceptance_bundle=None, validate_bundle_only=False)))
 
     def test_integrate_consumes_bundle_only_and_rejects_acceptance_inputs(self) -> None:
         # integrate 不签发、不跑环境：必须给 --acceptance-bundle，任何 acceptance 专用输入都是 INPUT_INVALID；
-        # acceptance 反之不得携带 bundle 或 --publish。
+        # acceptance 反之不得携带 bundle（--publish 已是合法的一条命令发布意图）。
         production = _attestation(self.root, "rel-candidate")
         rollback = _attestation(self.root, "rel-rollback")
         acceptance = ["--mode", "acceptance", "--release-attestation", str(production),
@@ -283,7 +289,6 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         with self._runtime_patches():
             self.assertEqual(self._blocker("integrate-no-bundle", ["--mode", "integrate"]), "INTEGRATION_RUN.ACCEPTANCE_REQUIRED")
             for run_id, argv in (
-                ("acceptance-publish", [*acceptance, "--publish"]),
                 ("acceptance-bundle", [*acceptance, "--acceptance-bundle", str(self.root)]),
                 ("integrate-baseline", ["--mode", "integrate", "--acceptance-bundle", str(self.root), "--baseline", "abc123"]),
                 ("integrate-beta", ["--mode", "integrate", "--acceptance-bundle", str(self.root), "--beta"]),
@@ -307,7 +312,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         release, rollback = _attestation(self.root, "rel-a"), _attestation(self.root, "rel-b")
         plan_path = self.root / "plan.json"
         plan_path.write_text("{}", encoding="utf-8")
-        answers = {("status",): "", ("rev-parse", "HEAD^{commit}"): commit,
+        answers = {("status",): "", ("diff",): "", ("rev-parse", "HEAD^{commit}"): commit,
                    ("rev-parse", "HEAD"): commit, ("ls-remote",): f"{parent}\trefs/heads/dev1.0", ("show",): tree}
 
         def fake_git(*args):
@@ -800,7 +805,7 @@ class IntegrationRunProductionReleaseContractTest(unittest.TestCase):
         manifest = json.loads((bundle_dir / "bundle.json").read_bytes())
         integration_store = self.root / "integration-store"
         git_answers = {
-            ("status",): "", ("rev-parse", f"HEAD^{{commit}}"): commit, ("ls-remote",): f"{parent}\trefs/heads/dev1.0",
+            ("status",): "", ("diff",): "", ("rev-parse", f"HEAD^{{commit}}"): commit, ("ls-remote",): f"{parent}\trefs/heads/dev1.0",
             ("symbolic-ref",): "refs/heads/dev1.0", ("rev-parse", "HEAD"): commit, ("show",): tree,
         }
 

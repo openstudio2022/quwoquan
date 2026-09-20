@@ -356,6 +356,11 @@ func RequestMetadataMiddleware(
 		request.Header.Del("X-Client-Region-Code")
 		request.Header.Del("X-Client-Carrier")
 		networkSubject := strings.TrimSpace(request.Header.Get(trustedNetworkHeader))
+		if parsed := trustedIP(networkSubject); parsed != nil {
+			networkSubject = parsed.String()
+		} else {
+			networkSubject = ""
+		}
 		attributes := rolloutapp.NetworkAttributes{Region: "unknown", Carrier: "unknown"}
 		if networkResolver != nil {
 			if clientIP := trustedIP(networkSubject); clientIP != nil {
@@ -427,6 +432,7 @@ func (executor *admissionExecutor) Execute(
 		Platform:      metadata.Platform,
 		AppVersion:    metadata.AppVersion,
 		AppBuild:      metadata.AppBuild,
+		ClientIP:      metadata.NetworkSubject,
 		Region:        metadata.Region,
 		Carrier:       metadata.Carrier,
 	}

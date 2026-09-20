@@ -49,6 +49,16 @@
 - 每次 stage 只追加 `ProdStageAttemptFact` 及其 activation、health、SLO、placement、readback 前驱；失败 retry 追加新 attempt。stage `100` 成功后 create-once 生成 `ProdReleasedFact`，不得以 lifecycle status transition 替代终态事实。
 - rollback 只引用 admission 已绑定的 exact previous `ProdReleasedFact` 与 rollback readiness，不得移动 tag、重建旧 commit 或猜测版本；`PostReleaseSoakFact` 只读 exact current `ProdReleasedFact`，且不改变 tag、QualificationFact、Prod terminal 或 release identity。
 
+<a id="req-004"></a>
+### REQ-004 云上 prod-sim 内部验证环
+
+- `prod-sim` 是 `prod-hosted` 执行面内的 validation ring，唯一 deployment instance 映射为 `prevalidate`，不是第五环境或正式 rollout stage；本地模拟结果不能作为云上准出。
+- 生产 App 保持 prod canonical URL。现有 rollout assignment policy 唯一拥有验证环访问条件：精确 platform/displayVersion/buildNumber 到已验真 App artifact digest 的映射、candidate digest、目标 instance、用户白名单与可信 IP/CIDR。RC 标签沿用 `vMAJOR.MINOR.PATCH-rc.N`；iOS displayVersion 使用不含标签前缀/RC 后缀的三段版本号，以单调 buildNumber 区别内部构建。
+- 用户与 IP 白名单均可独立配置：已配置的账号/设备名单内部 OR；只配置用户则只限制用户，只配置 IP 则只限制 IP，两类同时配置则 AND，再与精确版本条件 AND。省略的列表不施加该类限制；显式空列表拒绝该类所有主体，不得按省略处理；两类均省略时验证环默认拒绝。部署 `requireIp=true` 是额外限制：未配置 IP 列表或缺失可信 IP 时拒绝，`requireIp=false` 才允许 user-only。非法 CIDR、candidate/target/upstream/policy digest 漂移均拒绝；客户端身份/IP/region/carrier/artifact 摘要不成为信任来源。
+- 验证环占用的 candidate 池与正式百分比 rollout 互斥；每个请求重新判断全部条件，不读写正式 campaign sticky assignment，也不借用 internal canary 的 OR 放行。配置移除或名单撤销后，既有 assignment 不得绕过新条件。
+- 验证环只消费 main/RC/CMM/Qualification 对应 prod trust-domain exact artifacts，不重新构建或签名。hosted inventory、运行身份与 route readback 必须证明 target、instance、candidate、upstreams、配置和数据绑定一致；无法证明时保持禁用。
+- 复用现有 hosted deployment/prevalidate receipt，记录 exact authority refs、policy digest、readback、真实 Provider/内容/媒体/iOS 真机 Journey 和 cleanup 结果；`publicExposure=false`、non-promotable，不签发新发布 Fact，不写正式 activation/released authority。
+
 ## 4. 契约引用
 
 - canonical：`quwoquan_ops/environments`
@@ -64,6 +74,15 @@
 - THEN `ProdActivationAdmissionFact` 只物化并复验一次实际 `CandidateMaterialManifest` 与两个 factory material OCI canonical bytes，随后经 `stackctl` 完成 `canary -> 5 -> 20 -> 50 -> 100`；每阶段追加 `ProdStageAttemptFact` 与签名 revision、目标实例 ACK、health/SLO/readback，stage `100` create-once 生成 `ProdReleasedFact`，且 builder invocation 为零。
 - AND 任一 factory payload、materialDigest、source、tree、request、RC、signature、attestation、config/deployment bundle 或后继 exact ref 漂移均在 mutation 前 `GATE_BLOCK`，workflow scalar、tag 移动或 latest 查询均不能绕过。
 - AND 阶段失败只按 exact previous `ProdReleasedFact` / rollback readiness 回滚，soak 只引用 exact current `ProdReleasedFact`；CLI 拒绝 `package --kind release-manifest` 与 formal `--release-manifest`，formal 不接受历史 snapshot，且不存在 `ReleaseEvidenceManifest`、`releaseEvidenceRef`、public release-manifest writer、lifecycle status transition 或第二 effect 入口。
+
+<a id="gwt-002"></a>
+### GWT-002 云上 prod-sim 验证环隔离与非提升性证据
+
+- GIVEN 同一 main/RC/CMM/Qualification 绑定的 exact 制品、可信身份/IP 和精确 App 版本映射，部署实例为 `prod-hosted/prevalidate`，且不占用正式百分比 rollout 的 candidate 池。
+- WHEN 内部用户通过 prod canonical URL 访问验证环，并逐项撤销版本、用户、可信 IP 或 candidate route 绑定条件。
+- THEN 仅满足精确版本及全部已配置白名单限制的请求进入 exact candidate：user-only、IP-only 各自生效，both 为 AND，none 默认拒绝；显式空列表、已配置条件不匹配、部署 requireIp 未满足或摘要漂移均拒绝，旧 sticky assignment 不得绕过重新判断。
+- AND hosted readback 证明 instance、candidate、upstreams、配置与隔离数据一致；真实 Provider、内容/媒体、签名 iOS 真机 Journey 和 cleanup 的结果绑定同一 candidate，缺少任一 required 证据保持 `GATE_BLOCK`。
+- AND receipt 必须声明 `publicExposure=false` 与 non-promotable，不写正式 activation/released authority，也不把本地 contract PASS 或历史 snapshot 当作 hosted 验收通过。
 
 ## 6. 依赖
 
@@ -101,6 +120,15 @@
 - 影响或价值：GitHub Deployment、Deployment Status 与 Actions review-history 的当前只读响应没有同时给出 required-reviewer 请求和批准的明确事件时间；私有仓当前套餐也无法启用原生 required reviewers。用 `queued/in_progress` 或 Prod job `started_at` 替代会把 runner/concurrency queue 误算成审批，造成 timing 假绿。
 - 完成判定：`GWT-001` 的“只申请一次 production approval”分项由受控 GitHub App/webhook 与 hosted authority 直接覆盖——webhook 验签后 append-only 持久化 request/approved 事件及接收时间，严格绑定 delivery ID、installation、repository、workflow run、head SHA、candidate、environment 与 reviewer decision；workflow exact-byte 回读生成 approvalRequestedAt、approvalApprovedAt、humanDecisionWait 与 approvalWait，且回执声明 `nativeProtection=false`、`enforcement=external_hosted_ledger`，不再存在对应 `missingEvidence`。
 - 依赖：GitHub 官方可订阅事件、GitHub App installation/webhook secret、受控接收面与 hosted approval authority 不可变回读。
+
+<a id="open-006"></a>
+### OPEN-006 云上 prod-sim validation ring 尚无当前真实准出
+
+- 类型：`external_blocker`
+- 优先级：`P0`
+- 准出影响：`block`
+- 影响或价值：`prod-hosted/prevalidate` 的访问裁决具备本地 contract，但运行配置加载器尚未消费受管 hosted route/readback 前驱，必须拒绝启用 validation ring；自报 candidate/artifact/runtimeConfig 摘要不能替代验真。仍缺同一 RC/CMM/Qualification exact bytes、真实 Provider、隔离数据、签名 iOS 真机、route readback 和 cleanup 的 hosted receipt。
+- 完成判定：`GWT-002` 全部结果子句均由同一 candidate 的 hosted non-promotable receipt 直接证明；缺失云主机凭据、Provider、设备或发布授权时保留首个 typed blocker。
 
 <a id="open-005"></a>
 ### OPEN-005 动态灰度激活迁移到 Platform Ops hosted authority

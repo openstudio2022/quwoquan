@@ -8,16 +8,25 @@ from pathlib import Path
 from typing import Any
 
 from quwoquan_ops.cli.integration_run_bundle import IntegrationRunError
+from quwoquan_ops.cli.lib.dirty_worktree import overlapping_dirty_paths, parse_name_only_z, parse_porcelain_z
 
 DEV_REF = "refs/heads/dev1.0"
+
+
+def dirty_overlap_with_candidate(git: Callable[..., str], parent: str, candidate: str) -> tuple[str, ...]:
+    """只拦与本次发布 diff（`parent...candidate`）重叠的 tracked dirty / untracked；空 range 不阻断。
+
+    本树直接发布时 HEAD 就是 candidate，`HEAD...candidate` 恒空，因此范围一律取 expectedParent。
+    """
+    dirty = parse_porcelain_z(git("status", "--porcelain", "-z", "--untracked-files=all"))
+    touched = parse_name_only_z(git("diff", "--name-only", "--no-renames", "-z", parent, candidate))
+    return overlapping_dirty_paths(dirty, touched)
 
 
 def validate_mode_inputs(args: argparse.Namespace) -> None:
     if args.validate_bundle_only and (args.mode != "integrate" or args.publish or not re.fullmatch(r"[0-9a-f]{40}", args.candidate)):
         raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "--validate-bundle-only requires integrate, exact --candidate SHA and no --publish")
     if args.mode == "acceptance":
-        if args.publish:
-            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "acceptance mode issues environment facts only; publish belongs to the integration worktree")
         if args.acceptance_bundle is not None:
             raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "--acceptance-bundle is integrate-only; acceptance produces the bundle")
         return
@@ -31,8 +40,6 @@ def validate_mode_inputs(args: argparse.Namespace) -> None:
 
 
 def preflight_identity(args: argparse.Namespace, *, git: Callable[..., str], is_ancestor: Callable[[str, str], bool]) -> dict[str, str]:
-    if git("status", "--porcelain", "--untracked-files=no"):
-        raise IntegrationRunError("INTEGRATION_RUN.DIRTY_WORKTREE", "worktree must be clean")
     commit = git("rev-parse", f"{args.candidate}^{{commit}}")
     remote_head = git("ls-remote", args.remote, DEV_REF).split()[0]
     parent = git("rev-parse", f"{args.baseline}^{{commit}}") if args.baseline else remote_head
@@ -43,6 +50,10 @@ def preflight_identity(args: argparse.Namespace, *, git: Callable[..., str], is_
         raise IntegrationRunError(f"INTEGRATION_RUN.{code}", "candidate equals current published baseline; no new candidate to accept")
     if not is_ancestor(parent, commit):
         raise IntegrationRunError("INTEGRATION_RUN.NOT_FAST_FORWARD", "remote dev1.0 is not an ancestor of the candidate")
+    overlap = dirty_overlap_with_candidate(git, parent, commit)
+    if overlap:
+        preview = ", ".join(overlap[:8])
+        raise IntegrationRunError("INTEGRATION_RUN.DIRTY_WORKTREE", f"dirty path(s) overlap expectedParent...candidate: {preview}")
     if args.mode == "integrate":
         if git("symbolic-ref", "--quiet", "HEAD") != DEV_REF or (not args.validate_bundle_only and git("rev-parse", "HEAD") != commit):
             raise IntegrationRunError("INTEGRATION_RUN.INTEGRATION_IDENTITY_INVALID", "integrate requires refs/heads/dev1.0 with HEAD == candidate; validate bundle before FF")

@@ -6,6 +6,8 @@ const (
 	RouteFinalizeExpiredContentReactionCommandPath   = "/content/reactions/{targetKind}/{targetId}/commands/{operation}/finalize-expired"
 	RouteGetContentReactionMutationBasisMethod       = "GET"
 	RouteGetContentReactionMutationBasisPath         = "/content/reactions/{targetKind}/{targetId}/mutation-basis"
+	RouteGetContentReactionPresentationMethod        = "GET"
+	RouteGetContentReactionPresentationPath          = "/content/reactions/{targetKind}/{targetId}/presentation"
 	RouteGetContentReactionStateMethod               = "GET"
 	RouteGetContentReactionStatePath                 = "/content/posts/{postId}/reactions"
 	RouteLikePostMethod                              = "POST"

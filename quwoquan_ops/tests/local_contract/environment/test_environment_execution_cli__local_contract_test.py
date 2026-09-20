@@ -329,7 +329,7 @@ def _issue_acceptance(
 
 def _qualification_inputs(
     tmp_path: Path,
-) -> tuple[Path, Path, dict[str, str], dict[str, str], dict[str, str]]:
+) -> tuple[Path, Path, dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
     repository, store = _initialize_repository(tmp_path)
     candidate_ref, candidate = _candidate(store, repository)
     predecessor: dict[str, str] | None = None
@@ -378,13 +378,15 @@ def _qualification_inputs(
             "admission": admission,
         },
     )
-    return repository, store, publish_result, facts["gamma"], candidate
+    return repository, store, publish_result, facts["alpha"], facts["beta"], facts["gamma"], candidate
 
 
 def _qualify(
     repository: Path,
     store: Path,
     publish_result: dict[str, str],
+    alpha: dict[str, str],
+    beta: dict[str, str],
     gamma: dict[str, str],
 ) -> tuple[subprocess.CompletedProcess[str], dict[str, object]]:
     head, tree = _dev_identity(repository)
@@ -394,6 +396,10 @@ def _qualify(
         "qualify",
         "--publish-result",
         _exact_arg(publish_result),
+        "--alpha-acceptance",
+        _exact_arg(alpha),
+        "--beta-acceptance",
+        _exact_arg(beta),
         "--gamma-acceptance",
         _exact_arg(gamma),
         "--expected-dev-head",
@@ -493,13 +499,13 @@ def test_cli_supersede_turns_mutated_stale_gamma_into_safe_teardown(
 
 
 def test_cli_qualify_blocks_gamma_for_stale_dev_head(tmp_path: Path) -> None:
-    repository, store, publish_result, gamma, _ = _qualification_inputs(tmp_path)
+    repository, store, publish_result, alpha, beta, gamma, _ = _qualification_inputs(tmp_path)
     (repository / "next.txt").write_text("next\n", encoding="utf-8")
     _git(repository, "add", "next.txt")
     _git(repository, "commit", "-m", "replace qualified candidate")
     _git(repository, "push", "origin", "dev1.0")
 
-    completed, payload = _qualify(repository, store, publish_result, gamma)
+    completed, payload = _qualify(repository, store, publish_result, alpha, beta, gamma)
 
     assert completed.returncode != 0
     assert payload["terminal"] == "GATE_BLOCK"
@@ -511,7 +517,7 @@ def test_cli_qualify_blocks_missing_environment_verification_key(
 ) -> None:
     """keyring 里没有 environment-ops 的 active 公钥时，Gamma 链验签器不可构造，fail closed。"""
 
-    repository, store, publish_result, gamma, _ = _qualification_inputs(tmp_path)
+    repository, store, publish_result, alpha, beta, gamma, _ = _qualification_inputs(tmp_path)
     head, tree = _dev_identity(repository)
     scheduler_only = create_temporary_signing(
         tmp_path / "scheduler-only", identities=(INTEGRATION_SCHEDULER_IDENTITY,),
@@ -535,6 +541,10 @@ def test_cli_qualify_blocks_missing_environment_verification_key(
             "qualify",
             "--publish-result",
             _exact_arg(publish_result),
+            "--alpha-acceptance",
+            _exact_arg(alpha),
+            "--beta-acceptance",
+            _exact_arg(beta),
             "--gamma-acceptance",
             _exact_arg(gamma),
             "--expected-dev-head",
@@ -571,7 +581,7 @@ def test_cli_qualify_blocks_missing_environment_verification_key(
 
 
 def test_cli_qualify_blocks_key_purpose_reuse(tmp_path: Path) -> None:
-    repository, store, publish_result, gamma, _ = _qualification_inputs(tmp_path)
+    repository, store, publish_result, alpha, beta, gamma, _ = _qualification_inputs(tmp_path)
     head, tree = _dev_identity(repository)
     completed, payload = _run_cli(
         repository,
@@ -579,6 +589,10 @@ def test_cli_qualify_blocks_key_purpose_reuse(tmp_path: Path) -> None:
         "qualify",
         "--publish-result",
         _exact_arg(publish_result),
+        "--alpha-acceptance",
+        _exact_arg(alpha),
+        "--beta-acceptance",
+        _exact_arg(beta),
         "--gamma-acceptance",
         _exact_arg(gamma),
         "--expected-dev-head",
@@ -618,6 +632,10 @@ def test_integration_candidate_qualify_blocks_missing_environment_key(tmp_path: 
             "qualify",
             "--publish-result",
             "publish/result.json=sha256:" + "1" * 64,
+            "--alpha-fact",
+            "acceptance/alpha.json=sha256:" + "3" * 64,
+            "--beta-fact",
+            "acceptance/beta.json=sha256:" + "4" * 64,
             "--gamma-fact",
             "acceptance/gamma.json=sha256:" + "2" * 64,
             "--qualification-signer-identity",
@@ -652,11 +670,11 @@ def test_integration_candidate_qualify_blocks_missing_environment_key(tmp_path: 
 def test_cli_issues_gamma_and_qualifies_current_exact_dev_head(
     tmp_path: Path,
 ) -> None:
-    repository, store, publish_result, gamma, candidate = _qualification_inputs(
+    repository, store, publish_result, alpha, beta, gamma, candidate = _qualification_inputs(
         tmp_path
     )
 
-    completed, payload = _qualify(repository, store, publish_result, gamma)
+    completed, payload = _qualify(repository, store, publish_result, alpha, beta, gamma)
 
     assert completed.returncode == 0
     assert payload["terminal"] == "qualified"
@@ -676,33 +694,33 @@ def _store_snapshot(store: Path) -> dict[str, bytes]:
 
 
 def test_published_head_still_requires_exact_publish_predecessor(tmp_path: Path) -> None:
-    repository, store, publish_result, gamma, _ = _qualification_inputs(tmp_path)
+    repository, store, publish_result, alpha, beta, gamma, _ = _qualification_inputs(tmp_path)
     payload = json.loads((store / publish_result["ref"]).read_bytes())
     payload["readbackOid"] = "0" * 40
     wrong_publish = _write(store, "publish/wrong-readback.json", payload)
     before = _store_snapshot(store)
-    completed, result = _qualify(repository, store, wrong_publish, gamma)
+    completed, result = _qualify(repository, store, wrong_publish, alpha, beta, gamma)
     assert completed.returncode == 2
     assert result["code"] == "INTEGRATION_QUALIFICATION.DEV_HEAD_DRIFT"
     assert _store_snapshot(store) == before
 
 
 def test_local_unpublished_head_cannot_qualify(tmp_path: Path) -> None:
-    repository, store, publish_result, gamma, _ = _qualification_inputs(tmp_path)
+    repository, store, publish_result, alpha, beta, gamma, _ = _qualification_inputs(tmp_path)
     _git(repository, "commit", "--allow-empty", "-m", "unpublished candidate")
     before = _store_snapshot(store)
-    completed, payload = _qualify(repository, store, publish_result, gamma)
+    completed, payload = _qualify(repository, store, publish_result, alpha, beta, gamma)
     assert completed.returncode == 2
     assert payload["code"] == "ENVIRONMENT_EXECUTION.DEV_HEAD_DRIFT"
     assert _store_snapshot(store) == before
 
 
 def test_remote_move_without_local_tracking_update_blocks_qualification(tmp_path: Path) -> None:
-    repository, store, publish_result, gamma, candidate = _qualification_inputs(tmp_path)
+    repository, store, publish_result, alpha, beta, gamma, candidate = _qualification_inputs(tmp_path)
     moved = _git(repository, "commit-tree", candidate["tree"], "-p", candidate["commit"], "-m", "published next")
     _git(repository, "push", str(tmp_path / "origin.git"), f"{moved}:refs/heads/dev1.0")
     before = _store_snapshot(store)
-    completed, payload = _qualify(repository, store, publish_result, gamma)
+    completed, payload = _qualify(repository, store, publish_result, alpha, beta, gamma)
     assert completed.returncode == 2
     assert payload["code"] == "ENVIRONMENT_EXECUTION.DEV_HEAD_DRIFT"
     assert _git(repository, "rev-parse", "origin/dev1.0") == candidate["commit"]
@@ -794,16 +812,16 @@ def test_signing_stage_drift_leaves_no_usable_fact(
     monkeypatch.setattr(execution, "_published_dev_signer", guard)
     monkeypatch.setattr(sys.modules[__name__], "_run_cli", intercepted)
     with pytest.raises(StopIteration, match="observed signing fence"):
-        repository, store, publish_result, gamma, _ = _qualification_inputs(tmp_path)
-        _qualify(repository, store, publish_result, gamma)
+        repository, store, publish_result, alpha, beta, gamma, _ = _qualification_inputs(tmp_path)
+        _qualify(repository, store, publish_result, alpha, beta, gamma)
     assert observed == [command]
 
 
 def test_unreadable_origin_cannot_fall_back_to_local_dev(tmp_path: Path) -> None:
-    repository, store, publish_result, gamma, _ = _qualification_inputs(tmp_path)
+    repository, store, publish_result, alpha, beta, gamma, _ = _qualification_inputs(tmp_path)
     _git(repository, "remote", "set-url", "origin", str(tmp_path / "missing-origin.git"))
     before = _store_snapshot(store)
-    completed, payload = _qualify(repository, store, publish_result, gamma)
+    completed, payload = _qualify(repository, store, publish_result, alpha, beta, gamma)
     assert completed.returncode == 2
     assert payload["code"] == "ENVIRONMENT_EXECUTION.DEV_AUTHORITY_UNAVAILABLE"
     assert _store_snapshot(store) == before

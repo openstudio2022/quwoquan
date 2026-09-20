@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -134,6 +135,178 @@ func TestPolicyRejectsShrinkingPlatformAudience(t *testing.T) {
 	policy.Stages["20"] = stage
 	if err := policy.Validate(); err == nil {
 		t.Fatal("shrinking platform audience must fail")
+	}
+}
+
+func TestValidationRingRequiresUserAndTrustedIPMatch(t *testing.T) {
+	policy := rolloutPolicy("canary")
+	policy.ValidationRing = domain.ValidationRing{
+		Enabled:   true,
+		RequireIP: true,
+		Route: domain.RouteBinding{
+			Target:              domain.TargetCandidate,
+			DeploymentInstance:  "prevalidate",
+			CandidateID:         policy.CandidateDigest,
+			ArtifactDigest:      "sha256:" + strings.Repeat("a", 64),
+			RuntimeConfigDigest: "sha256:" + strings.Repeat("c", 64),
+		},
+	}
+	policy.AppVersions = []domain.AppVersion{{
+		Platform: "ios", DisplayVersion: "1.9.0", BuildNumber: "19001",
+		ArtifactDigest: "sha256:" + strings.Repeat("a", 64),
+	}}
+	policy.InternalCanary = domain.InternalCanary{
+		AccountIDs:     []string{"account-1"},
+		TrustedIPCidrs: []string{"203.0.113.0/24"},
+	}
+	evaluator, err := application.NewEvaluator(policy, testAllocationKey, newMemoryStore(), 30*24*time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := application.Subject{
+		DeviceActorID: "device-1", AccountID: "account-1", Platform: "ios",
+		AppVersion: "1.9.0", AppBuild: "19001", ClientIP: "203.0.113.10",
+	}
+	allowed, err := evaluator.Decide(context.Background(), base)
+	if err != nil || allowed.Target != domain.TargetCandidate {
+		t.Fatalf("allowed decision=%+v err=%v", allowed, err)
+	}
+	// 连续复用同一 evaluator/store，撤销条件不得被旧 assignment 绕过。
+	for name, subject := range map[string]application.Subject{
+		"wrong user":  {DeviceActorID: "device-1", AccountID: "account-2", Platform: "ios", AppVersion: "1.9.0", AppBuild: "19001", ClientIP: "203.0.113.10"},
+		"wrong ip":    {DeviceActorID: "device-1", AccountID: "account-1", Platform: "ios", AppVersion: "1.9.0", AppBuild: "19001", ClientIP: "198.51.100.10"},
+		"wrong build": {DeviceActorID: "device-1", AccountID: "account-1", Platform: "ios", AppVersion: "1.9.0", AppBuild: "19002", ClientIP: "203.0.113.10"},
+	} {
+		decision, decisionErr := evaluator.Decide(context.Background(), subject)
+		if decisionErr != nil || decision.Target != domain.TargetStable {
+			t.Fatalf("%s decision=%+v err=%v", name, decision, decisionErr)
+		}
+	}
+}
+
+// spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod/spec.md#gwt-002
+func validationPolicy() domain.Policy {
+	policy := rolloutPolicy("canary")
+	policy.CandidateUpstream = "https://candidate.example.invalid"
+	policy.AppVersions = []domain.AppVersion{{Platform: "ios", DisplayVersion: "1.9.0", BuildNumber: "19001", ArtifactDigest: "sha256:" + strings.Repeat("a", 64)}}
+	policy.InternalCanary = domain.InternalCanary{AccountIDs: []string{"account-1"}, TrustedIPCidrs: []string{"203.0.113.0/24"}}
+	policy.ValidationRing = domain.ValidationRing{Enabled: true, RequireIP: true, Route: domain.RouteBinding{
+		Target: domain.TargetCandidate, DeploymentInstance: "prevalidate", CandidateID: policy.CandidateDigest,
+		ArtifactDigest: policy.AppVersions[0].ArtifactDigest, RuntimeConfigDigest: "sha256:" + strings.Repeat("c", 64),
+	}}
+	return policy
+}
+
+func TestValidationRingRechecksRevocationWithoutTouchingStickyStore(t *testing.T) {
+	base := application.Subject{DeviceActorID: "device-1", AccountID: "account-1", Platform: "ios", AppVersion: "1.9.0", AppBuild: "19001", ClientIP: "203.0.113.10"}
+	store := newMemoryStore()
+	digest, err := domain.SubjectDigest(testAllocationKey, validationPolicy().CampaignID, base.DeviceActorID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	store.values[validationPolicy().CampaignID+":"+digest] = true
+	// store 读写都会报错，证明验证环不消费正式 campaign assignment。
+	store.failure = errors.New("validation ring must not use sticky store")
+	for _, revoke := range []string{"none", "user", "ip", "both", "version"} {
+		policy := validationPolicy()
+		subject := base
+		switch revoke {
+		case "user":
+			policy.InternalCanary.AccountIDs = []string{}
+		case "ip":
+			policy.InternalCanary.TrustedIPCidrs = []string{}
+		case "both":
+			policy.InternalCanary = domain.InternalCanary{}
+		case "version":
+			subject.AppBuild = "19002"
+		}
+		evaluator, err := application.NewEvaluator(policy, testAllocationKey, store, time.Hour)
+		if err != nil {
+			t.Fatalf("%s: %v", revoke, err)
+		}
+		decision, err := evaluator.Decide(context.Background(), subject)
+		want := domain.TargetStable
+		if revoke == "none" {
+			want = domain.TargetCandidate
+		}
+		if err != nil || decision.Target != want {
+			t.Fatalf("%s: %+v %v want=%s", revoke, decision, err, want)
+		}
+	}
+}
+
+func TestValidationRingOptionalWhitelistMatrix(t *testing.T) {
+	base := application.Subject{DeviceActorID: "device-1", AccountID: "account-1", Platform: "ios", AppVersion: "1.9.0", AppBuild: "19001", ClientIP: "203.0.113.10"}
+	for _, tc := range []struct {
+		name        string
+		users, ips  []string
+		requireIP   bool
+		ip, version string
+		want        domain.Target
+	}{
+		{"user-only", []string{"account-1"}, nil, false, "", "1.9.0", domain.TargetCandidate},
+		{"ip-only", nil, []string{"203.0.113.0/24"}, false, base.ClientIP, "1.9.0", domain.TargetCandidate},
+		{"both", []string{"account-1"}, []string{"203.0.113.0/24"}, false, base.ClientIP, "1.9.0", domain.TargetCandidate},
+		{"none", nil, nil, false, base.ClientIP, "1.9.0", domain.TargetStable},
+		{"empty-users", []string{}, []string{"203.0.113.0/24"}, false, base.ClientIP, "1.9.0", domain.TargetStable},
+		{"empty-ip", []string{"account-1"}, []string{}, false, base.ClientIP, "1.9.0", domain.TargetStable},
+		{"required-ip", []string{"account-1"}, nil, true, base.ClientIP, "1.9.0", domain.TargetStable},
+		{"missing-trusted-ip", nil, []string{"203.0.113.0/24"}, false, "", "1.9.0", domain.TargetStable},
+		{"wrong-version", []string{"account-1"}, nil, false, "", "1.8.0", domain.TargetStable},
+		{"wrong-user", []string{"other"}, nil, false, "", "1.9.0", domain.TargetStable},
+		{"wrong-ip", []string{"account-1"}, []string{"198.51.100.0/24"}, false, base.ClientIP, "1.9.0", domain.TargetStable},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			policy := validationPolicy()
+			policy.ValidationRing.RequireIP = tc.requireIP
+			policy.InternalCanary = domain.InternalCanary{AccountIDs: tc.users, TrustedIPCidrs: tc.ips}
+			evaluator, err := application.NewEvaluator(policy, testAllocationKey, newMemoryStore(), time.Hour)
+			if err != nil {
+				t.Fatal(err)
+			}
+			subject := base
+			subject.ClientIP = tc.ip
+			subject.AppVersion = tc.version
+			decision, err := evaluator.Decide(context.Background(), subject)
+			if err != nil || decision.Target != tc.want {
+				t.Fatalf("%+v %v want=%s", decision, err, tc.want)
+			}
+		})
+	}
+	policy := validationPolicy()
+	policy.Enabled = false
+	evaluator, err := application.NewEvaluator(policy, nil, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision, err := evaluator.Decide(context.Background(), base)
+	if err != nil || decision.Target != domain.TargetStable {
+		t.Fatalf("disabled: %+v %v", decision, err)
+	}
+}
+
+func TestValidationRingRejectsRouteDriftAndNonCanonicalVersion(t *testing.T) {
+	for _, mutation := range []string{"candidate", "artifact", "exposure", "instance", "stage", "version", "cidr"} {
+		policy := validationPolicy()
+		switch mutation {
+		case "candidate":
+			policy.ValidationRing.Route.CandidateID = "sha256:" + strings.Repeat("b", 64)
+		case "artifact":
+			policy.AppVersions[0].ArtifactDigest = "sha256:" + strings.Repeat("b", 64)
+		case "exposure":
+			policy.ValidationRing.Route.PublicExposure = true
+		case "instance":
+			policy.ValidationRing.Route.DeploymentInstance = "stable"
+		case "stage":
+			policy.Stage = "5"
+		case "version":
+			policy.AppVersions[0].DisplayVersion = "1.9.0-rc.1"
+		case "cidr":
+			policy.InternalCanary.TrustedIPCidrs = []string{"not-an-ip"}
+		}
+		if err := policy.Validate(); err == nil {
+			t.Errorf("%s drift accepted", mutation)
+		}
 	}
 }
 

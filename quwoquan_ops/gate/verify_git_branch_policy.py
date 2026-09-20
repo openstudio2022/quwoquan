@@ -562,10 +562,9 @@ def _integration_update_issue(
             ),
             f"managed system backsync to '{policy.integration_branch}' was rejected",
         )
-    if (
-        current_branch == policy.integration_branch
-        and local_ref == f"refs/heads/{policy.integration_branch}"
-    ):
+    # 发布座位由 admission 的规范 worktree/hub origin 验真承担；本地侧只接受 integration 分支 ref
+    # 或 exact candidate SHA（lane 一条命令发布的形态），`lane/* -> dev1.0` 的同名 ref 推送仍拒绝。
+    if local_ref in {f"refs/heads/{policy.integration_branch}", local_sha}:
         admission_issue = _acceptance_update_issue(
             policy, environment, remote_sha, local_sha, remote_ref, remote_name, remote_url,
         )
@@ -584,9 +583,9 @@ def _integration_update_issue(
     return _issue(
         policy, "direct_push_not_allowed",
         f"direct update of active integration branch '{policy.integration_branch}' is blocked; "
-        "push only from its matching integration worktree branch, use the "
-        "canonical trusted integration publisher, or use managed system "
-        "fast-forward backsync",
+        "push the exact candidate commit from a canonical worktree holding its publish "
+        f"admission, push '{policy.integration_branch}' itself, use the canonical trusted "
+        "integration publisher, or use managed system fast-forward backsync",
     )
 
 

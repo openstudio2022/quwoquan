@@ -77,6 +77,11 @@ func ValidateAndLoadRuntimeConfig(
 	if !policy.Enabled {
 		return errors.New("enabled rollout requires an enabled policy")
 	}
+	// 策略摘要只证明配置字节；当前加载器没有 hosted candidate/route readback 前驱。
+	// 在正式受管绑定接线前拒绝启用，不把自报 route 摘要当成运行态证明。
+	if policy.ValidationRing.Enabled {
+		return errors.New("validation ring requires verified hosted route readback; activation is unavailable")
+	}
 	config.Policy = policy
 	if err := ValidateAndResolveNetworkAttributeCatalogConfig(
 		&config.NetworkAttributeCatalog,

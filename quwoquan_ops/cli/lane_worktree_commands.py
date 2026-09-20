@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
-"""六 lane bootstrap/resync：默认只渲染命令；`resync --execute` 按 branch policy 的
-`persistent_lane_admission.resync_scope` 执行 ff-only 回同步并输出每条 lane 的 typed 结果。
+"""六 lane bootstrap/resync/align-published：默认只渲染命令；`resync --execute` 按 branch policy 的
+`persistent_lane_admission.resync_scope` 执行 ff-only 回同步并输出每条 lane 的 typed 结果；
+`align-published` 只把当前工作树对齐到已发布 exact SHA，供 `make accept SYNC=1` 在验收前调用。
 
 行为语义归属：
 `specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md`
@@ -201,6 +202,84 @@ def resync_lane(
     return LaneResyncResult(branch=branch, path=str(path), outcome="ff_done", target=target_sha, before=before, after=after)
 
 
+def _align_identity(git: GitRunner, path: Path, target: str) -> tuple[str, str, dict[str, object] | None]:
+    """返回 (branch, before, 早退结果)；HEAD 不可解析或有进行中操作即零写早退。"""
+    code, branch = git(path, "symbolic-ref", "--quiet", "--short", "HEAD")
+    if code != 0 or not branch:
+        return "", "", {"outcome": "skipped_missing", "detail": "worktree HEAD is detached", "target": target}
+    code, before = git(path, "rev-parse", "HEAD")
+    if code != 0 or not before:
+        return branch, "", {"outcome": "skipped_missing", "detail": before or "HEAD unresolvable",
+                            "target": target, "branch": branch}
+    if _in_progress(git, path):
+        return branch, before, {"outcome": "skipped_in_progress", "detail": "merge/rebase/cherry-pick in progress",
+                                "target": target, "branch": branch, "before": before}
+    return branch, before, None
+
+
+def align_published(
+    *,
+    worktree: Path | None = None,
+    merge_authorized: bool = False,
+    policy: inventory.WorktreePolicy | None = None,
+    project_root: Path | None = None,
+    git: GitRunner = _git,
+    fetch: bool = True,
+) -> dict[str, object]:
+    """把**当前**工作树对齐到已发布 origin/dev1.0 exact SHA，供发布前一条命令使用。
+
+    `ahead` 是常态（本 lane 有新提交），不是错误。落后走 ff-only；分叉只在调用方显式授权
+    合并时才在本工作树 merge 同一 SHA，且先用 `merge-tree` 零写预判冲突。任何情形都不
+    reset/stash/clean，也不触碰其他工作树。
+    """
+    active = policy or inventory.load_policy()
+    root = project_root or inventory.resolve_project_root(ROOT, active)
+    path = (worktree or ROOT).resolve()
+
+    if fetch:
+        code, out = git(root / active.bare_hub_directory, "fetch", "--no-tags", "origin",
+                        f"refs/heads/{active.integration_branch}:refs/remotes/origin/{active.integration_branch}")
+        if code != 0:
+            return {"outcome": "skipped_missing", "worktree": str(path), "detail": out or "fetch origin failed"}
+    try:
+        target = _published_target(git, root, active)
+    except RuntimeError as error:
+        return {"outcome": "skipped_missing", "worktree": str(path), "detail": str(error)}
+
+    branch, before, early = _align_identity(git, path, target)
+    if early is not None:
+        return {"worktree": str(path), **early}
+    common = {"worktree": str(path), "target": target, "branch": branch, "before": before, "detail": ""}
+    if before == target:
+        return {**common, "outcome": "aligned", "detail": "already at the published SHA", "after": before}
+    if git(path, "merge-base", "--is-ancestor", target, before)[0] == 0:
+        return {**common, "outcome": "ahead", "detail": "worktree already contains the published SHA", "after": before}
+
+    try:
+        overlap = _dirty_overlap(set(_status_paths(git, path)), set(_ff_paths(git, path, target)))
+    except RuntimeError as error:
+        return {**common, "outcome": "skipped_missing", "detail": str(error)}
+    if overlap:
+        return {**common, "outcome": "skipped_dirty_overlap", "overlap": list(overlap[:_OVERLAP_PREVIEW]),
+                "detail": f"{len(overlap)} dirty path(s) overlap the published delta"}
+
+    behind_only = git(path, "merge-base", "--is-ancestor", before, target)[0] == 0
+    if not behind_only:
+        if not merge_authorized:
+            return {**common, "outcome": "skipped_diverged",
+                    "detail": f"{branch} diverged from published {target}; explicit merge authorization required"}
+        # merge-tree 只算树、不动工作树：冲突时零写阻断，不留半成品 merge 状态。
+        if git(path, "merge-tree", "--write-tree", before, target)[0] != 0:
+            return {**common, "outcome": "merge_conflict",
+                    "detail": f"merging published {target} conflicts; resolve in this worktree via sync-lane-from-dev"}
+    code, out = git(path, "merge", "--no-edit", *(["--ff-only"] if behind_only else []), target)
+    after = git(path, "rev-parse", "HEAD")[1]
+    if code != 0 or (behind_only and after != target):
+        return {**common, "outcome": "ff_failed", "after": after,
+                "detail": out or "merge did not reach the published SHA"}
+    return {**common, "outcome": "ff_done" if behind_only else "merged", "after": after}
+
+
 def execute_resync(
     *,
     policy: inventory.WorktreePolicy | None = None,
@@ -228,9 +307,15 @@ def execute_resync(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("bootstrap", "resync"))
+    parser.add_argument("action", choices=("bootstrap", "resync", "align-published"))
     parser.add_argument("--execute", action="store_true", help="resync 时真正执行 ff-only 回同步并输出 JSON 结果")
+    parser.add_argument("--merge-authorized", action="store_true",
+                        help="align-published：调用方已显式授权在本工作树合并同一已发布 SHA；冲突仍零写阻断")
     args = parser.parse_args(argv)
+    if args.action == "align-published":
+        outcome = align_published(merge_authorized=args.merge_authorized)
+        print(json.dumps(outcome, ensure_ascii=False, indent=2))
+        return 0 if outcome["outcome"] in {"aligned", "ahead", "ff_done", "merged"} else 1
     if args.action == "resync" and args.execute:
         results = execute_resync()
         print(json.dumps([item.as_dict() for item in results], ensure_ascii=False, indent=2))

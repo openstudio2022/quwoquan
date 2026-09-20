@@ -29,4 +29,4 @@ metadata:
 
 ## 条件性交接
 
-提交后仅按用户授权进入 push/PR/发布。用户在同一请求里明确要求「合入 dev1.0」时，提交完成后交接 `integrate-lane-to-dev`：该交接是给用户的指令（在 integration 工作区运行 `/integrate-lane-to-dev`，附 commit SHA 与 lane），不在本 lane 工作区代跑、不 `cd` 到其他 worktree；未明确要求则停在提交。持久交接语义见 continue Skill。
+提交后仅按用户授权进入 push/PR/发布。用户在同一请求里明确要求「合入 dev1.0」时，提交完成后在**本 lane 工作区**继续执行 `integrate-lane-to-dev`（一条 `make accept PUBLISH=1`，附 commit SHA 与 lane），不切 Cursor 工作区、不 `cd` 到其他 worktree、不跨 worktree 代写；未明确要求则停在提交。持久交接语义见 continue Skill。

@@ -71,7 +71,7 @@ def write(root: Path, ref: str, value: dict[str, object]) -> dict[str, str]:
     return {"ref": ref, "digest": exact_file_digest(path)}
 
 
-def fixture(tmp_path: Path) -> tuple[Path, Path, dict[str, str], dict[str, str]]:
+def fixture(tmp_path: Path) -> tuple[Path, Path, dict[str, str], dict[str, str], dict[str, str], dict[str, str]]:
     repo = tmp_path / "repo"
     store = repo / ".qwq_output/env/repo/runs/qualification-test"
     repo.mkdir()
@@ -226,16 +226,36 @@ def fixture(tmp_path: Path) -> tuple[Path, Path, dict[str, str], dict[str, str]]
         reason_code="IMPACT_PLAN.NO_LIVE_ENVIRONMENT_REQUIRED",
         issued_at=NOW.isoformat(),
     )
-    beta = {
+    source_beta = {
         "ref": beta_path.relative_to(store).as_posix(),
         "digest": exact_file_digest(beta_path),
+    }
+    # Source admission may retain the typed policy skip.  Build a separate,
+    # immutable passed Beta fact for the post-publish qualification round.
+    live_beta_body = json.loads(beta_path.read_text())
+    live_beta_body["status"] = "passed"
+    live_beta_body.pop("reasonCode")
+    live_beta_body.pop("factId")
+    live_beta_body.pop("signer")
+    live_beta_payload = canonical_json_bytes(live_beta_body)
+    live_beta_body["signer"] = {
+        "identity": ENVIRONMENT_SIGNER,
+        "payloadType": "application/vnd.quwoquan.environment-acceptance-fact.v2+json",
+        "payload": base64.b64encode(live_beta_payload).decode("ascii"),
+        "signature": environment_sign(dsse_pae("application/vnd.quwoquan.environment-acceptance-fact.v2+json", live_beta_payload)),
+    }
+    live_beta_body["factId"] = canonical_digest(live_beta_body)
+    live_beta_path = write(store, "acceptance/live-beta.json", live_beta_body)
+    live_beta = {
+        "ref": live_beta_path["ref"],
+        "digest": live_beta_path["digest"],
     }
     gamma_request = request("gamma")
     gamma_path = issue_environment_acceptance_fact(
         store_root=store,
         request_ref=gamma_request,
         status="passed",
-        predecessor=beta,
+        predecessor=live_beta,
         **evidence_arguments("gamma"),
         signer_identity=ENVIRONMENT_SIGNER,
         signer=environment_sign,
@@ -253,7 +273,7 @@ def fixture(tmp_path: Path) -> tuple[Path, Path, dict[str, str], dict[str, str]]
         "candidateId": candidate_body["candidateId"],
         "commit": commit,
         "tree": tree,
-        "environmentFacts": {"alpha": alpha, "beta": beta},
+        "environmentFacts": {"alpha": alpha, "beta": source_beta},
     }
     admission = write(store, "admission.json", admission_body)
     result_body = {
@@ -265,15 +285,17 @@ def fixture(tmp_path: Path) -> tuple[Path, Path, dict[str, str], dict[str, str]]
         "admission": admission,
     }
     publish_result = write(store, "publish-result.json", result_body)
-    return repo, store, publish_result, gamma
+    return repo, store, publish_result, alpha, live_beta, gamma
 
 
 def test_qualification_binds_current_dev_head_abg_and_dsse(tmp_path: Path) -> None:
-    repo, store, publish_result, gamma = fixture(tmp_path)
+    repo, store, publish_result, alpha, beta, gamma = fixture(tmp_path)
     path = issue_integration_qualification(
         repository=repo,
         store_root=store,
         publish_result_ref=publish_result,
+        alpha_acceptance_ref=alpha,
+        beta_acceptance_ref=beta,
         gamma_acceptance_ref=gamma,
         signer_identity=QUALIFICATION_SIGNER,
         signer=qualification_sign,
@@ -287,7 +309,13 @@ def test_qualification_binds_current_dev_head_abg_and_dsse(tmp_path: Path) -> No
         json.loads(SCHEMA.read_text()), format_checker=FormatChecker()
     ).validate(fact)
     assert fact["devHead"] == git(repo, "rev-parse", "dev1.0")
+    assert fact["environmentChain"]["alpha"] == alpha
+    admission = json.loads((store / publish_result["ref"]).read_text())["admission"]
+    admission_beta = admission["ref"]
+    admission_payload = json.loads((store / admission_beta).read_text())
+    assert fact["environmentChain"]["beta"] != admission_payload["environmentFacts"]["beta"]
     assert fact["environmentChain"]["gamma"] == gamma
+    assert json.loads((store / fact["environmentChain"]["beta"]["ref"]).read_text())["status"] == "passed"
     payload = base64.b64decode(fact["signer"]["payload"])
     assert fact["signer"]["signature"] == qualification_sign(
         dsse_pae(fact["signer"]["payloadType"], payload)
@@ -298,14 +326,12 @@ def test_qualification_binds_current_dev_head_abg_and_dsse(tmp_path: Path) -> No
 def test_issue_rejects_any_environment_signature_tamper(
     tmp_path: Path, environment: str
 ) -> None:
-    repo, store, publish_result, gamma = fixture(tmp_path)
+    repo, store, publish_result, alpha, beta, gamma = fixture(tmp_path)
     publish_payload = json.loads((store / publish_result["ref"]).read_text())
     admission_ref = publish_payload["admission"]
     admission_path = store / admission_ref["ref"]
     admission = json.loads(admission_path.read_text())
-    exact = (
-        gamma if environment == "gamma" else admission["environmentFacts"][environment]
-    )
+    exact = gamma if environment == "gamma" else {"alpha": alpha, "beta": beta}[environment]
     fact_path = store / exact["ref"]
     fact = json.loads(fact_path.read_text())
     fact["signer"]["signature"] = "ed25519:" + base64.b64encode(b"\0" * 64).decode("ascii")
@@ -326,11 +352,13 @@ def test_issue_rejects_any_environment_signature_tamper(
             "ref": publish_result["ref"],
             "digest": exact_file_digest(publish_path),
         }
-    with pytest.raises(IntegrationQualificationError, match="ENVIRONMENT_INVALID"):
+    with pytest.raises(IntegrationQualificationError, match="ENVIRONMENT_INVALID|STALE"):
         issue_integration_qualification(
             repository=repo,
             store_root=store,
             publish_result_ref=publish_result,
+            alpha_acceptance_ref=alpha,
+            beta_acceptance_ref=beta,
             gamma_acceptance_ref=gamma,
             signer_identity=QUALIFICATION_SIGNER,
             signer=qualification_sign,
@@ -342,7 +370,7 @@ def test_issue_rejects_any_environment_signature_tamper(
 
 
 def test_issue_rejects_wrong_environment_signer_and_key(tmp_path: Path) -> None:
-    repo, store, publish_result, gamma = fixture(tmp_path)
+    repo, store, publish_result, alpha, beta, gamma = fixture(tmp_path)
     gamma_path = store / gamma["ref"]
     unknown_signer_gamma = json.loads(gamma_path.read_text())
     unknown_signer_gamma["signer"]["identity"] = "spiffe://unknown"
@@ -358,6 +386,8 @@ def test_issue_rejects_wrong_environment_signer_and_key(tmp_path: Path) -> None:
             repository=repo,
             store_root=store,
             publish_result_ref=publish_result,
+            alpha_acceptance_ref=alpha,
+            beta_acceptance_ref=beta,
             gamma_acceptance_ref=unknown_signer_ref,
             signer_identity=QUALIFICATION_SIGNER,
             signer=qualification_sign,
@@ -369,13 +399,15 @@ def test_issue_rejects_wrong_environment_signer_and_key(tmp_path: Path) -> None:
 
     wrong_key_root = tmp_path / "wrong-key"
     wrong_key_root.mkdir()
-    repo, store, publish_result, gamma = fixture(wrong_key_root)
+    repo, store, publish_result, alpha, beta, gamma = fixture(wrong_key_root)
 
     with pytest.raises(IntegrationQualificationError, match="ENVIRONMENT_INVALID"):
         issue_integration_qualification(
             repository=repo,
             store_root=store,
             publish_result_ref=publish_result,
+            alpha_acceptance_ref=alpha,
+            beta_acceptance_ref=beta,
             gamma_acceptance_ref=gamma,
             signer_identity=QUALIFICATION_SIGNER,
             signer=qualification_sign,
@@ -387,7 +419,7 @@ def test_issue_rejects_wrong_environment_signer_and_key(tmp_path: Path) -> None:
 
 
 def test_qualification_rejects_stale_dev_head_and_gamma(tmp_path: Path) -> None:
-    repo, store, publish_result, gamma = fixture(tmp_path)
+    repo, store, publish_result, alpha, beta, gamma = fixture(tmp_path)
     (repo / "next.txt").write_text("next\n")
     git(repo, "add", ".")
     git(repo, "commit", "-m", "next")
@@ -396,6 +428,8 @@ def test_qualification_rejects_stale_dev_head_and_gamma(tmp_path: Path) -> None:
             repository=repo,
             store_root=store,
             publish_result_ref=publish_result,
+            alpha_acceptance_ref=alpha,
+            beta_acceptance_ref=beta,
             gamma_acceptance_ref=gamma,
             signer_identity=QUALIFICATION_SIGNER,
             signer=qualification_sign,
@@ -409,11 +443,13 @@ def test_qualification_rejects_stale_dev_head_and_gamma(tmp_path: Path) -> None:
 def test_validate_qualification_verifies_identity_payload_signature_and_expiry(
     tmp_path: Path,
 ) -> None:
-    repo, store, publish_result, gamma = fixture(tmp_path)
+    repo, store, publish_result, alpha, beta, gamma = fixture(tmp_path)
     path = issue_integration_qualification(
         repository=repo,
         store_root=store,
         publish_result_ref=publish_result,
+        alpha_acceptance_ref=alpha,
+        beta_acceptance_ref=beta,
         gamma_acceptance_ref=gamma,
         signer_identity=QUALIFICATION_SIGNER,
         signer=qualification_sign,
@@ -476,11 +512,13 @@ def test_validate_qualification_verifies_identity_payload_signature_and_expiry(
 def test_validate_rejects_wrong_qualification_key_and_missing_environment_trust(
     tmp_path: Path,
 ) -> None:
-    repo, store, publish_result, gamma = fixture(tmp_path)
+    repo, store, publish_result, alpha, beta, gamma = fixture(tmp_path)
     path = issue_integration_qualification(
         repository=repo,
         store_root=store,
         publish_result_ref=publish_result,
+        alpha_acceptance_ref=alpha,
+        beta_acceptance_ref=beta,
         gamma_acceptance_ref=gamma,
         signer_identity=QUALIFICATION_SIGNER,
         signer=qualification_sign,

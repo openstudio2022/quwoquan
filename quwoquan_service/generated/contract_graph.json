@@ -119988,7 +119988,7 @@
           },
           {
             "path": "quwoquan_service/services/api-edge/internal/graphql_read/persisted_query_execution/adapters/inbound/http/runtime.go",
-            "sha256": "176796a0711dc6f483d5b88010f76c04217aa096051d56ea49f6528776ea1318"
+            "sha256": "c59025bb481622ac183f293177375a89f36f488d97ed841ef97aa310799893a8"
           }
         ],
         "localContract": [
@@ -120206,7 +120206,7 @@
         "domain": [
           {
             "path": "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/domain/policy.go",
-            "sha256": "81a1356d19d92ea3c2deeaea192ff550bf82d8145044a942d65ce02ebbcc9c00"
+            "sha256": "e11090eae34d4db0302c8d3a9e63f7d46ed7135a3e542ff41023bf663fcf9f55"
           }
         ],
         "store": [
@@ -120227,7 +120227,7 @@
         "reader": [
           {
             "path": "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/application/evaluator.go",
-            "sha256": "98a9479b1d205f4e867833f028055646ab0cac0f6bf548a93fb7ab5b10590199"
+            "sha256": "f91e3dd99d1a3a1a1e0ed913965a434496af141f2e899071625f4796bb56a7b8"
           },
           {
             "path": "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/application/minimum_build.go",
@@ -120243,7 +120243,7 @@
           },
           {
             "path": "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/application/runtime_config.go",
-            "sha256": "51e3f9eb66fe79975d1daff8025f13265761096773ad5b564d7456f668851e68"
+            "sha256": "d2642ec57b552ef77483487406d72040f87a242c1d148e37ead8872f8f2cccf8"
           },
           {
             "path": "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/application/target_context.go",
@@ -120253,7 +120253,7 @@
         "transport": [
           {
             "path": "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/adapters/inbound/http/middleware.go",
-            "sha256": "28c6ab3c5f8a6e4993090cb6b1382a05cea95671efab3355f28cf80667e82510"
+            "sha256": "de7bbd07ad52e7564ebca3c59c390e830c34750bc69eb82479496feba06558cf"
           },
           {
             "path": "quwoquan_service/services/api-edge/internal/edge_security/rollout_assignment/adapters/inbound/http/minimum_build.go",
@@ -120271,15 +120271,15 @@
           },
           {
             "path": "quwoquan_service/services/api-edge/tests/local_contract/edge_security/rollout_assignment/rollout_assignment__local_contract_test.go",
-            "sha256": "eeec62da813be07072f455229cf0ddefbec836b138578148e900546b22b65363"
+            "sha256": "4f201bd43b9efa4b5c02aaf1d306a116d9eab041c21ea5d7855971442aac8149"
           },
           {
             "path": "quwoquan_service/services/api-edge/tests/local_contract/edge_security/rollout_assignment/rollout_middleware__local_contract_test.go",
-            "sha256": "d02206db13673fa55c92b9d70055b65593f5eb5acc4011117cab428231fa387f"
+            "sha256": "606fea7924660beb4feaa5a3882b84c6b01b63b30610adb8492f341dcbd40d8c"
           },
           {
             "path": "quwoquan_service/services/api-edge/tests/local_contract/edge_security/rollout_assignment/runtime_config__local_contract_test.go",
-            "sha256": "6a67db8bc327f0bbf93a545c74a9d6044db10f406fe13bd975078e3bcb22c142"
+            "sha256": "ee86032abc6c6a4daf67dd4e8705a150e97d73996c5e95acd3a5be6081338789"
           }
         ],
         "apiIntegration": [
@@ -135302,7 +135302,7 @@
     },
     {
       "path": "gateway/edge_security/rollout_assignment/object.yaml",
-      "sha256": "0f9f96e90901b2076e7d0a347a3367a3db9aad12c50848578a21060ec4ebc0e1"
+      "sha256": "cc96e5d082dd426c8531ca734b182498b60be412f901e288f25d28eb60441de5"
     },
     {
       "path": "gateway/edge_security/rollout_assignment/operations.yaml",
@@ -322659,7 +322659,7 @@
     },
     {
       "path": "gateway/edge_security/rollout_assignment/object.yaml",
-      "sha256": "0f9f96e90901b2076e7d0a347a3367a3db9aad12c50848578a21060ec4ebc0e1",
+      "sha256": "cc96e5d082dd426c8531ca734b182498b60be412f901e288f25d28eb60441de5",
       "mediaType": "application/yaml",
       "content": {
         "access": {
@@ -322685,7 +322685,11 @@
         "business_rules": [
           "原始 deviceActorId 不得持久化或进入日志，subjectDigest 必须使用 allocation key 做 HMAC-SHA256。",
           "同一 campaign 的 candidate assignment 只能建立，不得删除或改回 stable；仅 campaign rollback 可使全量流量返回 stable。",
-          "assignment store 不可用或数据丢失时 campaign 必须回滚，不得使用请求随机或账号/IP fallback。"
+          "assignment store 不可用或数据丢失时 campaign 必须回滚，不得使用请求随机或账号/IP fallback。",
+          "prod-hosted/prevalidate 验证环使用 validationRing.enabled 与 requireIp 显式启用；route 必须绑定 target=candidate、deploymentInstance=prevalidate、等于 candidateDigest 的 candidateId、canonical artifactDigest/runtimeConfigDigest 及 publicExposure=false，缺失 hosted exact readback 时保持禁用。",
+          "验证环 appVersions 绑定 platform/displayVersion/buildNumber 到已验真 artifactDigest；displayVersion 为无 RC 后缀三段版本，buildNumber 为正整数字符串。用户或设备名单内部 OR，用户与 trustedIpCidrs 两类限制均可省略，已配置的限制与精确版本匹配 AND；省略为 nil、显式空列表为拒绝所有请求，不能把空配置视为未配置。两类均省略时验证环默认拒绝。只有 IP 限制已配置或部署 requireIp=true 时才要求可信 IP；requireIp=true 且未配置 IP 列表也拒绝，requireIp=false 允许仅用户白名单。",
+          "REST 与 GraphQL 只消费已验签 principal 和可信代理覆盖的源 IP，不从 RemoteAddr 或客户端转发头回退；客户端不提供受信制品身份。每次验证环请求重新裁决，不读取或写入正式 campaign sticky assignment。",
+          "validationRing 禁用时保持普通百分比灰度语义；其可选 appVersions 表为空不限制普通灰度。验证环 route 与版本制品摘要必须一致，公开流量和正式百分比 campaign 不得共享启用中的验证环 candidate 池。"
         ],
         "description": "API Edge 对生产发布 campaign 与可信安装主体的 stable/candidate 裁决。只有定向 audience 中已进入 candidate 的主体持久化 assignment， 百分比分区可由不可变 campaign material 确定性重算。",
         "identity": {

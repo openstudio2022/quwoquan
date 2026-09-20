@@ -46,7 +46,7 @@ Feature Tree 上下文算法见 [`specs/feature-tree/README.md`](specs/feature-t
 
 ## Git 不变量
 
-- 本地分支闭集为 `dev1.0`、只读 `main` 与六条长期 `lane/*`；lane upstream 统一为 `origin/dev1.0` 且不推远端，远端仅 `dev1.0/main`。`dev1.0` 只接受 trusted publisher CAS、持 bundle 的 integration non-force FF publish、managed backsync；其他 push、force/delete、来源不符均拒绝。唯一 promotion 为 `dev1.0 -> main`；Prod 只消费 main-reachable stable tag AdmissionFact 的 exact OCI digests。
+- 本地分支闭集为 `dev1.0`、只读 `main` 与六条长期 `lane/*`；lane upstream 统一为 `origin/dev1.0` 且不推 `lane/*`，远端仅 `dev1.0/main`。`dev1.0` 只接受 trusted publisher CAS、规范 linked worktree 持验真 admission 的 non-force FF publish（产出 candidate 的 lane 一条 `make accept PUBLISH=1` 即可，不必换工作区）、managed backsync；其他 push、force/delete、来源不符均拒绝。唯一 promotion 为 `dev1.0 -> main`；Prod 只消费 main-reachable stable tag AdmissionFact 的 exact OCI digests。
 - 新建 linked worktree 或再次 clone 每次都须先取得用户明确授权，并以 `QWQ_WORKTREE_AUTHZ="<授权理由>" <command>` 执行。clone 后先运行 `make install-hooks`。
 - 无验真 bundle/admission 不移动 `origin/dev1.0`；`env=1` 不证明 admission。bundle/admission、Lane Gate 左移、dev 发布资格与回同步只读 `daily-merge-release-strategy` REQ-002 及两个同步 Skill；日常 dev 由 accept/bundle/integrate/hook 强制。普通凭据可 FF 但不证明 Alpha；hosted 强制缺口保持 OPEN-track；dev 禁删/禁非 FF。同步目标只取本轮已发布 `origin/dev1.0` exact SHA，不回落本地 dev、不推 lane。Gamma/IQF 后仅 `dev1.0 -> main` PR，MainSourceSeal 后仅受管 backsync。
 - 只有用户明确要求时才创建提交；提交按 `commit` Skill 执行，不用 `--no-verify` 作为常规通道。

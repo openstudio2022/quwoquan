@@ -20,6 +20,7 @@ from typing import Any
 import yaml
 
 from quwoquan_ops.ci import integration_qualification as qualification
+from quwoquan_ops.cli.lib.dirty_worktree import overlapping_dirty_paths, parse_name_only_z, parse_porcelain_z
 from quwoquan_ops.cli.lib.evidence_signing import (
     ENVIRONMENT_OPS_IDENTITY, KEYRING_RELATIVE_PATH, EvidenceSigningError,
     ed25519_environment_verifier, load_keyring,
@@ -228,9 +229,22 @@ def inspect_claims(*, repository: Path, policy_path: Path) -> list[dict[str, Any
     return claims
 
 
+def _write_claim_release(root: Path, claim: Mapping[str, Any], *, reason: str) -> Path:
+    claim_id = _digest(claim.get("claimId"), "claimId")
+    payload = {
+        "schema": "quwoquan_ops.scoped_path_claim_release.v1",
+        "claimId": claim_id,
+        "claimDigest": exact_digest(root / "claims" / f"{claim_id}.json"),
+        "reason": _text(reason, "reason"),
+        "releasedAt": _utc_now(),
+    }
+    return _write_create_once(root / "releases" / f"{claim_id}.json", payload)
+
+
 def acquire_claim(
     *, repository: Path, policy_path: Path, writer_id: str,
     expected_parent: str, paths: Sequence[str], expires_at: str,
+    supersede_same_worktree: bool = False,
 ) -> Path:
     repository = _repo_root(repository)
     normalized = _normalize_paths(repository, paths)
@@ -242,14 +256,26 @@ def acquire_claim(
     root = _claim_root(repository, policy_path)
     with _coordinator_lock(root):
         active = [claim for claim in inspect_claims(repository=repository, policy_path=policy_path) if claim["active"]]
+        superseded: list[dict[str, Any]] = []
         for claim in active:
-            for requested in normalized:
-                for existing in claim.get("paths", []):
-                    if _paths_conflict(requested, existing):
-                        raise ScopedCandidateError(
-                            "SCOPED_CANDIDATE.CLAIM_CONFLICT",
-                            f"path {requested!r} conflicts with active claim {claim.get('claimId')}",
-                        )
+            overlaps = any(
+                _paths_conflict(requested, existing)
+                for requested in normalized
+                for existing in claim.get("paths", [])
+            )
+            if not overlaps:
+                continue
+            same_worktree = claim.get("worktree") == str(repository)
+            same_parent = claim.get("expectedParent") == expected_parent
+            if supersede_same_worktree and same_worktree and same_parent:
+                superseded.append(claim)
+                continue
+            raise ScopedCandidateError(
+                "SCOPED_CANDIDATE.CLAIM_CONFLICT",
+                f"path overlap conflicts with active claim {claim.get('claimId')}",
+            )
+        for claim in superseded:
+            _write_claim_release(root, claim, reason="superseded_by_new_head")
         generation = 1 + max((int(claim.get("generation", 0)) for claim in active), default=0)
         body: dict[str, Any] = {
             "schema": "quwoquan_ops.scoped_path_claim.v1", "writerId": writer_id,
@@ -266,13 +292,8 @@ def release_claim(*, repository: Path, policy_path: Path, claim_ref: Path, reaso
     repository = _repo_root(repository)
     root = _claim_root(repository, policy_path)
     claim = _read_json(claim_ref)
-    claim_id = _digest(claim.get("claimId"), "claimId")
-    payload = {
-        "schema": "quwoquan_ops.scoped_path_claim_release.v1", "claimId": claim_id,
-        "claimDigest": exact_digest(claim_ref), "reason": _text(reason, "reason"), "releasedAt": _utc_now(),
-    }
     with _coordinator_lock(root):
-        return _write_create_once(root / "releases" / f"{claim_id}.json", payload)
+        return _write_claim_release(root, claim, reason=reason)
 
 
 def _index_digest(repository: Path) -> str:
@@ -374,7 +395,8 @@ def build_head_candidate(
     impact_plan_digest = _digest(impact_plan_digest, "impactPlanDigest")
     claim_path = acquire_claim(
         repository=repository, policy_path=policy_path, writer_id=writer_id,
-expected_parent=parent, paths=list(changed), expires_at=expires_at,
+        expected_parent=parent, paths=list(changed), expires_at=expires_at,
+        supersede_same_worktree=True,
     )
     body: dict[str, Any] = {
         "schema": _SCHEMA, "claimRef": claim_path.relative_to(root).as_posix(),
@@ -693,15 +715,25 @@ def _validated_admission(repository: Path, admission_ref: Path, policy_path: Pat
     return admission
 
 
-def validate_integration_publish_origin(repository: Path, remote: str, remote_url: str | None = None) -> None:
-    """本地 source 检查不替代 hosted 身份保护；禁止非规范 worktree/remote。"""
+def canonical_publish_worktrees(repository: Path) -> tuple[frozenset[Path], Path]:
+    """发布座位闭集是政策声明的六条 lane 目录加唯一 integration 目录，外加同一 bare hub。"""
     from quwoquan_ops.cli.lib.local_worktree_inventory import load_policy, resolve_project_root
     policy = load_policy()
     project = resolve_project_root(repository, policy)
-    hub = project / policy.bare_hub_directory
+    seats = {(project / directory).resolve() for _, directory in policy.lane_worktree_directories}
+    seats.add((project / policy.integration_directory).resolve())
+    return frozenset(seats), (project / policy.bare_hub_directory).resolve()
+
+
+def validate_publish_worktree_origin(repository: Path, remote: str, remote_url: str | None = None) -> None:
+    """本地 source 检查不替代 hosted 身份保护；座位是规范 worktree + hub origin，不是某个目录。"""
+    seats, hub = canonical_publish_worktrees(repository)
     common = Path(_git(repository, "rev-parse", "--path-format=absolute", "--git-common-dir").stdout.strip()).resolve()
-    if repository != project / policy.integration_directory or common != hub.resolve() or remote != "origin":
-        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "publisher requires canonical integration worktree and origin")
+    if repository.resolve() not in seats or common != hub or remote != "origin":
+        raise ScopedCandidateError(
+            "SCOPED_CANDIDATE.INVALID",
+            "publisher requires a canonical lane or integration worktree on the hub origin",
+        )
     urls = _git(repository, "remote", "get-url", "--push", "--all", "origin").stdout.splitlines()
     authority = _git(repository, "--git-dir", str(hub), "config", "--get-all", "remote.origin.url").stdout.splitlines()
     if len(urls) != 1 or urls != authority or (remote_url is not None and remote_url != urls[0]):
@@ -712,7 +744,7 @@ def validate_publish_update(*, repository: Path, policy_path: Path, admission_re
                             before: str, after: str, ref: str, remote: str, remote_url: str) -> dict[str, Any]:
     """hook 与 publisher 的 exact update 校验边界；不接受 env boolean。"""
     repository = _repo_root(repository)
-    validate_integration_publish_origin(repository, remote, remote_url)
+    validate_publish_worktree_origin(repository, remote, remote_url)
     root = _claim_root(repository, policy_path)
     relative = _normalize_path(root, admission_ref.get("ref"))
     digest = _digest(admission_ref.get("digest"), "admission.digest")
@@ -879,15 +911,16 @@ def local_git_cas_publish(
     *, repository: Path, policy_path: Path, admission_ref: Path, remote: str = "origin",
     ref: str = "refs/heads/dev1.0",
 ) -> Path:
-    """integration 工作区通道：本地 ff-only 跟到候选，再以 expected-old lease 做一次 non-force fast-forward push。
+    """规范 worktree 通道：以 expected-old lease 做一次 non-force fast-forward push，不移动本地任何分支。
 
-    前置：当前工作区 HEAD 就在目标分支上且工作树干净；本地分支 == expectedRemoteOid 或已等于候选。
+    前置：当前工作树是政策声明的 lane 或 integration 座位、共享同一 bare hub origin，HEAD 就是候选
+    commit；脏文件只与本次发布 diff（`expectedRemoteOid...candidate`）重叠时阻断。
     CAS：`--force-with-lease=<ref>:<before>` 只在远端仍为 before 时更新；pre-push hook 与
     hosted ruleset 继续独立保证 fast-forward。终态按 ls-remote 读回 before|after|other 收口。
     """
     repository = _repo_root(repository)
     root = _claim_root(repository, policy_path)
-    validate_integration_publish_origin(repository, remote)
+    validate_publish_worktree_origin(repository, remote)
     admission_digest = exact_digest(admission_ref)
     admission = _validated_admission(repository, admission_ref, policy_path, admission_digest)
     if admission["targetRef"] != ref:
@@ -895,31 +928,35 @@ def local_git_cas_publish(
     before = str(admission["expectedRemoteOid"])
     after = str(admission["commit"])
     branch = ref.removeprefix("refs/heads/")
-    current_branch = _git(repository, "symbolic-ref", "--quiet", "HEAD").stdout.strip()
-    if current_branch != ref:
-        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", f"worktree HEAD must be on {ref} for the integration channel")
-    if _git(repository, "status", "--porcelain", "--untracked-files=no").stdout.strip():
-        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "worktree must be clean before publish")
+    head = _git(repository, "rev-parse", "HEAD^{commit}").stdout.strip()
+    if head != after:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.INVALID", "worktree HEAD must be the exact candidate commit to publish")
+    overlap = overlapping_dirty_paths(
+        parse_porcelain_z(_git(repository, "status", "--porcelain", "-z", "--untracked-files=all").stdout),
+        parse_name_only_z(_git(repository, "diff", "--name-only", "--no-renames", "-z", before, after).stdout),
+    )
+    if overlap:
+        preview = ", ".join(overlap[:8])
+        raise ScopedCandidateError("SCOPED_CANDIDATE.DIRTY_WORKTREE", f"dirty path(s) overlap expectedParent...candidate: {preview}")
     remote_before = _remote_ref_oid(repository, remote, ref)
     if remote_before != before:
         state = _terminal_readback(before=before, after=after, readback=remote_before or "")
         code = "SCOPED_CANDIDATE.STALE" if state == "after" else "SCOPED_CANDIDATE.CAS_CONFLICT"
         raise ScopedCandidateError(code, f"remote readback before publish is {state}")
-    local = _git(repository, "rev-parse", ref).stdout.strip()
-    if local == before:
-        _git(repository, "merge", "--ff-only", after)
-    elif local != after:
-        raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "local integration branch is neither expected parent nor candidate")
-    if _git(repository, "rev-parse", ref).stdout.strip() != after:
-        raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "local fast-forward did not land on the candidate")
+    ancestry = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", before, after], cwd=repository,
+        text=True, capture_output=True, check=False,
+    )
+    if ancestry.returncode != 0:
+        raise ScopedCandidateError("SCOPED_CANDIDATE.CAS_CONFLICT", "candidate is not a fast-forward of the expected remote parent")
     _validated_admission(repository, admission_ref, policy_path, admission_digest)
-    validate_integration_publish_origin(repository, remote)
+    validate_publish_worktree_origin(repository, remote)
     publish_env = os.environ.copy()
     publish_env.pop("QWQ_ACCEPTANCE_PUBLISH", None)
     publish_env["QWQ_PUBLISH_ADMISSION_REF"] = admission_ref.relative_to(root).as_posix()
     publish_env["QWQ_PUBLISH_ADMISSION_DIGEST"] = admission_digest
     push = subprocess.run(
-        ["git", "push", f"--force-with-lease={ref}:{before}", remote, f"{ref}:{ref}"],
+        ["git", "push", f"--force-with-lease={ref}:{before}", remote, f"{after}:{ref}"],
         cwd=repository, text=True, capture_output=True, check=False,
         env=publish_env,
     )
@@ -941,6 +978,7 @@ def local_git_cas_publish(
             "channel": "integration_worktree_fast_forward",
             "remote": remote,
             "branch": branch,
+            "sourceBranch": _git(repository, "symbolic-ref", "--quiet", "HEAD").stdout.strip(),
             "pushExitCode": push.returncode,
             "worktree": str(repository),
         },

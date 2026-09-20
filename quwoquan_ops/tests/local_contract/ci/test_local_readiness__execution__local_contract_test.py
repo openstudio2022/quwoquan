@@ -271,6 +271,43 @@ def test_source_drift_during_worktree_run_stales_receipt_without_green(monkeypat
         assert not (state / "process/receipts/current").exists()
 
 
+# spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-005.t2
+def test_same_tree_digest_skips_capsule_rematerialize(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    _init(repo)
+    plan = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="commit")
+    state = tmp_path / "state"
+    original = __import__("lib.local_readiness.core", fromlist=["_materialize_capsule_entry"])._materialize_capsule_entry
+    calls = {"n": 0}
+
+    def counted(repo_root, capsule_root, entry):
+        calls["n"] += 1
+        return original(repo_root, capsule_root, entry)
+
+    monkeypatch.setattr("lib.local_readiness.core._materialize_capsule_entry", counted)
+    with source_execution_root(
+        repo_root=repo, mode="commit", state_root=_state_root(state), fingerprint=plan["fingerprint"],
+    ) as (capsule, _env, entries):
+        first = calls["n"]
+        assert first == len(entries)
+        assert (capsule / "source.txt").read_text(encoding="utf-8") == "one\n"
+    with source_execution_root(
+        repo_root=repo, mode="commit", state_root=_state_root(state), fingerprint=plan["fingerprint"],
+    ) as (capsule, _env, entries):
+        assert calls["n"] == first
+        assert (capsule / "source.txt").read_text(encoding="utf-8") == "one\n"
+    assert any((_state_root(state) / "process/capsules").iterdir())
+    (repo / "source.txt").write_text("two\n", encoding="utf-8")
+    _commit_all(repo, "changed tree")
+    changed = plan_readiness(level="fast", paths=["source.txt"], repo_root=repo, mode="commit")
+    with source_execution_root(
+        repo_root=repo, mode="commit", state_root=_state_root(state), fingerprint=changed["fingerprint"],
+    ) as (capsule, _env, entries):
+        assert calls["n"] == first + len(entries)
+        assert (capsule / "source.txt").read_text(encoding="utf-8") == "two\n"
+
+
 def test_capsule_rejects_symlink_escape_and_cleans_process_root() -> None:
     with _repo() as directory:
         repo = Path(directory)

@@ -18,6 +18,7 @@ var generatedRouteTable = []generatedRouteDef{
 	{method: "POST", pathTemplate: "/content/reactions/{targetKind}/{targetId}/commands/{operation}/finalize-expired", operation: "FinalizeExpiredContentReactionCommand"},
 	{method: "GET", pathTemplate: "/content/reactions/{targetKind}/{targetId}/commands/{operation}/receipt", operation: "RecoverContentReactionCommand"},
 	{method: "GET", pathTemplate: "/content/reactions/{targetKind}/{targetId}/mutation-basis", operation: "GetContentReactionMutationBasis"},
+	{method: "GET", pathTemplate: "/content/reactions/{targetKind}/{targetId}/presentation", operation: "GetContentReactionPresentation"},
 }
 
 type generatedRouteDef struct {

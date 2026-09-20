@@ -53,6 +53,7 @@ func Middleware(
 				Platform:      request.Header.Get("X-Client-Device-Platform"),
 				AppVersion:    request.Header.Get("X-Client-App-Version"),
 				AppBuild:      request.Header.Get("X-Client-App-Build"),
+				ClientIP:      trustedClientIP(request, trustedNetworkHeader),
 				Region:        attributes.Region,
 				Carrier:       attributes.Carrier,
 			}
@@ -96,6 +97,17 @@ func parseTrustedIP(value string) net.IP {
 		value = host
 	}
 	return net.ParseIP(value)
+}
+
+func trustedClientIP(request *http.Request, trustedHeader string) string {
+	if request == nil || strings.TrimSpace(trustedHeader) == "" {
+		return ""
+	}
+	parsed := parseTrustedIP(request.Header.Get(trustedHeader))
+	if parsed == nil {
+		return ""
+	}
+	return parsed.String()
 }
 
 func normalizedAttribute(value string) string {

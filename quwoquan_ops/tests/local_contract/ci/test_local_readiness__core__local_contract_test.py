@@ -807,7 +807,7 @@ def test_scope_fingerprint_does_not_require_review_consolidation() -> None:
         repo = Path(directory)
         _init(repo)
         plan = {**build_impact_plan(["source.txt"], level="scope", repo_root=repo), "mode": "workspace"}
-        with pytest.raises(LocalReadinessError, match="owner identity"):
+        with pytest.raises(LocalReadinessError, match="scope/release readiness 要求 canonical candidate evidence"):
             capture_fingerprint(plan, repo_root=repo, mode="workspace")
         fingerprint = capture_fingerprint(plan, repo_root=repo, mode="workspace", allow_missing_admission=True)
         assert fingerprint["digest"].startswith("sha256:")

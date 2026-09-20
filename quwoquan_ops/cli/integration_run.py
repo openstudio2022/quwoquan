@@ -115,7 +115,7 @@ def _git(*args: str) -> str:
     completed = subprocess.run(["git", "-c", "core.quotePath=false", *args], cwd=ROOT, text=True, capture_output=True, check=False)
     if completed.returncode != 0:
         raise IntegrationRunError("INTEGRATION_RUN.GIT", f"git {' '.join(args)}: {' '.join((completed.stderr or completed.stdout).split())}")
-    return completed.stdout.strip()
+    return completed.stdout.rstrip("\n\r")
 
 
 def _is_ancestor(parent: str, commit: str) -> bool:
@@ -1519,7 +1519,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--signing-keyring", type=Path, default=DEFAULT_KEYRING_PATH,
                         help="仓内 Ed25519 公钥 keyring；私钥来自仓外 QWQ_EVIDENCE_SIGNING_KEY_ROOT")
     parser.add_argument("--fact-ttl-hours", type=int, default=72)
-    parser.add_argument("--writer", default="integration")
+    parser.add_argument("--writer", default="", help="claim writer 身份；留空时取当前 lane 分支名（integration 分支回落 integration）")
     parser.add_argument("--publish", action="store_true", help="admit 后以 local-git CAS 发布到远端 dev1.0")
     parser.add_argument("--reuse", action="store_true",
                         help="acceptance 专用：复用同 commit/tree/parent/ImpactPlan/profile/平台计划 的有效 Alpha/Beta 事实；"
@@ -1534,9 +1534,10 @@ def _parser() -> argparse.ArgumentParser:
 
 def _prepare_signing(args: argparse.Namespace, summary: dict[str, Any]) -> tuple[Any, Any]:
     validate_mode_inputs(args)
-    if args.validate_bundle_only:
-        from quwoquan_ops.ci.scoped_candidate.core import validate_integration_publish_origin
-        validate_integration_publish_origin(ROOT, args.remote)
+    if args.validate_bundle_only or args.publish:
+        # 发布座位在跑完整质量闭集之前就失败，避免白跑一轮才报 INVALID。
+        from quwoquan_ops.ci.scoped_candidate.core import validate_publish_worktree_origin
+        validate_publish_worktree_origin(ROOT, args.remote)
     try:
         keyring = load_keyring(args.signing_keyring)
     except EvidenceSigningError as exc:
@@ -1564,6 +1565,27 @@ def _prepare_signing(args: argparse.Namespace, summary: dict[str, Any]) -> tuple
     return keyring, signer
 
 
+def _admit_and_publish(*, args: argparse.Namespace, candidate_ref: Mapping[str, str], source_ref: Mapping[str, str],
+                       alpha_ref: Mapping[str, str], beta_ref: Mapping[str, str], parent: str,
+                       phases: Phases, summary: dict[str, Any]) -> None:
+    """acceptance 与 integrate 共用的发布尾段：同一 admission、同一 expected-old CAS、同一读回。"""
+    admission_path = phases.run("admit", lambda: create_publish_admission(
+        repository=ROOT, policy_path=POLICY, candidate_ref=candidate_ref, source_fact_refs=[source_ref],
+        alpha_fact_ref=alpha_ref, beta_fact_ref=beta_ref, expected_remote_oid=parent,
+    ))
+    summary["admission"] = store_ref(repository=ROOT, policy_path=POLICY, path=admission_path)
+    summary["terminal"] = "admitted"
+    if not args.publish:
+        return
+    result_path = phases.run("publish", lambda: local_git_cas_publish(
+        repository=ROOT, policy_path=POLICY, admission_ref=admission_path, remote=args.remote,
+    ))
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    summary["publish"] = {**store_ref(repository=ROOT, policy_path=POLICY, path=result_path),
+                          "beforeOid": result["beforeOid"], "afterOid": result["afterOid"], "readbackOid": result["readbackOid"]}
+    summary["terminal"] = "published"
+
+
 def _integrate_bundle(args: argparse.Namespace, *, identity: Mapping[str, str], phases: Phases,
                       summary: dict[str, Any], keyring: Any) -> None:
     imported = phases.run("validate-bundle" if args.validate_bundle_only else "import-bundle", lambda: _import_acceptance_bundle(
@@ -1579,20 +1601,9 @@ def _integrate_bundle(args: argparse.Namespace, *, identity: Mapping[str, str], 
         summary["terminal"] = "bundle_validated"
         return
     record_imported_bundle(summary, imported, bundle_dir=args.acceptance_bundle)
-    admission_path = phases.run("admit", lambda: create_publish_admission(
-        repository=ROOT, policy_path=POLICY, candidate_ref=manifest["candidate"], source_fact_refs=[manifest["sourceFact"]],
-        alpha_fact_ref=manifest["alphaFact"], beta_fact_ref=manifest["betaFact"], expected_remote_oid=identity["parent"],
-    ))
-    summary["admission"] = store_ref(repository=ROOT, policy_path=POLICY, path=admission_path)
-    summary["terminal"] = "admitted"
-    if args.publish:
-        result_path = phases.run("publish", lambda: local_git_cas_publish(
-            repository=ROOT, policy_path=POLICY, admission_ref=admission_path, remote=args.remote,
-        ))
-        result = json.loads(result_path.read_text(encoding="utf-8"))
-        summary["publish"] = {**store_ref(repository=ROOT, policy_path=POLICY, path=result_path),
-                              "beforeOid": result["beforeOid"], "afterOid": result["afterOid"], "readbackOid": result["readbackOid"]}
-        summary["terminal"] = "published"
+    _admit_and_publish(args=args, candidate_ref=manifest["candidate"], source_ref=manifest["sourceFact"],
+                       alpha_ref=manifest["alphaFact"], beta_ref=manifest["betaFact"], parent=identity["parent"],
+                       phases=phases, summary=summary)
 
 
 def _accept_alpha(*, args: argparse.Namespace, candidate_ref: Mapping[str, str], candidate: Mapping[str, Any],
@@ -1726,6 +1737,8 @@ def main(argv: list[str] | None = None) -> int:
         lane_branch = _readiness_local_ref(args=args, commit=identity["commit"])
         merged_lanes = _merged_lanes(values=args.merged_lanes, lane_branch=lane_branch, commit=identity["commit"], remote=args.remote)
         _apply_acceptance_execution_scope(args, lane_branch)
+        # claim writer 如实记录发布工作树身份；不再把 lane 的 claim 一律写成 integration。
+        args.writer = args.writer or lane_branch.removeprefix("refs/heads/") or "integration"
         summary["laneBranch"] = lane_branch
         summary["mergedLanes"] = merged_lanes
         plan, plan_path = phases.run("impact-plan", lambda: _impact_plan(parent=identity["parent"], commit=identity["commit"], run_dir=run_dir))
@@ -1785,7 +1798,14 @@ def main(argv: list[str] | None = None) -> int:
                                  "betaStatus": beta_status, "betaReasonCode": beta_reason,
                                  "bundle": {"path": str(bundle_dir), "ref": _output_ref(bundle_dir), "bundleId": manifest["bundleId"],
                                             "storeFiles": len(manifest["storeFiles"])},
-                                 "note": "lane acceptance only: no publish admission, no dev1.0 write; integrate consumes the bundle"}
+                                 "note": ("same-worktree publish: admission and expected-old CAS follow this accepted candidate"
+                                          if args.publish else
+                                          "acceptance only: no publish admission, no dev1.0 write; PUBLISH=1 or integrate consumes the bundle")}
+        if args.publish:
+            # 同一 run 直接发布本 candidate：不移动本 lane HEAD，也不需要本地 dev1.0 ref。
+            _admit_and_publish(args=args, candidate_ref=candidate_ref, source_ref=source_ref,
+                               alpha_ref=alpha_ref, beta_ref=beta_ref, parent=identity["parent"],
+                               phases=phases, summary=summary)
         return 0
     except (IntegrationRunError, ScopedCandidateError, EnvironmentSchedulerError) as exc:
         code = getattr(exc, "code", "INTEGRATION_RUN.BLOCKED")

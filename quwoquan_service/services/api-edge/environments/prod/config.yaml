@@ -13,7 +13,7 @@ overrides:
   sys.api-edge.minimum_build.exempt_paths: [/ops/app-recovery/version]
   sys.api-edge.rollout.enabled: true
   sys.api-edge.rollout.policy_file: rollout/routing_policy.yaml
-  sys.api-edge.rollout.policy_sha256: sha256:aa2e052da0033d081cdcb1f1a7d6b8942fdedf2d3f46f5cb6dc425baed2974b5
+  sys.api-edge.rollout.policy_sha256: sha256:e85fbeebf012199559a84aa9f3ece704436c637b3d44e50919c6061cd465e2a2
   sys.api-edge.candidate_upstreams.assistant: http://host.containers.internal:29230
   sys.api-edge.candidate_upstreams.chat: http://host.containers.internal:29200
   sys.api-edge.candidate_upstreams.circle: http://host.containers.internal:29300

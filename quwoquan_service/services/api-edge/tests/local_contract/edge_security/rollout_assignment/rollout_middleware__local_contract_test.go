@@ -68,6 +68,38 @@ func TestMiddlewareRebuildsNetworkAttributesAndUsesVerifiedDevice(t *testing.T) 
 	}
 }
 
+// spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/gray-release-to-prod/spec.md#gwt-002
+func TestValidationRingMiddlewareNeverFallsBackToForwardedOrRemoteIP(t *testing.T) {
+	policy := validationPolicy()
+	evaluator, err := application.NewEvaluator(policy, testAllocationKey, newMemoryStore(), time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, trusted := range []string{"203.0.113.10", "", "invalid", "203.0.113.10,198.51.100.1"} {
+		seen := domain.TargetStable
+		handler := httpadapter.Middleware(evaluator, nil, "X-Edge-Client-IP", nil)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			seen = application.TargetFromContext(r.Context())
+			w.WriteHeader(http.StatusNoContent)
+		}))
+		r := httptest.NewRequest(http.MethodGet, "/content/feed", nil)
+		r.RemoteAddr = "203.0.113.10:443"
+		r.Header.Set("X-Forwarded-For", "203.0.113.10")
+		r.Header.Set("X-Edge-Client-IP", trusted)
+		r.Header.Set("X-Client-Device-Platform", "ios")
+		r.Header.Set("X-Client-App-Version", "1.9.0")
+		r.Header.Set("X-Client-App-Build", "19001")
+		r = r.WithContext(rtauth.WithPrincipal(r.Context(), rtauth.Principal{Actor: operation.ActorContext{AccountID: "account-1", DeviceActorID: "device-1"}}))
+		handler.ServeHTTP(httptest.NewRecorder(), r)
+		want := domain.TargetStable
+		if trusted == "203.0.113.10" {
+			want = domain.TargetCandidate
+		}
+		if seen != want {
+			t.Errorf("trusted=%q target=%s want=%s", trusted, seen, want)
+		}
+	}
+}
+
 func TestRolloutMetricsAreBoundedAndDistinguishMissingSubjectFromStoreFailure(t *testing.T) {
 	registry := prometheus.NewRegistry()
 	observer := rolloutmetrics.NewMetrics(registry)

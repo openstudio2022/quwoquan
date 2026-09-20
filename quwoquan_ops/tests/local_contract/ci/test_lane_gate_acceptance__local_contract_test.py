@@ -1,5 +1,6 @@
 """Lane Gate 左移只扩充 canonical push readiness；不伪造 runtime 准出。
 
+spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-001
 spec_ref: specs/feature-tree/runtime/deliver-deploy-prod-pipeline/daily-merge-release-strategy/spec.md#gwt-002
 """
 from __future__ import annotations
@@ -50,6 +51,44 @@ def test_push_includes_all_hosted_governance_and_four_exact_ops_shards():
     }
     assert not any(check["id"] == "focused:python" and covered.intersection(check["command"][4:])
                    for check in checks.values())
+
+
+# 冻结闭集：恒定 required 恰好等于清单，派生项只能是 static:/focused:，四类排除项不得出现。
+FROZEN_INVARIANT_REQUIRED = frozenset({
+    "lane_gate:verify_git_branch_policy",
+    "lane_gate:verify_github_supply_chain",
+    "lane_gate:verify_github_artifact_lifecycle",
+    "lane_gate:verify_workflow_cli_arguments",
+    "lane_gate:verify_entrypoint_script_paths",
+    "lane_gate:verify_quality_policy",
+    "lane_gate:feature-tree",
+    "lane_gate:impact-boundary",
+    "static:code-health-delta",
+    "static:python_script_governance_app",
+    "static:python_script_governance_service",
+    "static:python_script_governance_ops",
+    "static:python_script_governance_data",
+})
+
+
+@pytest.mark.parametrize("paths", [
+    ["specs/feature-tree/runtime/spec.md"],
+    ["quwoquan_ops/cli/integration_run.py"],
+    ["quwoquan_app/lib/runtime/value.dart"],
+    ["quwoquan_service/services/user-service/internal/account/user_account/infrastructure/cache/close_cache.go"],
+])
+def test_source_admitted_required_set_is_the_frozen_closed_set(paths) -> None:
+    plan = planner.bind_source_health_plan(
+        planner.build_impact_plan(paths, level="scope"), mode="push", base=BASE, head=HEAD,
+    )
+    ids = {check["id"] for check in plan["checks"]}
+    # 恒定部分与 changed paths 无关：既不少一项，也不许多一项恒定检查。
+    assert FROZEN_INVARIANT_REQUIRED <= ids
+    derived = ids - FROZEN_INVARIANT_REQUIRED
+    assert all(item.startswith(("static:", "focused:")) for item in derived), sorted(derived)
+    for excluded in ("lane_gate:ops-local-contract:", "focused:dart", "focused:go:", "scope_build:"):
+        assert not any(item == excluded.rstrip(":") or item.startswith(excluded) for item in ids), sorted(ids)
+    assert not plan["deferred"]
 
 
 def test_push_source_admitted_drops_app_service_runtime_suites() -> None:
