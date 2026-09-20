@@ -217,8 +217,8 @@
 - 类型：`capability_gap`
 - 优先级：`P1`
 - 准出影响：`track`
-- 影响或价值：仍缺 hosted CI 对 `origin/dev1.0` expected-old non-force FF 与 publish admission 验真的 current 发布回执；不得把本树 `make accept PUBLISH=1` 读回 `after`、或 local contract 已覆盖的 bundle/digest/parent 漂移拒绝与 integrate 相位闭集，写成 hosted 保护已闭合。[L2 DEC-014](../design.md#dec-014) 的默认通道是产出 candidate 的规范 lane 工作树一条 `make accept PUBLISH=1`；`make integrate ACCEPTANCE_BUNDLE=… PUBLISH=1` 是同一 admission/CAS 的等价两段形态，不是完成该 GWT 的第二必要条件。GWT-006/GWT-007 与 local CI GWT-008 缺少 current 取证不称完成；hosted 回执仍归 OPEN-004。
-- 完成判定：`GWT-001.t6..t12`——真实 lane `make accept PUBLISH=1` 的 summary（终态 `published`，publish result 读回 `after`，远端 `dev1.0` 等于该 candidate）。等价两段式 `make integrate ACCEPTANCE_BUNDLE=… PUBLISH=1` 可选用同一事实，但不是默认完成条件。hosted 回执未取证前本 OPEN 保持开放，不把一次本地 CAS 写成 hosted 保护已闭合。
+- 影响或价值：仍缺 hosted CI 对 `origin/dev1.0` expected-old non-force FF 与 publish admission 验真的 current 发布回执。本地 CAS 已取证：本树 `make accept PUBLISH=1` 已有终态 `published`、publish result 读回 `after`、远端 `dev1.0` 等于该 candidate 的 current summary，不得把该本地回执写成 hosted 保护已闭合。`make integrate ACCEPTANCE_BUNDLE=… PUBLISH=1` 是同一 admission/CAS 的等价两段形态，不是完成该 GWT 的第二必要条件。GWT-006/GWT-007 与 local CI GWT-008 缺少 current 取证不称完成；hosted 回执仍归 OPEN-004。
+- 完成判定：`GWT-001.t6..t12`——本地一条命令 after 读回已取证；hosted 回执未取证前本 OPEN 保持开放，不把一次本地 CAS 写成 hosted 保护已闭合。等价两段式 `make integrate ACCEPTANCE_BUNDLE=… PUBLISH=1` 可选用同一事实，但不是默认完成条件。
 - 依赖：[L2 DEC-014](../design.md#dec-014)；[`OPEN-004`](#open-004) 的 hosted 回执；[`OPEN-006`](#open-006) 的 Alpha 真实签发。
 <a id="open-007"></a>
 ### OPEN-007 `promotion_hosted.ruleset_fact` 把只读 token 下不可见的 `bypass_actors` 折成空并判 `passed`
