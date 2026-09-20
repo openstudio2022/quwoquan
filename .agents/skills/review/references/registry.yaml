@@ -20,13 +20,13 @@ evidence:
     timeout_seconds: 120
     covers: []
   portal-test:
-    command: make test-ops-portal
+    command: python3 -B quwoquan_ops/cli/local_readiness.py managed-portal-test
     segment: POST
     required: true
     timeout_seconds: 900
     covers: []
   portal-build:
-    command: make build-ops-portal
+    command: python3 -B quwoquan_ops/cli/local_readiness.py managed-portal-build
     segment: POST
     required: true
     timeout_seconds: 900
