@@ -61,6 +61,105 @@ def args_for(commit: str) -> argparse.Namespace:
     )
 
 
+def test_published_mode_keeps_normal_acceptance_empty_range_protection(tmp_path: Path, monkeypatch) -> None:
+    from quwoquan_ops.cli.integration_run_acceptance import published_identity, validate_mode_inputs
+    from quwoquan_ops.ci.scoped_candidate import core
+    from quwoquan_ops.ci.scoped_candidate import exact_digest
+    import json
+    target, parent, commit = make_repo(tmp_path)
+    git(target, "reset", "--hard", commit)
+    git(target, "push", "origin", "dev1.0")
+    normal = args_for(commit); normal.mode = "acceptance"
+    runner, is_ancestor = bind_git(target)
+    with pytest.raises(IntegrationRunError, match="NOTHING_TO_ACCEPT"):
+        preflight_identity(normal, git=runner, is_ancestor=is_ancestor)
+    store = tmp_path / "store"; store.mkdir()
+    def write(name, body):
+        (store/name).write_text(json.dumps(body))
+        return {"ref": name, "digest": exact_digest(store/name)}
+    candidate = {"commit": commit, "tree": git(target, "rev-parse", "HEAD^{tree}"), "expectedParent": parent}
+    candidate["candidateId"] = exact_digest(candidate)
+    cref = write("candidate.json", candidate)
+    admission = {"candidate": cref, "admissionId": "sha256:"+"a"*64}
+    aref = write("admission.json", admission)
+    result = {"terminal": "published", "targetRef": "refs/heads/dev1.0", "admission": aref,
+              "admissionId": admission["admissionId"], "beforeOid": parent, "afterOid": commit, "readbackOid": commit}
+    result["publishResultId"] = exact_digest(result)
+    rref = write("published.json", result)
+    monkeypatch.setattr(core, "_validated_admission", lambda *a: admission)
+    args = argparse.Namespace(mode="published-validation", candidate_ref=cref['ref']+'='+cref['digest'],
+        publish_result=rref['ref']+'='+rref['digest'], remote="origin", publish=False,
+        acceptance_bundle=None, baseline="", reuse=False, validate_bundle_only=False)
+    validate_mode_inputs(args)
+    assert published_identity(args, repository=target, store=store, policy=Path("unused"), git=runner)[1]["commit"] == commit
+    runtime_wip = target / "quwoquan_data" / "uncommitted.py"
+    runtime_wip.parent.mkdir(); runtime_wip.write_text("foreign work")
+    assert published_identity(args, repository=target, store=store, policy=Path("unused"), git=runner)[1]["commit"] == commit
+    assert runtime_wip.read_text() == "foreign work"
+    (target / "owned.txt").write_text("dirty overlap\n")
+    with pytest.raises(IntegrationRunError, match="DIRTY_WORKTREE"):
+        published_identity(args, repository=target, store=store, policy=Path("unused"), git=runner)
+    runtime_wip.unlink()
+    git(target, "checkout", "--", "owned.txt")
+    (store/"published.json").write_text("{}")
+    with pytest.raises(core.ScopedCandidateError, match="STALE"):
+        published_identity(args, repository=target, store=store, policy=Path("unused"), git=runner)
+    rref = write("published.json", result)
+    git(target, "reset", "--hard", parent)
+    with pytest.raises(IntegrationRunError, match="PUBLISHED_IDENTITY_INVALID"):
+        published_identity(args, repository=target, store=store, policy=Path("unused"), git=runner)
+
+
+@pytest.mark.parametrize("fail_at", [None, "beta"])
+def test_published_chain_uses_same_candidate_and_stops_before_failed_issue(tmp_path, monkeypatch, fail_at):
+    from quwoquan_ops.cli import integration_run as run
+    from quwoquan_ops.ci import environment_scheduler as scheduler
+    from contextlib import contextmanager
+    store = tmp_path / "store"; store.mkdir()
+    candidate = {"candidateId": "sha256:"+"a"*64, "commit": "b"*40, "tree": "c"*40,
+                 "expectedParent": "d"*40, "impactPlanDigest": "sha256:"+"e"*64}
+    cref = {"ref": "candidate.json", "digest": "sha256:"+"f"*64}
+    monkeypatch.setattr(run, "_store", lambda: store)
+    monkeypatch.setattr(run, "published_identity", lambda *a, **k: (cref, candidate, {"publishResultId": "published"}))
+    monkeypatch.setattr(run, "_impact_plan", lambda **k: ({"plan_digest": candidate["impactPlanDigest"], "scopes": []}, tmp_path / "plan.json"))
+    monkeypatch.setattr(run, "_output_ref", lambda p: str(p))
+    monkeypatch.setattr(run, "_acceptance_release_inputs", lambda args: {})
+    requests = {}; calls = []; issued = []
+    def request(**kw):
+        assert kw["candidate_ref"] == cref
+        p=store/(kw["environment"]+".request"); requests[p.name]=kw["environment"]; return p
+    monkeypatch.setattr(run, "create_execution_request", request)
+    monkeypatch.setattr(run, "request_exact_ref", lambda s,p: {"ref":p.name,"digest":"sha256:"+"1"*64})
+    @contextmanager
+    def fenced(**kw):
+        calls.append("claim:"+requests[kw["request_ref"]["ref"]]); yield {}
+        calls.append("closed:"+requests[kw["request_ref"]["ref"]])
+    monkeypatch.setattr(scheduler, "execution_fence", fenced)
+    def execute(**kw):
+        env=kw["environment"]; calls.append("execute:"+env)
+        assert kw["candidate"] == {k:candidate[k] for k in ("candidateId","commit","tree")}
+        if env == fail_at: raise IntegrationRunError("INTEGRATION_RUN.VERIFY_FAILED", "first failure")
+        summary["environments"][env]={}
+        return {"cases":[],"named":{},"readiness":tmp_path/env}
+    monkeypatch.setattr(run, "_run_environment", execute)
+    def issue(**kw):
+        env=requests[kw["request_ref"]["ref"]]
+        assert "closed:"+env in calls and kw["status"]=="passed"
+        assert kw["predecessor"] == (None if not issued else {"ref":issued[-1]+".json","digest":"sha256:"+"2"*64})
+        issued.append(env); return store/(env+".json")
+    monkeypatch.setattr(run, "issue_environment_acceptance_fact", issue)
+    monkeypatch.setattr(run, "exact_file_digest", lambda p: "sha256:"+"2"*64)
+    args=argparse.Namespace(app_platform="ios",ios_device_id="explicit-test-device",profile="integration",fact_ttl_hours=1,signer_identity="test")
+    summary={"runId":"live-attempt","environments":{}}
+    if fail_at:
+        with pytest.raises(IntegrationRunError,match="first failure"):
+            run._published_environment_chain(args,phases=run.Phases(),summary=summary,run_dir=tmp_path,signer=lambda x:"unused")
+        assert issued==["alpha"] and "execute:gamma" not in calls
+    else:
+        run._published_environment_chain(args,phases=run.Phases(),summary=summary,run_dir=tmp_path,signer=lambda x:"unused")
+        assert issued==["alpha","beta","gamma"] and summary["terminal"]=="environments_passed"
+
+
 def test_overlapping_dirty_paths_include_parent_child() -> None:
     assert overlapping_dirty_paths(["gamma/wip.txt"], ["owned.txt"]) == ()
     assert overlapping_dirty_paths(["owned.txt"], ["owned.txt"]) == ("owned.txt",)

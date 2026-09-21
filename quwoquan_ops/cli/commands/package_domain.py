@@ -337,6 +337,9 @@ def register_parser(
     package_parser.add_argument("--provider-evidence", default="")
     package_parser.add_argument("--provider-raw-dir", default="")
     package_parser.add_argument("--test-evidence", default="")
+    package_parser.add_argument("--source-revision", default="")
+    package_parser.add_argument("--source-tree", default="")
+    package_parser.add_argument("--source-root", default="")
 
 
 @contextlib.contextmanager
@@ -577,10 +580,34 @@ def command_package(args: argparse.Namespace) -> dict[str, Any]:
             )
             try:
                 _package_stage("before input capsule materialization dispatch")
+                source_revision = str(getattr(args, "source_revision", "") or "")
+                source_tree = str(getattr(args, "source_tree", "") or "")
+                source_root = str(getattr(args, "source_root", "") or "")
+                frozen: dict[str, object] = {}
+                supplied = (bool(source_revision), bool(source_tree), bool(source_root))
+                if any(supplied) and not all(supplied):
+                    return staging_ownership.returning(
+                        {
+                            "exitCode": 2,
+                            "summary": (
+                                f"stackctl package frozen source identity is incomplete for {env_name}"
+                            ),
+                            "details": [
+                                "source-revision, source-tree and source-root must be supplied together"
+                            ],
+                        }
+                    )
+                if all(supplied):
+                    frozen = {
+                        "source_revision": source_revision,
+                        "source_tree": source_tree,
+                        "source_root": Path(source_root),
+                    }
                 package_snapshot = _stackctl.materialize_package_input_capsule(
                     package_input_roots,
                     capsule_root=capsule_staging_root,
                     dependency_platforms=dependency_platforms,
+                    **frozen,
                 )
             except (
                 OSError,

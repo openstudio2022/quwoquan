@@ -26,6 +26,12 @@ def dirty_overlap_with_candidate(git: Callable[..., str], parent: str, candidate
 def validate_mode_inputs(args: argparse.Namespace) -> None:
     if args.validate_bundle_only and (args.mode != "integrate" or args.publish or not re.fullmatch(r"[0-9a-f]{40}", args.candidate)):
         raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "--validate-bundle-only requires integrate, exact --candidate SHA and no --publish")
+    if args.mode == "published-validation":
+        if args.publish or args.acceptance_bundle is not None or args.baseline or args.reuse:
+            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "published-validation cannot publish, import bundle, override baseline or reuse source EAF")
+        if not args.candidate_ref or not args.publish_result:
+            raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "published-validation requires exact candidate-ref and publish-result")
+        return
     if args.mode == "acceptance":
         if args.acceptance_bundle is not None:
             raise IntegrationRunError("INTEGRATION_RUN.INPUT_INVALID", "--acceptance-bundle is integrate-only; acceptance produces the bundle")
@@ -58,6 +64,38 @@ def preflight_identity(args: argparse.Namespace, *, git: Callable[..., str], is_
         if git("symbolic-ref", "--quiet", "HEAD") != DEV_REF or (not args.validate_bundle_only and git("rev-parse", "HEAD") != commit):
             raise IntegrationRunError("INTEGRATION_RUN.INTEGRATION_IDENTITY_INVALID", "integrate requires refs/heads/dev1.0 with HEAD == candidate; validate bundle before FF")
     return {"commit": commit, "parent": parent, "remoteHead": remote_head, "tree": git("show", "-s", "--format=%T", commit)}
+
+
+def published_identity(args: argparse.Namespace, *, repository: Path, store: Path, policy: Path,
+                       git: Callable[..., str]) -> tuple[dict, dict, dict]:
+    """发布后环境运行只消费验真的已发布候选，不创建新 candidate。"""
+    from quwoquan_ops.ci.scoped_candidate.core import _load_exact_ref, _identity_digest, _validated_admission
+    def exact(value: str) -> dict:
+        ref, digest = value.rsplit("=", 1)
+        return {"ref": ref, "digest": digest}
+    result, _ = _load_exact_ref(store, exact(args.publish_result), "publish-result")
+    _identity_digest(result, "publishResultId")
+    if result.get("terminal") != "published" or result.get("targetRef") != DEV_REF:
+        raise IntegrationRunError("INTEGRATION_RUN.PUBLISHED_IDENTITY_INVALID", "published result required")
+    admission_ref = result["admission"]
+    admission = _validated_admission(repository, store / admission_ref["ref"], policy, admission_ref["digest"])
+    candidate_ref = exact(args.candidate_ref)
+    candidate, _ = _load_exact_ref(store, candidate_ref, "candidate")
+    _identity_digest(candidate, "candidateId")
+    if (admission["candidate"] != candidate_ref or result.get("admissionId") != admission["admissionId"]
+            or result.get("beforeOid") != candidate["expectedParent"]
+            or result.get("afterOid") != candidate["commit"] or result.get("readbackOid") != candidate["commit"]):
+        raise IntegrationRunError("INTEGRATION_RUN.PUBLISHED_IDENTITY_INVALID", "candidate/publish-result/admission drift")
+    remote = git("ls-remote", args.remote, DEV_REF).split()[0]
+    if remote != candidate["commit"] or git("rev-parse", "HEAD") != remote or git("show", "-s", "--format=%T", remote) != candidate["tree"]:
+        raise IntegrationRunError("INTEGRATION_RUN.PUBLISHED_IDENTITY_INVALID", "published HEAD/tree no longer current")
+    # 外域 WIP 必须保留。打包走 published commit 的隔离源码树，因此只拦与
+    # expectedParent...candidate 重叠、可能污染身份核对的脏路径。
+    overlap = dirty_overlap_with_candidate(git, candidate["expectedParent"], candidate["commit"])
+    if overlap:
+        preview = ", ".join(overlap[:8])
+        raise IntegrationRunError("INTEGRATION_RUN.DIRTY_WORKTREE", f"dirty path(s) overlap expectedParent...candidate: {preview}")
+    return candidate_ref, candidate, result
 
 
 def validate_source_inputs(args: argparse.Namespace, *, repository: Path) -> None:

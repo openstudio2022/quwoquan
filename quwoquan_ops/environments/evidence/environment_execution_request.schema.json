@@ -74,6 +74,10 @@
     "resourceGroup": {
       "const": "workstation-commercial-runtime"
     },
+    "attemptId": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$"
+    },
     "createdAt": {
       "type": "string",
       "format": "date-time"

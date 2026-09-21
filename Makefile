@@ -1918,6 +1918,30 @@ accept:
 		$$( [ "$${REUSE:-0}" = "1" ] && printf -- '--reuse' ) \
 		$(INTEGRATE_ARGS)
 
+# 发布后对同一 published candidate 实跑 Alpha→Beta→Gamma；不创建新 candidate、不 publish。
+# 必填：CANDIDATE_REF、PUBLISH_RESULT、RELEASE_ATTESTATION、ROLLBACK_RELEASE_ATTESTATION、
+# RELEASE_HANDOFF_REF、IOS_DEVICE_ID。APP_PLATFORM 固定 ios。
+.PHONY: validate-published
+validate-published:
+	@if [ -z "$(CANDIDATE_REF)" ] || [ -z "$(PUBLISH_RESULT)" ]; then \
+		echo "[validate-published] GATE_BLOCK: CANDIDATE_REF 与 PUBLISH_RESULT 必填" >&2; exit 2; fi; \
+	if [ -z "$(RELEASE_ATTESTATION)" ] || [ -z "$(ROLLBACK_RELEASE_ATTESTATION)" ] || [ -z "$(RELEASE_HANDOFF_REF)" ]; then \
+		echo "[validate-published] GATE_BLOCK: RELEASE_ATTESTATION / ROLLBACK_RELEASE_ATTESTATION / RELEASE_HANDOFF_REF 必填" >&2; exit 2; fi; \
+	if [ -z "$(IOS_DEVICE_ID)" ]; then \
+		echo "[validate-published] GATE_BLOCK: IOS_DEVICE_ID 必填" >&2; exit 2; fi
+	@PYTHONDONTWRITEBYTECODE=1 python3 -B quwoquan_ops/cli/integration_run.py \
+		--mode published-validation \
+		--candidate-ref "$(CANDIDATE_REF)" \
+		--publish-result "$(PUBLISH_RESULT)" \
+		--app-platform ios \
+		--ios-device-id "$(IOS_DEVICE_ID)" \
+		--release-attestation "$(RELEASE_ATTESTATION)" \
+		--rollback-release-attestation "$(ROLLBACK_RELEASE_ATTESTATION)" \
+		--release-handoff-ref "$(RELEASE_HANDOFF_REF)" \
+		--readiness-level "$${READINESS_LEVEL:-scope}" \
+		--profile "$${PROFILE:-integration}" \
+		$(INTEGRATE_ARGS)
+
 # 等价两段形态：integration 工作区（分支 dev1.0，HEAD 已 ff 到 candidate）消费他树 acceptance bundle。
 # 日常默认路径是在产出 candidate 的 lane 直接 `make accept PUBLISH=1`，不必换工作区。
 # 本入口与 accept 的发布尾段共用同一 admission/CAS/readback；同一 candidate 任一时刻只允许一个 publisher。

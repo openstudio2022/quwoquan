@@ -22,10 +22,12 @@
 from __future__ import annotations
 
 import argparse
+from contextvars import ContextVar
 import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -96,7 +98,7 @@ NO_LIVE = NO_LIVE_ENVIRONMENT_REQUIRED
 ALPHA_LIVE_DEFERRED = ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV
 ENVIRONMENT_SPEC_REF = "specs/feature-tree/runtime/deliver-deploy-prod-pipeline/spec.md#sit-001"
 DEFAULT_SIGNER = "quwoquan-environment-ops-local"
-from quwoquan_ops.cli.integration_run_acceptance import validate_mode_inputs, validate_source_inputs, preflight_identity, record_imported_bundle
+from quwoquan_ops.cli.integration_run_acceptance import validate_mode_inputs, validate_source_inputs, preflight_identity, record_imported_bundle, published_identity
 from quwoquan_ops.cli.integration_run_bundle import (
     ACCEPTANCE_BUNDLE_SCHEMA, BUNDLE_MANIFEST, BUNDLE_STORE_DIR, _EAF_NAMED_FIELDS,
     IntegrationRunError, _canonical_bytes, _sha256_hex, _bundle_path, _bundle_bytes,
@@ -210,15 +212,22 @@ class StackctlResult:
         return report, json.loads(raw)
 
 
+_EXECUTION_FENCE: ContextVar[dict[str, str] | None] = ContextVar("integration_execution_fence", default=None)
+
+
 def _stackctl(*args: str, env: Mapping[str, str] | None = None, log_dir: Path) -> StackctlResult:
     command = " ".join(args)
     process_env = dict(os.environ)
     process_env["PYTHONDONTWRITEBYTECODE"] = "1"
     if env:
         process_env.update(env)
+    fence = _EXECUTION_FENCE.get()
+    if fence:
+        process_env.update(fence)
     completed = subprocess.run(
         [sys.executable, "-B", str(STACKCTL), "--output-format", "json", *args],
         cwd=ROOT, env=process_env, text=True, capture_output=True, check=False,
+        **({"pass_fds": (int(fence["QWQ_ENVIRONMENT_EXECUTION_FD"]),)} if fence else {}),
     )
     log_dir.mkdir(parents=True, exist_ok=True)
     slug = "-".join(part.strip("-") for part in args[:3]).replace("/", "_")
@@ -727,10 +736,24 @@ def _package_with_dependency_recovery(*, environment: str, args: argparse.Namesp
     _app_acceptance_plan(app_platform)
 
     def package() -> StackctlResult:
+        source_args: tuple[str, ...] = ()
+        if getattr(args, "mode", "") == "published-validation":
+            if not getattr(args, "published_source_root", None):
+                args.published_source_root = str(_materialize_published_source(
+                    commit=str(args.published_source_revision),
+                    tree=str(args.published_source_tree),
+                    run_dir=log_dir.parent,
+                ))
+            source_args = (
+                "--source-revision", str(args.published_source_revision),
+                "--source-tree", str(args.published_source_tree),
+                "--source-root", str(args.published_source_root),
+            )
         return _stackctl(
             "package", "--env", environment, "--include-services", "--app-platform", app_platform,
             "--release-attestation", str(args.release_attestation),
-            "--rollback-release-attestation", str(args.rollback_release_attestation), log_dir=log_dir,
+            "--rollback-release-attestation", str(args.rollback_release_attestation),
+            *source_args, log_dir=log_dir,
         )
 
     result = package()
@@ -881,6 +904,8 @@ def _run_environment(*, environment: str, profile: str, candidate: Mapping[str, 
     target = f"{environment}-local"
     store = _store()
     evidence_dir = store / "environment-evidence" / candidate["candidateId"].removeprefix("sha256:") / environment
+    if getattr(args, "mode", "") == "published-validation":
+        evidence_dir = evidence_dir / "attempts" / summary["runId"]
     log_dir = run_dir / environment
     env_summary: dict[str, Any] = {"environment": environment, "target": target, "reports": {}}
     summary["environments"][environment] = env_summary
@@ -1483,7 +1508,8 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--candidate", default="HEAD", help="exact commit（HEAD 或 lane head sha）")
     parser.add_argument("--candidate-ref", default="", help="acceptance：复用已冻结 candidate 的 store ref=sha256:digest，不重新 acquire claim")
-    parser.add_argument("--mode", choices=("integrate", "acceptance"), default="integrate",
+    parser.add_argument("--publish-result", default="", help="published-validation：已发布exact result ref=sha256:digest")
+    parser.add_argument("--mode", choices=("integrate", "acceptance", "published-validation"), default="integrate",
                         help="integrate=integration 工作区消费 acceptance bundle 并 admit/publish；"
                              "acceptance=本地 lane/integration 跑 readiness + typed Alpha/Beta 并签发事实与 bundle")
     parser.add_argument("--baseline", default="",
@@ -1549,7 +1575,7 @@ def _prepare_signing(args: argparse.Namespace, summary: dict[str, Any]) -> tuple
     except EvidenceSigningError as exc:
         code = "INTEGRATION_RUN.SIGNER_UNREGISTERED" if exc.code == "EVIDENCE_SIGNING.SIGNER_UNREGISTERED" else "INTEGRATION_RUN.SIGNER_UNAVAILABLE"
         raise IntegrationRunError(code, exc.detail) from exc
-    live_environment = bool(getattr(args, "alpha", False) or args.beta)
+    live_environment = bool(args.mode == "published-validation" or getattr(args, "alpha", False) or args.beta)
     has_data = args.release_attestation is not None or args.rollback_release_attestation is not None or bool(args.release_handoff_ref)
     if live_environment or has_data:
         for label, path in (("release", args.release_attestation), ("rollback", args.rollback_release_attestation)):
@@ -1711,6 +1737,81 @@ def _select_candidate(*, args: argparse.Namespace, identity: Mapping[str, str], 
     return ref, candidate, None, _store() / candidate["claimRef"]
 
 
+def _materialize_published_source(*, commit: str, tree: str, run_dir: Path) -> Path:
+    """把已发布 commit 展开成只读源码树，避免共享工作树外域 WIP 进入 package。"""
+    dest = (run_dir / "published-source").resolve()
+    marker = run_dir / ".published-identity"
+    token = f"{commit}:{tree}\n"
+    if dest.is_dir() and marker.is_file() and marker.read_text(encoding="ascii") == token:
+        return dest
+    if dest.exists():
+        shutil.rmtree(dest)
+    dest.mkdir(parents=True, exist_ok=False)
+    archive = subprocess.run(
+        ["git", "archive", "--format=tar", commit], cwd=ROOT, capture_output=True, check=False,
+    )
+    if archive.returncode != 0:
+        raise IntegrationRunError("INTEGRATION_RUN.PUBLISHED_IDENTITY_INVALID", archive.stderr.decode("utf-8", errors="replace"))
+    unpacked = subprocess.run(["tar", "-xf", "-", "-C", str(dest)], input=archive.stdout, check=False)
+    if unpacked.returncode != 0:
+        raise IntegrationRunError("INTEGRATION_RUN.PUBLISHED_IDENTITY_INVALID", "cannot unpack published source archive")
+    observed = _git("rev-parse", f"{commit}^{{tree}}")
+    if observed != tree:
+        raise IntegrationRunError("INTEGRATION_RUN.PUBLISHED_IDENTITY_INVALID", "published source tree drifted during materialization")
+    marker.write_text(token, encoding="ascii")
+    return dest
+
+
+def _published_environment_chain(args: argparse.Namespace, *, phases: Phases, summary: dict,
+                                 run_dir: Path, signer: Any) -> None:
+    from quwoquan_ops.ci.environment_scheduler import execution_fence
+    def identity():
+        return published_identity(args, repository=ROOT, store=_store(), policy=POLICY, git=_git)
+    candidate_ref, candidate, publication = identity()
+    args.published_source_revision = candidate["commit"]
+    args.published_source_tree = candidate["tree"]
+    args.published_source_root = ""
+    args.alpha = args.beta = True
+    summary["candidate"] = {**candidate, "candidateRef": candidate_ref}
+    summary["publishResult"] = publication["publishResultId"]
+    plan, plan_path = _impact_plan(parent=candidate["expectedParent"], commit=candidate["commit"], run_dir=run_dir)
+    if plan["plan_digest"] != candidate["impactPlanDigest"]:
+        raise IntegrationRunError("INTEGRATION_RUN.PUBLISHED_IDENTITY_INVALID", "published ImpactPlan drift")
+    summary["impactPlan"] = {"digest": plan["plan_digest"], "ref": _output_ref(plan_path)}
+    # 输入先于任何lease和环境mutation；没有显式release/handoff/设备不借用历史产物。
+    _acceptance_release_inputs(args)
+    if args.app_platform != "ios" or not args.ios_device_id:
+        raise IntegrationRunError("INTEGRATION_RUN.APP_LAUNCH_DEVICE_UNAVAILABLE", "published validation requires explicit iOS simulator identity")
+    prior = None
+    previous_readiness = None
+    binding = {key: candidate[key] for key in ("candidateId", "commit", "tree")}
+    for environment in ("alpha", "beta", "gamma"):
+        identity()
+        request_path = create_execution_request(store_root=_store(), candidate_ref=candidate_ref,
+            environment=environment, impact_plan_digest=plan["plan_digest"], priority=1, attempt_id=summary["runId"])
+        request_ref = request_exact_ref(_store(), request_path)
+        with execution_fence(store_root=_store(), request_ref=request_ref) as fence:
+            token = _EXECUTION_FENCE.set(fence)
+            try:
+                offline = _alpha_offline_pages(candidate=binding, candidate_ref=candidate_ref, args=args,
+                    run_dir=run_dir, phases=phases) if environment == "alpha" and "app" in plan["scopes"] else None
+                evidence = _run_environment(environment=environment, profile=args.profile, candidate=binding,
+                    impact_plan_digest=plan["plan_digest"], args=args, run_dir=run_dir, phases=phases,
+                    summary=summary, previous_readiness=previous_readiness, scopes=tuple(plan["scopes"]), offline_pages=offline)
+            finally:
+                _EXECUTION_FENCE.reset(token)
+        identity()
+        expires = (datetime.now(timezone.utc) + timedelta(hours=args.fact_ttl_hours)).isoformat()
+        fact = issue_environment_acceptance_fact(store_root=_store(), request_ref=request_ref, profile=args.profile,
+            status="passed", case_result_refs=evidence["cases"], predecessor=prior,
+            signer_identity=args.signer_identity, signer=signer, expires_at=expires, non_promotable=False,
+            **evidence["named"])
+        prior = {"ref": fact.relative_to(_store()).as_posix(), "digest": exact_file_digest(fact)}
+        previous_readiness = evidence["readiness"]
+        summary["environments"][environment].update(executed=True, acceptance=prior)
+    summary["terminal"] = "environments_passed"
+
+
 def main(argv: list[str] | None = None) -> int:
     started_monotonic = time.monotonic()
     args = _parser().parse_args(argv)
@@ -1726,6 +1827,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         summary["mode"] = args.mode
         keyring, signer = _prepare_signing(args, summary)
+        if args.mode == "published-validation":
+            _published_environment_chain(args, phases=phases, summary=summary, run_dir=run_dir, signer=signer)
+            return 0
 
         identity = phases.run("preflight", lambda: preflight_identity(args, git=_git, is_ancestor=_is_ancestor))
         summary["candidate"] = identity

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import base64
 import fcntl
+from contextlib import contextmanager
 import uuid
 import hashlib
 import json
@@ -301,6 +302,7 @@ def create_execution_request(
     impact_plan_digest: str,
     priority: int,
     created_at: str | None = None,
+    attempt_id: str | None = None,
 ) -> Path:
     """Create one deduplicated hermetic/detached request per candidate and environment."""
 
@@ -334,9 +336,14 @@ def create_execution_request(
         "resourceGroup": RESOURCE_GROUP,
         "createdAt": requested_at,
     }
+    if attempt_id is not None:
+        if re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}", attempt_id) is None:
+            raise EnvironmentSchedulerError("ENVIRONMENT_SCHEDULER.INVALID", "invalid attemptId")
+        body["attemptId"] = attempt_id
     body["requestId"] = canonical_digest(body)
     dedupe_key = canonical_digest(
-        {"candidateId": identity["candidateId"], "environment": environment}
+        {"candidateId": identity["candidateId"], "environment": environment,
+         **({"attemptId": attempt_id} if attempt_id is not None else {})}
     ).removeprefix("sha256:")
     path = root / "environment-execution" / "requests" / f"{dedupe_key}.json"
     if path.exists() and not path.is_symlink():
@@ -376,6 +383,8 @@ def load_execution_request(
         raise EnvironmentSchedulerError(
             "ENVIRONMENT_SCHEDULER.INVALID", "request resource group drifted"
         )
+    if "attemptId" in request and (not isinstance(request["attemptId"], str) or re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}", request["attemptId"]) is None):
+        raise EnvironmentSchedulerError("ENVIRONMENT_SCHEDULER.INVALID", "invalid attemptId")
     environment = request.get("environment")
     if environment not in ENVIRONMENTS:
         raise EnvironmentSchedulerError(
@@ -446,10 +455,10 @@ def select_next_request(
 
     root = _safe_root(store_root)
     requests: list[dict[str, Any]] = []
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str, str | None]] = set()
     for exact_ref in request_refs:
         request = load_execution_request(root, exact_ref)
-        key = (request["candidate"]["candidateId"], request["environment"])
+        key = (request["candidate"]["candidateId"], request["environment"], request.get("attemptId"))
         if key in seen:
             continue
         seen.add(key)
@@ -511,6 +520,37 @@ def claim_execution_request(*, store_root: Path, request_ref: Mapping[str, str])
         return {**claim, "path": str(path)}
     finally:
         os.close(descriptor)
+
+
+@contextmanager
+def execution_fence(*, store_root: Path, request_ref: Mapping[str, str]):
+    """既有 scheduler slot/fd 覆盖整段命令；异常保留占用供显式恢复。"""
+    from quwoquan_ops.cli.lib.output_paths import deployment_target_path, _read_secure_json_object, _atomic_write_secure_json_object
+    from quwoquan_ops.cli.lib.local_runtime_reservation import local_runtime_operation_lock_path
+    claim = claim_execution_request(store_root=store_root, request_ref=request_ref)
+    directory = deployment_target_path(claim["target"], "process", "environment-execution")
+    fd = os.open(directory / ".claim.lock", os.O_RDWR | os.O_NOFOLLOW)
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        slot = directory / "execution-slot.json"
+        current = _read_secure_json_object(slot, label="environment execution slot")
+        if not current or current.get("claimId") != claim["claimId"]:
+            raise EnvironmentSchedulerError("ENVIRONMENT_SCHEDULER.EXECUTION_IN_USE", "execution claim changed")
+        current = {**current, "executorStarted": True}
+        _atomic_write_secure_json_object(slot, current, label="environment execution slot")
+        yield {"QWQ_ENVIRONMENT_EXECUTION_CLAIM_ID": claim["claimId"], "QWQ_ENVIRONMENT_EXECUTION_FD": str(fd)}
+        fence = local_runtime_operation_lock_path(claim["target"]).with_suffix(".executor.json")
+        if fence.exists() or _read_secure_json_object(slot, label="environment execution slot") != current:
+            raise EnvironmentSchedulerError("ENVIRONMENT_SCHEDULER.EXECUTION_IN_USE", "executor closure not proven")
+        slot.unlink()
+        parent_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
+    finally:
+        fcntl.flock(fd, fcntl.LOCK_UN)
+        os.close(fd)
 
 
 def _event_paths(root: Path, request_id: str) -> list[Path]:
@@ -903,6 +943,8 @@ def issue_environment_acceptance_fact(
         / request["candidate"]["candidateId"].removeprefix("sha256:")
         / f"{request['environment']}.json"
     )
+    if "attemptId" in request:
+        path = path.parent / "attempts" / request["attemptId"] / path.name
     result = write_create_once(path, signed)
     append_task_state(
         store_root=root,

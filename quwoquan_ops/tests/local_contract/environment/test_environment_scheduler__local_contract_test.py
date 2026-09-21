@@ -77,6 +77,55 @@ def _request(
     return path, request_exact_ref(root, path)
 
 
+def test_live_attempt_preserves_source_request_and_candidate(tmp_path: Path) -> None:
+    candidate = _candidate(tmp_path)
+    source, _ = _request(tmp_path, environment="alpha", candidate=candidate)
+    original = source.read_bytes()
+    live = create_execution_request(store_root=tmp_path, candidate_ref=candidate, environment="alpha",
+        impact_plan_digest=IMPACT, priority=1, created_at=NOW, attempt_id="published-live")
+    assert live != source and source.read_bytes() == original
+    _queue(tmp_path, request_exact_ref(tmp_path, source))
+    source_fact = _issue(tmp_path, request_exact_ref(tmp_path, source), status="not_required", reason_code="ACCEPTANCE.ALPHA_LIVE_DEFERRED_TO_PUBLISHED_DEV")
+    source_fact_bytes = source_fact.read_bytes()
+    _mutate(tmp_path, request_exact_ref(tmp_path, live))
+    live_fact = _issue(tmp_path, request_exact_ref(tmp_path, live))
+    assert live_fact != source_fact and source_fact.read_bytes() == source_fact_bytes
+    assert json.loads(live_fact.read_text())["status"] == "passed"
+    assert json.loads(live.read_text())["candidate"] == json.loads(original)["candidate"]
+    Draft202012Validator(json.loads(REQUEST_SCHEMA.read_text())).validate(json.loads(live.read_text()))
+    assert create_execution_request(store_root=tmp_path, candidate_ref=candidate, environment="alpha",
+        impact_plan_digest=IMPACT, priority=1, created_at=NOW, attempt_id="published-live") == live
+    with pytest.raises(EnvironmentSchedulerError, match="attemptId"):
+        create_execution_request(store_root=tmp_path, candidate_ref=candidate, environment="alpha",
+            impact_plan_digest=IMPACT, priority=1, attempt_id="../escape")
+
+
+def test_execution_fence_closes_owned_success_and_retains_failed_slot(tmp_path, monkeypatch):
+    from quwoquan_ops.ci.environment_scheduler import execution_fence
+    from quwoquan_ops.cli.lib import output_paths, local_runtime_reservation
+    def target_path(target, *parts):
+        return tmp_path / "deploy" / target / Path(*parts)
+    monkeypatch.setattr(output_paths, "deployment_target_path", target_path)
+    monkeypatch.setattr(local_runtime_reservation, "local_runtime_operation_lock_path", lambda target: tmp_path / (target + ".lock"))
+    candidate = _candidate(tmp_path)
+    _, request = _request(tmp_path, environment="alpha", candidate=candidate)
+    slot = target_path("alpha-local", "process", "environment-execution", "execution-slot.json")
+    with execution_fence(store_root=tmp_path, request_ref=request) as fence:
+        assert slot.exists()
+        assert json.loads(slot.read_text())["executorStarted"] is True
+        assert int(fence["QWQ_ENVIRONMENT_EXECUTION_FD"]) >= 0
+    assert not slot.exists()
+    live = create_execution_request(store_root=tmp_path, candidate_ref=candidate, environment="alpha",
+        impact_plan_digest=IMPACT, priority=1, attempt_id="failed-attempt")
+    with pytest.raises(RuntimeError, match="verify failed"):
+        with execution_fence(store_root=tmp_path, request_ref=request_exact_ref(tmp_path, live)):
+            raise RuntimeError("verify failed")
+    assert slot.exists()
+    with pytest.raises(EnvironmentSchedulerError, match="EXECUTION_IN_USE"):
+        with execution_fence(store_root=tmp_path, request_ref=request):
+            pass
+
+
 def _queue(root: Path, request: dict[str, str]) -> None:
     append_task_state(store_root=root, request_ref=request, state="queued", occurred_at=NOW)
 
