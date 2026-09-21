@@ -160,6 +160,38 @@ def test_published_chain_uses_same_candidate_and_stops_before_failed_issue(tmp_p
         assert issued==["alpha","beta","gamma"] and summary["terminal"]=="environments_passed"
 
 
+def test_offline_ios_syncs_missing_dependency_bundle_once(tmp_path, monkeypatch):
+    from quwoquan_ops.cli import integration_run as run
+    calls = []
+    receipt_dir = tmp_path / "uat"
+    receipt_dir.mkdir()
+    (receipt_dir / "receipt.json").write_text("{}")
+    def stackctl(*args, **kw):
+        calls.append(args[0])
+        if args[0] == "app-content-uat":
+            if "app-dependency-sync" not in calls:
+                return run.StackctlResult("uat", {"exitCode": 2, "firstBlocker": "APP.DEPENDENCY.bundle_missing", "summary": "GATE_BLOCK"}, "")
+            return run.StackctlResult("uat", {"exitCode": 0, "reportDir": str(receipt_dir)}, "")
+        if args[0] == "app-dependency-sync":
+            return run.StackctlResult("sync", {"exitCode": 0}, "")
+        raise AssertionError(args)
+    monkeypatch.setattr(run, "_stackctl", stackctl)
+    monkeypatch.setattr(run, "_evidence_location", lambda p: (tmp_path, "receipt.json"))
+    monkeypatch.setattr(run, "exact_file_digest", lambda p: "sha256:" + "2" * 64)
+    monkeypatch.setattr(run, "_bundle_put", lambda *a, **k: None)
+    monkeypatch.setattr(run, "_store", lambda: tmp_path)
+    monkeypatch.setattr(run, "_bundle_bytes", lambda *a, **k: b"{}")
+    import quwoquan_ops.cli.lib.integration_app_launch as launch
+    monkeypatch.setattr(launch, "offline_receipt_evidence", lambda **k: {"files": [], "cases": []})
+    args = argparse.Namespace(app_platform="ios", ios_device_id="device", android_device_id="")
+    run._alpha_offline_pages(
+        candidate={"candidateId": "sha256:" + "a" * 64, "commit": "b" * 40, "tree": "c" * 40},
+        candidate_ref={"ref": "c.json", "digest": "sha256:" + "f" * 64},
+        args=args, run_dir=tmp_path, phases=run.Phases(),
+    )
+    assert calls == ["app-content-uat", "app-dependency-sync", "app-content-uat"]
+
+
 def test_overlapping_dirty_paths_include_parent_child() -> None:
     assert overlapping_dirty_paths(["gamma/wip.txt"], ["owned.txt"]) == ()
     assert overlapping_dirty_paths(["owned.txt"], ["owned.txt"]) == ("owned.txt",)

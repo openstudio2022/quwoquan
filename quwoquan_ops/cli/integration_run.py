@@ -786,11 +786,20 @@ def _alpha_offline_pages(*, candidate: Mapping[str, Any], candidate_ref: Mapping
 
     def run_platform(platform: str, device: str, observed: dict[str, Any]) -> None:
         nonlocal evidence_root
-        result = _stackctl(
-            "app-content-uat", "--targets", "alpha-local", "--platform", "android" if platform == "android" else "ios-simulator",
-            "--device-id", device, "--candidate", f"{candidate_ref['ref']}={candidate_ref['digest']}",
-            log_dir=run_dir / "offline" / platform,
-        )
+        def launch() -> StackctlResult:
+            return _stackctl(
+                "app-content-uat", "--targets", "alpha-local", "--platform", "android" if platform == "android" else "ios-simulator",
+                "--device-id", device, "--candidate", f"{candidate_ref['ref']}={candidate_ref['digest']}",
+                log_dir=run_dir / "offline" / platform,
+            )
+
+        result = launch()
+        if result.exit_code != 0 and result.payload.get("firstBlocker") == "APP.DEPENDENCY.bundle_missing":
+            phases.run(f"alpha.offline-{platform}.app-dependency-sync", lambda: _require_ok(
+                _stackctl("app-dependency-sync", "--platform", platform, log_dir=run_dir / "offline" / platform / "app-dependency-sync"),
+                "INTEGRATION_RUN.APP_DEPENDENCY_SYNC_FAILED",
+            ))
+            result = launch()
         observed["result"] = dict(result.payload)
         command_error = None
         try:

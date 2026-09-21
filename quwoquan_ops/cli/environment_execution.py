@@ -30,6 +30,7 @@ from quwoquan_ops.ci.environment_scheduler import (  # noqa: E402
     request_exact_ref,
     select_next_request,
     claim_execution_request,
+    release_unstarted_execution_slot,
     supersede_request,
 )
 from quwoquan_ops.ci.integration_qualification import (  # noqa: E402
@@ -200,6 +201,10 @@ def _build_parser() -> argparse.ArgumentParser:
         qualify.add_argument(f"--expected-{environment}-signer-identity", required=True)
     qualify.add_argument("--issued-at", required=True)
     qualify.add_argument("--expires-at", required=True)
+
+    release_unstarted = commands.add_parser("release-unstarted")
+    _add_exact(release_unstarted, "--request", required=True)
+    release_unstarted.add_argument("--claim-id", required=True)
     return parser
 
 
@@ -685,6 +690,13 @@ def _handle_qualify(args: argparse.Namespace) -> dict[str, object]:
     }
 
 
+def _handle_release_unstarted(args: argparse.Namespace) -> dict[str, object]:
+    released = release_unstarted_execution_slot(
+        store_root=args.store_root, request_ref=args.request, claim_id=args.claim_id,
+    )
+    return {"terminal": "released", **released}
+
+
 def _dispatch(args: argparse.Namespace) -> dict[str, object]:
     handlers = {
         "request": _handle_request,
@@ -694,6 +706,7 @@ def _dispatch(args: argparse.Namespace) -> dict[str, object]:
         "supersede": _handle_supersede,
         "issue": _handle_issue,
         "qualify": _handle_qualify,
+        "release-unstarted": _handle_release_unstarted,
     }
     return handlers[args.command](args)
 

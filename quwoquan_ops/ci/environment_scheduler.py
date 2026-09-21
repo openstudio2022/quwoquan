@@ -553,6 +553,68 @@ def execution_fence(*, store_root: Path, request_ref: Mapping[str, str]):
         os.close(fd)
 
 
+def release_unstarted_execution_slot(*, store_root: Path, request_ref: Mapping[str, str], claim_id: str) -> dict[str, str]:
+    """关闭未创建 executor fence 的失败 slot；禁止接管仍存活的他人 PID。"""
+    from quwoquan_ops.cli.lib.output_paths import (
+        deployment_target_path, _read_secure_json_object,
+    )
+    from quwoquan_ops.cli.lib.local_runtime_reservation import local_runtime_operation_lock_path
+
+    root = _safe_root(store_root)
+    request = load_execution_request(root, request_ref)
+    expected = _digest(claim_id, "claimId")
+    directory = deployment_target_path(request["target"], "process", "environment-execution")
+    descriptor = os.open(directory / ".claim.lock", os.O_RDWR | os.O_NOFOLLOW)
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX)
+        slot = directory / "execution-slot.json"
+        current = _read_secure_json_object(slot, label="environment execution slot")
+        if (
+            not current
+            or current.get("claimId") != expected
+            or current.get("request") != dict(request_ref)
+            or current.get("storeRoot") != str(root)
+        ):
+            raise EnvironmentSchedulerError(
+                "ENVIRONMENT_SCHEDULER.EXECUTION_IN_USE",
+                "unstarted release requires the exact retained claim",
+            )
+        fence = local_runtime_operation_lock_path(request["target"]).with_suffix(".executor.json")
+        if fence.exists():
+            raise EnvironmentSchedulerError(
+                "ENVIRONMENT_SCHEDULER.EXECUTION_IN_USE",
+                "executor fence still present; use verified fence reconciliation",
+            )
+        owner_pid = current.get("ownerPid")
+        if isinstance(owner_pid, int) and owner_pid != os.getpid():
+            try:
+                os.kill(owner_pid, 0)
+            except ProcessLookupError:
+                pass
+            else:
+                raise EnvironmentSchedulerError(
+                    "ENVIRONMENT_SCHEDULER.EXECUTION_IN_USE",
+                    "owner process still exists",
+                )
+        if current_task_state(store_root=root, request_id=request["requestId"]) == "mutation_started":
+            append_task_state(
+                store_root=root,
+                request_ref=request_ref,
+                state="safe_teardown_required",
+                reason="unstarted_executor_released",
+            )
+        slot.unlink()
+        parent_fd = os.open(directory, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(parent_fd)
+        finally:
+            os.close(parent_fd)
+        return {"claimId": expected, "target": str(request["target"]), "state": "safe_teardown_required"}
+    finally:
+        fcntl.flock(descriptor, fcntl.LOCK_UN)
+        os.close(descriptor)
+
+
 def _event_paths(root: Path, request_id: str) -> list[Path]:
     _digest(request_id, "requestId")
     directory = (

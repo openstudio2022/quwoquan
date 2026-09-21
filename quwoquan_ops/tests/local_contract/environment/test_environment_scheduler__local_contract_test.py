@@ -124,6 +124,15 @@ def test_execution_fence_closes_owned_success_and_retains_failed_slot(tmp_path, 
     with pytest.raises(EnvironmentSchedulerError, match="EXECUTION_IN_USE"):
         with execution_fence(store_root=tmp_path, request_ref=request):
             pass
+    live_ref = request_exact_ref(tmp_path, live)
+    claim_id = json.loads(slot.read_text())["claimId"]
+    from quwoquan_ops.ci.environment_scheduler import release_unstarted_execution_slot
+    released = release_unstarted_execution_slot(store_root=tmp_path, request_ref=live_ref, claim_id=claim_id)
+    assert released["target"] == "alpha-local" and not slot.exists()
+    retry = create_execution_request(store_root=tmp_path, candidate_ref=candidate, environment="alpha",
+        impact_plan_digest=IMPACT, priority=1, attempt_id="retry-attempt")
+    with execution_fence(store_root=tmp_path, request_ref=request_exact_ref(tmp_path, retry)):
+        assert slot.exists()
 
 
 def _queue(root: Path, request: dict[str, str]) -> None:
